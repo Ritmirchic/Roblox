@@ -103,7 +103,7 @@ func _init_modules() -> void:
 		{"cargo_cap": 6})
 	_add_mod("engine_basic", "Ion Thruster Mk1", "Propulsion", "ship/mod_engine_basic.glb", 260, 8.0, 130.0, 6.0, Vector3i(1, 1, 1),
 		"Reliable ion propulsion unit providing steady forward & RCS stabilization thrust.",
-		{"thrust_force": 195.0, "heat_rate": 10.0, "max_heat": 100.0})
+		{"thrust_force": 580.0, "heat_rate": 10.0, "max_heat": 100.0})
 
 	# Mining (5)
 	_add_mod("mining_basic", "Basic Mining Laser", "Mining", "equipment/eq_mining_basic.glb", 220, 4.5, 95.0, 7.0, Vector3i(1, 1, 1),
@@ -185,7 +185,7 @@ func _init_modules() -> void:
 		{"cargo_cap": 85})
 	_add_mod("thruster_booster", "Vector Afterburner Booster", "Utility", "equipment/eq_thruster_booster.glb", 2400, 11.0, 175.0, 13.0, Vector3i(1, 1, 1),
 		"Twin high-output vector nozzles delivering massive linear thrust and crisp rotational agility.",
-		{"thrust_force": 360.0, "turn_bonus": 0.30, "heat_rate": 14.0, "max_heat": 130.0})
+		{"thrust_force": 720.0, "turn_bonus": 0.30, "heat_rate": 14.0, "max_heat": 130.0})
 
 func get_module_scaled_stat(mod_id: String, stat_key: String, level: int = 1) -> float:
 	if not modules.has(mod_id):

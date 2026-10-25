@@ -288,9 +288,9 @@ func _test_live_3d_gameplay_mining_combat_magnets() -> void:
 	# Ship movement test
 	var start_pos := ship.global_position
 	ship.thrust_input = Vector3(0, 0, 1)
-	for _i in range(8):
+	for _i in range(15):
 		await get_tree().physics_frame
-	_check(ship.global_position.distance_to(start_pos) > 0.05, "Thruster physics accelerates RigidBody3D ship in space")
+	_check(ship.global_position.distance_to(start_pos) > 0.15 and ship.linear_velocity.length() > 1.0, "Thruster physics accelerates RigidBody3D ship in space")
 	ship.thrust_input = Vector3.ZERO
 	ship.linear_velocity = Vector3.ZERO
 
