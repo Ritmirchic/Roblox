@@ -12,7 +12,7 @@ config_version=5
 
 config/name="SPACE MINER: BUILD & CONQUER"
 config/description="3D Modular Spaceship Construction, Physics-Based Space Flight, Asteroid Mining, Combat & Collectible Crew Card Game."
-config/version="1.0.0"
+config/version="1.0.2"
 run/main_scene="res://scenes/main/Main.tscn"
 config/features=PackedStringArray("4.3", "GL Compatibility")
 boot_splash/bg_color=Color(0.0235, 0.0392, 0.0941, 1)
@@ -39,15 +39,18 @@ ThemeHelper="*res://scripts/autoload/ThemeHelper.gd"
 window/size/viewport_width=1600
 window/size/viewport_height=900
 window/size/resizable=true
+window/vsync/vsync_mode=1
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
 [physics]
 
-common/physics_ticks_per_second=60
+common/physics_ticks_per_second=120
+common/max_physics_steps_per_frame=8
+common/physics_jitter_fix=0.5
 3d/default_gravity=0.0
-3d/default_linear_damp=0.35
-3d/default_angular_damp=1.2
+3d/default_linear_damp=0.28
+3d/default_angular_damp=0.18
 
 [rendering]
 

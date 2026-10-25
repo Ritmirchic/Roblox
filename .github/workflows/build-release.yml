@@ -208,12 +208,14 @@ jobs:
 
           $tag = "space-miner-v1.0.0"
           $notes = @"
-          # SPACE MINER: BUILD & CONQUER — v1.0.1 (64-Bit Windows Release)
+          # SPACE MINER: BUILD & CONQUER — v1.0.2 (64-Bit Windows Release)
 
           Complete standalone 64-bit Windows 3D space mining, modular ship construction, orbital combat, and collectible card progression game built on **Godot Engine 4.3**.
 
-          ### v1.0.1 Fix
-          - Fixed `Projectile3D` SceneTree `global_transform` / velocity initialization and reticle target-lock aiming so all weapons, rotating turrets, drones, and enemy spacecraft fire accurately in every 3D direction from their physical muzzle mounts.
+          ### v1.0.2 Highlights
+          - **Dual Crosshair HUD**: Primary Steering/Aiming Crosshair (Cyan) + Live Ballistic Bullet Trajectory Pipper (Gold/Green) showing exact 3D bullet flight vector, drift, impact range, and moving-target lead indicator.
+          - **120 Hz Smooth Flight & Effortless 360° Maneuvers**: 120 Hz physics simulation, sub-frame Quaternion ship/camera interpolation, and gimbal-lock-free 6-DOF 360° pitch loops, upside-down flips, and `Q/E` barrel rolls.
+          - **v1.0.1 Fix**: Full 360° multi-directional `Projectile3D` muzzle firing.
 
           ## Downloads
           - **Windows Standalone Portable (`SPACE_MINER_WINDOWS.zip`)**: Extract and launch `SPACE_MINER.exe`. No external runtimes required.
@@ -238,9 +240,9 @@ jobs:
 
           if ($exists) {
             gh release upload $tag "dist\SPACE_MINER_WINDOWS.zip" "dist\SPACE_MINER_SETUP.exe" "dist\SPACE_MINER_SOURCE.zip" "dist\SHA256SUMS.txt" --clobber --repo "${{ github.repository }}"
-            gh release edit $tag --title "SPACE MINER: BUILD & CONQUER v1.0.1" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
+            gh release edit $tag --title "SPACE MINER: BUILD & CONQUER v1.0.2" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
           } else {
-            gh release create $tag "dist\SPACE_MINER_WINDOWS.zip" "dist\SPACE_MINER_SETUP.exe" "dist\SPACE_MINER_SOURCE.zip" "dist\SHA256SUMS.txt" --target "${{ github.sha }}" --title "SPACE MINER: BUILD & CONQUER v1.0.1" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
+            gh release create $tag "dist\SPACE_MINER_WINDOWS.zip" "dist\SPACE_MINER_SETUP.exe" "dist\SPACE_MINER_SOURCE.zip" "dist\SHA256SUMS.txt" --target "${{ github.sha }}" --title "SPACE MINER: BUILD & CONQUER v1.0.2" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
           }
 
           Write-Host "::notice title=ReleasePublished::https://github.com/${{ github.repository }}/releases/tag/$tag"

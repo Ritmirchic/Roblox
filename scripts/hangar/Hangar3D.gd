@@ -17,6 +17,10 @@ var _cam_yaw: float = -32.0
 var _cam_pitch: float = -22.0
 var _cam_dist: float = 16.5
 var _cam_target: Vector3 = Vector3(0, 0.5, 0)
+var _goal_yaw: float = -32.0
+var _goal_pitch: float = -22.0
+var _goal_dist: float = 16.5
+var _goal_target: Vector3 = Vector3(0, 0.5, 0)
 var _orbit_dragging: bool = false
 var _pan_dragging: bool = false
 
@@ -223,18 +227,18 @@ func _build_camera_rig() -> void:
 	_apply_camera_transform()
 
 func _apply_camera_transform() -> void:
-	_cam_pitch = clampf(_cam_pitch, -78.0, -6.0)
-	_cam_dist = clampf(_cam_dist, 6.0, 34.0)
-	_cam_target.x = clampf(_cam_target.x, -12.0, 12.0)
-	_cam_target.y = clampf(_cam_target.y, -0.5, 6.0)
-	_cam_target.z = clampf(_cam_target.z, -12.0, 12.0)
+	_goal_pitch = clampf(_goal_pitch, -85.0, 28.0)
+	_goal_dist = clampf(_goal_dist, 5.5, 36.0)
+	_goal_target.x = clampf(_goal_target.x, -12.0, 12.0)
+	_goal_target.y = clampf(_goal_target.y, -0.5, 6.0)
+	_goal_target.z = clampf(_goal_target.z, -12.0, 12.0)
 
 	_cam_pivot.position = _cam_target
 	_cam_pivot.rotation_degrees = Vector3(_cam_pitch, _cam_yaw, 0.0)
 	_cam.position = Vector3(0, 0, _cam_dist)
 	# Prevent floor clipping
-	if _cam.global_position.y < 0.6:
-		_cam.global_position.y = 0.6
+	if _cam.global_position.y < 0.45:
+		_cam.global_position.y = 0.45
 
 func _build_ship_and_gizmos() -> void:
 	_ship_preview_root = Node3D.new()
@@ -700,16 +704,20 @@ func _process(delta: float) -> void:
 	if Input.is_key_pressed(KEY_A): pan.x -= 1.0
 	if Input.is_key_pressed(KEY_D): pan.x += 1.0
 	if pan.length_squared() > 0.01:
-		var yaw_basis := Basis(Vector3.UP, deg_to_rad(_cam_yaw))
-		_cam_target += (yaw_basis * pan.normalized()) * delta * 10.0
-		_apply_camera_transform()
+		var yaw_basis := Basis(Vector3.UP, deg_to_rad(_goal_yaw))
+		_goal_target += (yaw_basis * pan.normalized()) * delta * 11.0
 
 	if Input.is_key_pressed(KEY_Q):
-		_cam_yaw -= 55.0 * delta
-		_apply_camera_transform()
+		_goal_yaw -= 75.0 * delta
 	if Input.is_key_pressed(KEY_E):
-		_cam_yaw += 55.0 * delta
-		_apply_camera_transform()
+		_goal_yaw += 75.0 * delta
+
+	var cam_alpha := 1.0 - exp(-18.0 * delta)
+	_cam_yaw = lerpf(_cam_yaw, _goal_yaw, cam_alpha)
+	_cam_pitch = lerpf(_cam_pitch, _goal_pitch, cam_alpha)
+	_cam_dist = lerpf(_cam_dist, _goal_dist, cam_alpha)
+	_cam_target = _cam_target.lerp(_goal_target, cam_alpha)
+	_apply_camera_transform()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -737,24 +745,20 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.button_index == MOUSE_BUTTON_MIDDLE:
 			_pan_dragging = event.pressed
 		elif event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
-			_cam_dist -= 1.4
-			_apply_camera_transform()
+			_goal_dist = clampf(_goal_dist - 1.6, 5.5, 36.0)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
-			_cam_dist += 1.4
-			_apply_camera_transform()
+			_goal_dist = clampf(_goal_dist + 1.6, 5.5, 36.0)
 		elif event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 			_handle_left_click(event.position)
 
 	elif event is InputEventMouseMotion:
 		if _orbit_dragging:
-			_cam_yaw -= event.relative.x * 0.32 * ThemeHelper.camera_sensitivity
-			_cam_pitch -= event.relative.y * 0.28 * ThemeHelper.camera_sensitivity
-			_apply_camera_transform()
+			_goal_yaw -= event.relative.x * 0.36 * ThemeHelper.camera_sensitivity
+			_goal_pitch = clampf(_goal_pitch - event.relative.y * 0.32 * ThemeHelper.camera_sensitivity, -85.0, 28.0)
 		elif _pan_dragging:
 			var right := _cam.global_transform.basis.x
 			var up := _cam.global_transform.basis.y
-			_cam_target -= (right * event.relative.x - up * event.relative.y) * 0.025
-			_apply_camera_transform()
+			_goal_target -= (right * event.relative.x - up * event.relative.y) * 0.025
 		else:
 			_update_mouse_ray(event.position)
 

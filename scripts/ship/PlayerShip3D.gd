@@ -33,6 +33,9 @@ var _drone_fire_cd: float = 0.0
 var _shield_hit_flash: float = 0.0
 var _shield_regen_delay: float = 0.0
 var _prev_pos: Vector3 = Vector3.ZERO
+var _prev_phys_xform: Transform3D = Transform3D.IDENTITY
+var _curr_phys_xform: Transform3D = Transform3D.IDENTITY
+var _phys_interp_ready: bool = false
 var _distance_accum: float = 0.0
 var _mining_sec_accum: float = 0.0
 
@@ -56,7 +59,23 @@ func _ready() -> void:
 
 	ShipGrid.cargo_changed.connect(_refresh_mass_and_com)
 	rebuild_from_grid()
+	reset_interpolation()
 	_prev_pos = global_position
+
+func reset_interpolation() -> void:
+	_prev_phys_xform = global_transform
+	_curr_phys_xform = global_transform
+	_phys_interp_ready = true
+
+func get_smoothed_transform() -> Transform3D:
+	if not _phys_interp_ready:
+		return global_transform
+	var f := clampf(Engine.get_physics_interpolation_fraction(), 0.0, 1.0)
+	var q0 := _prev_phys_xform.basis.orthonormalized().get_rotation_quaternion()
+	var q1 := _curr_phys_xform.basis.orthonormalized().get_rotation_quaternion()
+	var interp_basis := Basis(q0.slerp(q1, f)).orthonormalized()
+	var interp_origin := _prev_phys_xform.origin.lerp(_curr_phys_xform.origin, f)
+	return Transform3D(interp_basis, interp_origin)
 
 func rebuild_from_grid() -> void:
 	for ch in get_children():
@@ -185,6 +204,8 @@ func _refresh_mass_and_com() -> void:
 		_shield_mesh.position = center_of_mass
 
 func _physics_process(delta: float) -> void:
+	_prev_phys_xform = _curr_phys_xform if _phys_interp_ready else global_transform
+
 	# Track distance traveled for achievements
 	var step_dist := global_position.distance_to(_prev_pos)
 	_prev_pos = global_position
@@ -237,6 +258,9 @@ func _physics_process(delta: float) -> void:
 	_process_magnets_and_collection(delta)
 	_process_orbiting_drones(delta)
 
+	_curr_phys_xform = global_transform
+	_phys_interp_ready = true
+
 	ship_telemetry_updated.emit({
 		"speed": linear_velocity.length(),
 		"energy": current_energy,
@@ -264,32 +288,40 @@ func _apply_flight_physics(delta: float) -> void:
 	var right := global_transform.basis.x
 	var up := global_transform.basis.y
 
-	var world_thrust_dir := (fwd * thrust_input.z + right * (thrust_input.x * 0.65) + up * (thrust_input.y * 0.65))
+	var world_thrust_dir := (fwd * thrust_input.z + right * (thrust_input.x * 0.82) + up * (thrust_input.y * 0.82))
 	if world_thrust_dir.length_squared() > 0.001 and total_thrust > 0.0:
 		var force := world_thrust_dir.limit_length(1.0) * total_thrust * boost_mult * overheat_penalty
 		apply_central_force(force)
 		# Subtle physical off-center CoM torque effect (mitigated partly when stabilizer is on)
 		var com_offset: Vector3 = stats.get("center_of_mass", Vector3.ZERO) - stats.get("thrust_center", Vector3.ZERO)
-		var asym_scale := 0.08 if stabilizer_enabled else 0.28
+		var asym_scale := 0.04 if stabilizer_enabled else 0.18
 		if com_offset.length_squared() > 0.05:
-			apply_torque(global_transform.basis * (com_offset.cross(Vector3(0, 0, -1)) * total_thrust * 0.015 * asym_scale))
+			apply_torque(global_transform.basis * (com_offset.cross(Vector3(0, 0, -1)) * total_thrust * 0.012 * asym_scale))
 
-	# Rotational control
+	# Smooth 6-DOF Full-360 Rotational Control (Quaternion/Basis local-frame: zero gimbal or horizon lock!)
 	var ang_acc := float(stats.get("angular_accel", 3.2))
-	var torque_local := Vector3(rot_input.x, rot_input.y, rot_input.z) * mass * clampf(ang_acc, 1.4, 7.5) * 2.2
-	apply_torque(global_transform.basis * torque_local)
+	var agility := clampf(0.95 + ang_acc * 0.14, 0.95, 2.25)
+	var desired_local_ang := Vector3(
+		rot_input.x * 3.1 * agility,
+		rot_input.y * 3.3 * agility,
+		rot_input.z * 4.2 * agility
+	)
+	var desired_world_ang := global_transform.basis * desired_local_ang
+	if rot_input.length_squared() > 0.0008:
+		var rot_blend := 1.0 - exp(-15.0 * delta)
+		angular_velocity = angular_velocity.lerp(desired_world_ang, rot_blend)
+	elif stabilizer_enabled:
+		var damp_blend := 1.0 - exp(-7.5 * delta)
+		angular_velocity = angular_velocity.lerp(Vector3.ZERO, damp_blend)
 
-	# Flight stabilization assistance
-	if stabilizer_enabled:
-		if thrust_input.length_squared() < 0.01:
-			linear_velocity = linear_velocity.lerp(Vector3.ZERO, clampf(delta * 1.8, 0.0, 1.0))
-		if rot_input.length_squared() < 0.001:
-			angular_velocity = angular_velocity.lerp(Vector3.ZERO, clampf(delta * 5.5, 0.0, 1.0))
+	# Smooth linear velocity stabilization when throttle is released
+	if stabilizer_enabled and thrust_input.length_squared() < 0.01:
+		linear_velocity = linear_velocity.lerp(Vector3.ZERO, 1.0 - exp(-1.9 * delta))
 
 	# Cap max speed cleanly according to acceleration/thrust-to-mass
-	var max_spd := clampf(22.0 + float(stats.get("acceleration", 8.0)) * 3.2 * boost_mult, 24.0, 115.0)
+	var max_spd := clampf(26.0 + float(stats.get("acceleration", 8.0)) * 3.4 * boost_mult, 28.0, 125.0)
 	if linear_velocity.length() > max_spd:
-		linear_velocity = linear_velocity.normalized() * lerpf(linear_velocity.length(), max_spd, clampf(delta * 4.0, 0.0, 1.0))
+		linear_velocity = linear_velocity.normalized() * lerpf(linear_velocity.length(), max_spd, 1.0 - exp(-5.0 * delta))
 
 	# Update thruster plume visuals & audio
 	var throttle_vis := clampf(thrust_input.length() * boost_mult, 0.08, 1.4)
@@ -317,6 +349,7 @@ func _get_reticle_assisted_point(from_pos: Vector3) -> Vector3:
 	return aimed_world_point if (aimed_world_point - from_pos).length_squared() > 1.0 else (from_pos + base_dir * 160.0)
 
 func _update_turrets(delta: float) -> void:
+	var slew_alpha := 1.0 - exp(-18.0 * delta)
 	for uid in _turrets_by_uid.keys():
 		var tur: Node3D = _turrets_by_uid[uid]
 		if not is_instance_valid(tur):
@@ -325,7 +358,141 @@ func _update_turrets(delta: float) -> void:
 		var to_t := target_pt - tur.global_position
 		if to_t.length_squared() > 1.0:
 			var aim_xform := Projectile3D.make_aim_transform(tur.global_position, to_t.normalized(), global_transform.basis.y)
-			tur.global_transform.basis = tur.global_transform.basis.slerp(aim_xform.basis, clampf(delta * 12.0, 0.0, 1.0)).orthonormalized()
+			var q_cur := tur.global_transform.basis.orthonormalized().get_rotation_quaternion()
+			var q_dst := aim_xform.basis.orthonormalized().get_rotation_quaternion()
+			tur.global_transform.basis = Basis(q_cur.slerp(q_dst, slew_alpha)).orthonormalized()
+
+func get_weapon_fire_solution(uid: int) -> Dictionary:
+	var entry: Dictionary = ShipGrid.placed_modules[uid]
+	var mod_id: String = entry["mod_id"]
+	var def: Dictionary = GameData.modules[mod_id]
+	var muzzle: Marker3D = _muzzles_by_uid[uid]
+	var m_pos := muzzle.global_position
+	var p_spd := float(def.get("proj_speed", 210.0))
+	var w_range := float(def.get("weapon_range", 200.0))
+
+	var barrel_dir: Vector3
+	if bool(def.get("is_turret", false)) and _turrets_by_uid.has(uid) and is_instance_valid(_turrets_by_uid[uid]):
+		var tur: Node3D = _turrets_by_uid[uid]
+		# Snap turret aim if target is already within 2 deg, otherwise use live slewing turret barrel!
+		var tgt_point := _get_reticle_assisted_point(m_pos)
+		var wish_dir := (tgt_point - m_pos).normalized()
+		var cur_tur_fwd := (-tur.global_transform.basis.z).normalized()
+		if wish_dir.length_squared() > 0.1 and cur_tur_fwd.dot(wish_dir) > 0.998:
+			barrel_dir = wish_dir
+		else:
+			barrel_dir = cur_tur_fwd
+	else:
+		var ship_fwd := (-global_transform.basis.z).normalized()
+		var tgt_point := _get_reticle_assisted_point(m_pos)
+		var wish_dir := (tgt_point - m_pos).normalized()
+		if wish_dir.length_squared() < 0.1:
+			barrel_dir = ship_fwd
+		elif ship_fwd.dot(wish_dir) >= 0.92:
+			barrel_dir = wish_dir
+		else:
+			# Smoothly clamp fixed mounts to a 23-deg forward gimbal cone around ship nose
+			barrel_dir = ship_fwd.slerp(wish_dir, 0.25).normalized()
+
+	if barrel_dir.length_squared() < 0.1:
+		barrel_dir = (-global_transform.basis.z).normalized()
+
+	var shot_vel: Vector3 = barrel_dir * p_spd + linear_velocity
+	var flight_dir: Vector3 = shot_vel.normalized() if shot_vel.length_squared() > 0.1 else barrel_dir
+	return {
+		"muzzle_pos": m_pos,
+		"barrel_dir": barrel_dir,
+		"flight_dir": flight_dir,
+		"proj_speed": p_spd,
+		"shot_vel": shot_vel,
+		"range": w_range,
+	}
+
+func get_ballistic_sight_info() -> Dictionary:
+	var sum_origin := Vector3.ZERO
+	var sum_flight_dir := Vector3.ZERO
+	var sum_speed := 0.0
+	var max_range := 190.0
+	var count := 0
+
+	for uid in ShipGrid.placed_modules.keys():
+		var entry: Dictionary = ShipGrid.placed_modules[uid]
+		var mod_id: String = entry["mod_id"]
+		var def: Dictionary = GameData.modules[mod_id]
+		if not def.has("weapon_type") or not _muzzles_by_uid.has(uid):
+			continue
+		if ShipGrid.get_module_efficiency(entry) <= 0.0:
+			continue
+		var sol := get_weapon_fire_solution(uid)
+		sum_origin += sol["muzzle_pos"] as Vector3
+		sum_flight_dir += sol["flight_dir"] as Vector3
+		sum_speed += float(sol["proj_speed"])
+		max_range = maxf(max_range, float(sol["range"]))
+		count += 1
+
+	var origin: Vector3
+	var flight_dir: Vector3
+	var avg_spd: float
+	if count > 0:
+		origin = sum_origin / float(count)
+		flight_dir = (sum_flight_dir / float(count)).normalized()
+		avg_spd = sum_speed / float(count)
+	else:
+		# Fallback ballistic sight along nose + ship drift when only mining gear is equipped
+		var s_xf := get_smoothed_transform()
+		var nose_fwd := (-s_xf.basis.z).normalized()
+		origin = s_xf.origin + nose_fwd * 2.4
+		avg_spd = 210.0
+		var v := nose_fwd * avg_spd + linear_velocity
+		flight_dir = v.normalized() if v.length_squared() > 0.1 else nose_fwd
+
+	if flight_dir.length_squared() < 0.01:
+		flight_dir = (-global_transform.basis.z).normalized()
+
+	var ref_dist := 165.0
+	if is_instance_valid(locked_enemy):
+		ref_dist = clampf(origin.distance_to(locked_enemy.global_position), 25.0, max_range)
+
+	var impact_pos := origin + flight_dir * ref_dist
+	var hit_kind := "none"
+	var space_state := get_world_3d().direct_space_state
+	if space_state != null:
+		var q := PhysicsRayQueryParameters3D.create(origin, origin + flight_dir * max_range)
+		q.exclude = [get_rid()]
+		var hit := space_state.intersect_ray(q)
+		if not hit.is_empty():
+			impact_pos = hit["position"]
+			var col: Object = hit["collider"]
+			if col is EnemyShip3D or (col is Node and col.is_in_group("enemies")):
+				hit_kind = "enemy"
+			elif col is Asteroid3D:
+				hit_kind = "asteroid"
+			else:
+				hit_kind = "prop"
+
+	# Compute moving-target ballistic lead point if an enemy is targeted
+	var has_lead := false
+	var lead_pos := Vector3.ZERO
+	if is_instance_valid(locked_enemy):
+		var en_pos := locked_enemy.global_position
+		var en_vel := Vector3.ZERO
+		if locked_enemy is CharacterBody3D:
+			en_vel = (locked_enemy as CharacterBody3D).velocity
+		var dist_to_en := origin.distance_to(en_pos)
+		var tof := dist_to_en / maxf(40.0, avg_spd)
+		lead_pos = en_pos + (en_vel - linear_velocity) * tof
+		has_lead = true
+
+	return {
+		"origin": origin,
+		"flight_dir": flight_dir,
+		"world_pos": impact_pos,
+		"distance": origin.distance_to(impact_pos),
+		"hit_kind": hit_kind,
+		"has_weapons": count > 0,
+		"has_lead": has_lead,
+		"lead_world_pos": lead_pos,
+	}
 
 func _process_mining_beams(delta: float) -> void:
 	var any_beam_active := false
@@ -410,25 +577,16 @@ func _process_weapons(delta: float) -> void:
 		var rate := maxf(0.15, float(def["fire_rate"]) * fr_mult * eff)
 		_weapon_cooldowns[uid] = 1.0 / rate
 
-		var muzzle: Marker3D = _muzzles_by_uid[uid]
-		var m_pos := muzzle.global_position
+		var sol := get_weapon_fire_solution(uid)
+		var m_pos: Vector3 = sol["muzzle_pos"]
+		var barrel_dir: Vector3 = sol["barrel_dir"]
+		var p_spd: float = float(sol["proj_speed"])
 		var wtype: String = def["weapon_type"]
-		var tgt_point := _get_reticle_assisted_point(m_pos)
-		var fire_dir := (tgt_point - m_pos).normalized()
-		if fire_dir.length_squared() < 0.1:
-			fire_dir = (-global_transform.basis.z).normalized()
-
-		# Fixed hull pods (non-turrets) clamp within generous 75-deg forward gimbal cone around ship nose
-		if not bool(def.get("is_turret", false)):
-			var ship_fwd := (-global_transform.basis.z).normalized()
-			if ship_fwd.dot(fire_dir) < 0.25:
-				fire_dir = ship_fwd
 
 		var dmg := GameData.get_module_scaled_stat(mod_id, "weapon_damage", int(entry["level"])) * eff * dmg_mult
-		var p_spd := float(def.get("proj_speed", 180.0))
 		var p := Projectile3D.new()
 		projectiles_root.add_child(p)
-		var xform := Projectile3D.make_aim_transform(m_pos, fire_dir, global_transform.basis.y)
+		var xform := Projectile3D.make_aim_transform(m_pos, barrel_dir, global_transform.basis.y)
 		p.setup(
 			true,
 			wtype,

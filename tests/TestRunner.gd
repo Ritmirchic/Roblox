@@ -288,7 +288,7 @@ func _test_live_3d_gameplay_mining_combat_magnets() -> void:
 	# Ship movement test
 	var start_pos := ship.global_position
 	ship.thrust_input = Vector3(0, 0, 1)
-	for _i in range(15):
+	for _i in range(30):
 		await get_tree().physics_frame
 	_check(ship.global_position.distance_to(start_pos) > 0.15 and ship.linear_velocity.length() > 1.0, "Thruster physics accelerates RigidBody3D ship in space")
 	ship.thrust_input = Vector3.ZERO
@@ -308,7 +308,7 @@ func _test_live_3d_gameplay_mining_combat_magnets() -> void:
 	var ch: ResourceChunk3D = exp_world.chunks_root.get_child(exp_world.chunks_root.get_child_count() - 1)
 	ch.global_position = ship.global_position + Vector3(0, 0, -14)
 	ch.velocity = Vector3.ZERO
-	for _i in range(6):
+	for _i in range(12):
 		await get_tree().physics_frame
 	_check(ch.velocity.length() > 0.2, "Magnetic collector physically pulls nearby ResourceChunk3D toward ship")
 
@@ -358,6 +358,48 @@ func _test_live_3d_gameplay_mining_combat_magnets() -> void:
 			if is_instance_valid(pr):
 				var travel_dir := (pr.global_position - spawn_p).normalized()
 				_check(travel_dir.dot(aim_d) > 0.96, "Projectile flies accurately along aimed 3D vector " + str(aim_d))
+
+	# 2nd Crosshair (Ballistic Bullet Sight) accuracy test under sideways ship velocity drift
+	for old_p in exp_world.projectiles_root.get_children():
+		old_p.queue_free()
+	await get_tree().process_frame
+	var drift_xf := Projectile3D.make_aim_transform(test_ship_origin, Vector3(0, 0, -1))
+	PhysicsServer3D.body_set_state(ship.get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM, drift_xf)
+	PhysicsServer3D.body_set_state(ship.get_rid(), PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, Vector3(45.0, 0, 0))
+	ship.global_transform = drift_xf
+	ship.linear_velocity = Vector3(45.0, 0, 0)
+	ship.aimed_world_point = test_ship_origin + Vector3(0, 0, -180.0)
+	var b_info := ship.get_ballistic_sight_info()
+	var sight_dir: Vector3 = b_info["flight_dir"]
+	_check(sight_dir.x > 0.12, "2nd Ballistic Crosshair reflects sideways ship velocity drift")
+	ship.current_energy = 120.0
+	ship._weapon_cooldowns.clear()
+	ship.firing_weapons = true
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	ship.firing_weapons = false
+	if exp_world.projectiles_root.get_child_count() >= 1:
+		var pr_drift := exp_world.projectiles_root.get_child(0) as Projectile3D
+		var p0 := pr_drift.global_position
+		await get_tree().physics_frame
+		await get_tree().physics_frame
+		var actual_bullet_dir := (pr_drift.global_position - p0).normalized()
+		_check(actual_bullet_dir.dot(sight_dir) > 0.995, "2nd Ballistic Crosshair vector matches actual bullet trajectory 1:1")
+
+	# Full 360-degree vertical flip (upside-down pitch loop) & barrel roll test
+	ship.linear_velocity = Vector3.ZERO
+	PhysicsServer3D.body_set_state(ship.get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM, drift_xf)
+	PhysicsServer3D.body_set_state(ship.get_rid(), PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY, Vector3.ZERO)
+	ship.global_transform = drift_xf
+	ship.rot_input = Vector3(1.8, 0.0, 0.0) # Pitch loop
+	var went_upside_down := false
+	for _step in range(95):
+		await get_tree().physics_frame
+		if ship.global_transform.basis.y.y < -0.5:
+			went_upside_down = true
+			break
+	_check(went_upside_down, "Ship effortlessly pitches past 180 deg upside-down without gimbal lock")
+	ship.rot_input = Vector3.ZERO
 
 	# Enemy AI & Combat test
 	var enemy := EnemyShip3D.new()
