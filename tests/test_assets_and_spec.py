@@ -4,6 +4,7 @@ import re
 import subprocess
 import wave
 
+from gdtoolkit.parser import parser as gd_parser
 from PIL import Image
 import pygltflib
 
@@ -13,9 +14,10 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 def test_all_gdscripts_parse_cleanly():
     gd_files = sorted(ROOT.glob("scripts/**/*.gd")) + sorted(ROOT.glob("tests/*.gd"))
     assert len(gd_files) >= 18
-    cmd = [str(ROOT / ".venv" / "bin" / "gdparse")] + [str(f) for f in gd_files]
-    res = subprocess.run(cmd, capture_output=True, text=True)
-    assert res.returncode == 0, f"gdparse failed:\n{res.stderr}\n{res.stdout}"
+    for f in gd_files:
+        src = f.read_text(encoding="utf-8")
+        tree = gd_parser.parse(src)
+        assert tree is not None, f"gdparse failed on {f}"
 
 
 def test_all_res_paths_exist():

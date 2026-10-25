@@ -30,7 +30,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pillow pygltflib "gdtoolkit==4.*" pytest
-          pytest -v tests/test_assets_and_spec.py
+          $ptOut = pytest -v --tb=short tests/test_assets_and_spec.py 2>&1
+          $ptExit = $LASTEXITCODE
+          $ptOut | ForEach-Object { Write-Host $_ }
+          if ($ptExit -ne 0) {
+            $errSummary = ($ptOut | Select-Object -Last 15) -join " | "
+            Write-Host "::error title=PytestFailure::$errSummary"
+            exit 1
+          }
           Write-Host "::notice title=StaticTests::pytest asset, GLB PBR, card art, audio, and gdparse suite passed."
 
       - name: Install Godot 4.3-stable (Win64) & Export Templates
