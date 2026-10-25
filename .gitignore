@@ -1,7 +1,11 @@
 node_modules/
 dist/
 build/
-release/
+release/*
+!release/SPACE_MINER_WINDOWS.zip
+!release/SPACE_MINER_SETUP.exe
+!release/SPACE_MINER_SOURCE.zip
+!release/SHA256SUMS.txt
 preview/
 *.log
 .DS_Store

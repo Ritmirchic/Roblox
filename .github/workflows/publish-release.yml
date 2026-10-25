@@ -1,0 +1,44 @@
+name: Publish Windows release assets
+
+# The build artifacts are produced locally and committed under release/.
+# This workflow attaches them to a GitHub Release so they get real
+# https://github.com/.../releases/download/... URLs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach the artifacts to
+        required: true
+        default: space-miner-v1.1.0
+
+permissions:
+  contents: write
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the branch holding the artifacts
+        uses: actions/checkout@v4
+
+      - name: Verify artifacts exist
+        run: |
+          ls -la release/
+          sha256sum -c release/SHA256SUMS.txt
+
+      - name: Upload artifacts to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ inputs.tag }}" \
+            release/SPACE_MINER_WINDOWS.zip \
+            release/SPACE_MINER_SETUP.exe \
+            release/SPACE_MINER_SOURCE.zip \
+            release/SHA256SUMS.txt \
+            --repo "${{ github.repository }}" --clobber
+
+      - name: Show the published assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release view "${{ inputs.tag }}" --repo "${{ github.repository }}" --json assets
