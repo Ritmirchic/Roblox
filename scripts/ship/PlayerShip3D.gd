@@ -305,18 +305,27 @@ func _apply_flight_physics(delta: float) -> void:
 			sm.set_shader_parameter("throttle", throttle_vis * eff)
 			sm.set_shader_parameter("heat_ratio", engine_heat / 100.0)
 
-func _update_turrets(delta: float) -> void:
-	var target_pt := aimed_world_point
+func _get_reticle_assisted_point(from_pos: Vector3) -> Vector3:
+	var base_dir := (aimed_world_point - from_pos).normalized()
+	if base_dir.length_squared() < 0.1:
+		base_dir = (-global_transform.basis.z).normalized()
 	if is_instance_valid(locked_enemy):
-		target_pt = locked_enemy.global_position
+		var to_lock := (locked_enemy.global_position - from_pos).normalized()
+		# Only snap/assist direct-fire guns when the locked enemy is close to the player's crosshair (~12 deg cone)
+		if to_lock.length_squared() > 0.1 and base_dir.dot(to_lock) > 0.978:
+			return locked_enemy.global_position
+	return aimed_world_point if (aimed_world_point - from_pos).length_squared() > 1.0 else (from_pos + base_dir * 160.0)
+
+func _update_turrets(delta: float) -> void:
 	for uid in _turrets_by_uid.keys():
 		var tur: Node3D = _turrets_by_uid[uid]
 		if not is_instance_valid(tur):
 			continue
+		var target_pt := _get_reticle_assisted_point(tur.global_position)
 		var to_t := target_pt - tur.global_position
-		if to_t.length_squared() > 1.0 and absf(to_t.normalized().dot(global_transform.basis.y)) < 0.92:
-			var desired := Basis.looking_at(to_t.normalized(), global_transform.basis.y)
-			tur.global_transform.basis = tur.global_transform.basis.slerp(desired, clampf(delta * 10.0, 0.0, 1.0)).orthonormalized()
+		if to_t.length_squared() > 1.0:
+			var aim_xform := Projectile3D.make_aim_transform(tur.global_position, to_t.normalized(), global_transform.basis.y)
+			tur.global_transform.basis = tur.global_transform.basis.slerp(aim_xform.basis, clampf(delta * 12.0, 0.0, 1.0)).orthonormalized()
 
 func _process_mining_beams(delta: float) -> void:
 	var any_beam_active := false
@@ -403,16 +412,23 @@ func _process_weapons(delta: float) -> void:
 
 		var muzzle: Marker3D = _muzzles_by_uid[uid]
 		var m_pos := muzzle.global_position
-		var tgt_point := locked_enemy.global_position if is_instance_valid(locked_enemy) else aimed_world_point
-		var fire_dir := (tgt_point - m_pos).normalized()
-		if fire_dir.length_squared() < 0.1 or absf(fire_dir.dot(Vector3.UP)) > 0.99:
-			fire_dir = -global_transform.basis.z
-
 		var wtype: String = def["weapon_type"]
+		var tgt_point := _get_reticle_assisted_point(m_pos)
+		var fire_dir := (tgt_point - m_pos).normalized()
+		if fire_dir.length_squared() < 0.1:
+			fire_dir = (-global_transform.basis.z).normalized()
+
+		# Fixed hull pods (non-turrets) clamp within generous 75-deg forward gimbal cone around ship nose
+		if not bool(def.get("is_turret", false)):
+			var ship_fwd := (-global_transform.basis.z).normalized()
+			if ship_fwd.dot(fire_dir) < 0.25:
+				fire_dir = ship_fwd
+
 		var dmg := GameData.get_module_scaled_stat(mod_id, "weapon_damage", int(entry["level"])) * eff * dmg_mult
 		var p_spd := float(def.get("proj_speed", 180.0))
 		var p := Projectile3D.new()
-		var xform := Transform3D(Basis.looking_at(fire_dir, Vector3.UP), m_pos)
+		projectiles_root.add_child(p)
+		var xform := Projectile3D.make_aim_transform(m_pos, fire_dir, global_transform.basis.y)
 		p.setup(
 			true,
 			wtype,
@@ -421,9 +437,9 @@ func _process_weapons(delta: float) -> void:
 			xform,
 			float(def.get("splash_radius", 0.0)),
 			float(def.get("turn_rate", 0.0)),
-			locked_enemy if wtype == "missile" else null
+			locked_enemy if wtype == "missile" else null,
+			linear_velocity
 		)
-		projectiles_root.add_child(p)
 
 		match wtype:
 			"kinetic": AudioManager.play_sfx("mg_shot", 0.08, 0.48)
@@ -492,8 +508,8 @@ func _process_orbiting_drones(delta: float) -> void:
 			for dn in _orbit_drones:
 				var dir := (nearest.global_position - dn.global_position).normalized()
 				var p := Projectile3D.new()
-				p.setup(true, "laser", 20.0 * float(stats.get("damage_mult", 1.0)), 220.0, Transform3D(Basis.looking_at(dir, Vector3.UP), dn.global_position))
 				projectiles_root.add_child(p)
+				p.setup(true, "laser", 20.0 * float(stats.get("damage_mult", 1.0)), 220.0, Projectile3D.make_aim_transform(dn.global_position, dir), 0.0, 0.0, null, linear_velocity)
 
 func receive_enemy_hit(raw_damage: float, hit_world_pos: Vector3, shape_idx: int = 0) -> void:
 	if raw_damage <= 0.0:

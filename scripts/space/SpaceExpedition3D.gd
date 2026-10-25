@@ -46,6 +46,7 @@ var _hazard_warn_lbl: Label
 var _pause_panel: PanelContainer
 var _extracting: bool = false
 var autopilot_override: bool = false
+var _manual_locked_enemy: Node3D = null
 
 func setup_sector(sec_idx: int) -> void:
 	sector_index = clampi(sec_idx, 0, GameData.sectors.size() - 1)
@@ -579,26 +580,31 @@ func _handle_flight_inputs(_delta: float) -> void:
 	player_ship.firing_weapons = _mouse_captured and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
 	player_ship.firing_mining = (_mouse_captured and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)) or Input.is_key_pressed(KEY_F)
 
-	# Auto-acquire nearest target near reticle for turrets & seeker missiles
-	var cam_fwd := -_cam.global_transform.basis.z
-	player_ship.aimed_world_point = _cam.global_position + cam_fwd * 150.0
-	var space_q := PhysicsRayQueryParameters3D.create(_cam.global_position, _cam.global_position + cam_fwd * 240.0)
+	# Crosshair world aim raycast starting ahead of the ship (never hitting debris between 3rd-person cam & ship)
+	var cam_fwd := (-_cam.global_transform.basis.z).normalized()
+	var cam_to_ship_d := _cam.global_position.distance_to(player_ship.global_position)
+	var ray_origin := _cam.global_position + cam_fwd * (cam_to_ship_d + 2.5)
+	player_ship.aimed_world_point = _cam.global_position + cam_fwd * 220.0
+	var space_q := PhysicsRayQueryParameters3D.create(ray_origin, _cam.global_position + cam_fwd * 280.0)
 	space_q.exclude = [player_ship.get_rid()]
 	var hit := get_world_3d().direct_space_state.intersect_ray(space_q)
 	if not hit.is_empty():
 		player_ship.aimed_world_point = hit["position"]
 
-	var best_en: Node3D = null
-	var best_dot := 0.88
-	for en in enemies_root.get_children():
-		if en is Node3D:
-			var en_n := en as Node3D
-			var dir_e: Vector3 = (en_n.global_position - _cam.global_position).normalized()
-			var d_dot := cam_fwd.dot(dir_e)
-			if d_dot > best_dot and en_n.global_position.distance_to(player_ship.global_position) < 250.0:
-				best_dot = d_dot
-				best_en = en_n
-	if is_instance_valid(best_en):
+	if is_instance_valid(_manual_locked_enemy) and _manual_locked_enemy.global_position.distance_to(player_ship.global_position) < 320.0:
+		player_ship.locked_enemy = _manual_locked_enemy
+	else:
+		_manual_locked_enemy = null
+		var best_en: Node3D = null
+		var best_dot := 0.90
+		for en in enemies_root.get_children():
+			if en is Node3D:
+				var en_n := en as Node3D
+				var dir_e: Vector3 = (en_n.global_position - _cam.global_position).normalized()
+				var d_dot := cam_fwd.dot(dir_e)
+				if d_dot > best_dot and en_n.global_position.distance_to(player_ship.global_position) < 250.0:
+					best_dot = d_dot
+					best_en = en_n
 		player_ship.locked_enemy = best_en
 
 func _update_third_person_camera(delta: float) -> void:
@@ -656,7 +662,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		_mouse_steer += event.relative
 
 	elif event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+		if not _pause_panel.visible and not _mouse_captured and event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
+			_set_mouse_flight_mode(true)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			_cam_dist = clampf(_cam_dist - 1.5, 8.5, 34.0)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			_cam_dist = clampf(_cam_dist + 1.5, 8.5, 34.0)
@@ -665,11 +673,35 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.keycode in [KEY_ESCAPE, KEY_TAB]:
 			_pause_panel.visible = not _pause_panel.visible
 			_set_mouse_flight_mode(not _pause_panel.visible)
+		elif event.keycode == KEY_T and is_instance_valid(player_ship):
+			_toggle_manual_target_lock()
 		elif event.keycode == KEY_Z and is_instance_valid(player_ship):
 			player_ship.stabilizer_enabled = not player_ship.stabilizer_enabled
 			AudioManager.play_sfx("ui_click", 0.05, 0.6)
 		elif event.keycode == KEY_H:
 			_complete_expedition_and_return()
+
+func _toggle_manual_target_lock() -> void:
+	if is_instance_valid(_manual_locked_enemy):
+		_manual_locked_enemy = null
+		player_ship.locked_enemy = null
+		AudioManager.play_sfx("ui_back", 0.04, 0.5)
+		return
+	var cam_fwd := (-_cam.global_transform.basis.z).normalized()
+	var best: Node3D = null
+	var best_score := -2.0
+	for en in enemies_root.get_children():
+		if en is Node3D:
+			var en_n := en as Node3D
+			var d := en_n.global_position.distance_to(player_ship.global_position)
+			if d < 280.0:
+				var dot_v := cam_fwd.dot((en_n.global_position - _cam.global_position).normalized())
+				if dot_v > best_score:
+					best_score = dot_v
+					best = en_n
+	_manual_locked_enemy = best
+	player_ship.locked_enemy = best
+	AudioManager.play_sfx("ui_click", 0.04, 0.6)
 
 func _complete_expedition_and_return() -> void:
 	if _extracting:

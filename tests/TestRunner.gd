@@ -317,6 +317,47 @@ func _test_live_3d_gameplay_mining_combat_magnets() -> void:
 	var c2 := ch.try_collect()
 	_check(c1 and not c2 and ShipGrid.get_current_cargo_units() > cargo_before, "ResourceChunk3D enters cargo & blocks duplicate collection")
 
+	# Multi-directional 3D projectile trajectory test (-Z, +X, +Z, +Y) from off-origin ship
+	for a in exp_world.asteroids_root.get_children():
+		a.queue_free()
+	for e_old in exp_world.enemies_root.get_children():
+		e_old.queue_free()
+	await get_tree().process_frame
+
+	var test_ship_origin := Vector3(40.0, 25.0, -30.0)
+	ship.locked_enemy = null
+	var test_dirs: Array[Vector3] = [
+		Vector3(0, 0, -1),
+		Vector3(1, 0, 0),
+		Vector3(0, 0, 1),
+		Vector3(0, 1, 0),
+	]
+	for aim_d in test_dirs:
+		for old_p in exp_world.projectiles_root.get_children():
+			old_p.queue_free()
+		await get_tree().process_frame
+		var desired_xf := Projectile3D.make_aim_transform(test_ship_origin, aim_d)
+		PhysicsServer3D.body_set_state(ship.get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM, desired_xf)
+		PhysicsServer3D.body_set_state(ship.get_rid(), PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, Vector3.ZERO)
+		ship.global_transform = desired_xf
+		ship.linear_velocity = Vector3.ZERO
+		ship.current_energy = 120.0
+		ship._weapon_cooldowns.clear()
+		ship.aimed_world_point = test_ship_origin + aim_d * 180.0
+		ship.firing_weapons = true
+		await get_tree().physics_frame
+		ship.firing_weapons = false
+		_check(exp_world.projectiles_root.get_child_count() >= 1, "Weapon spawned Projectile3D for aim " + str(aim_d))
+		if exp_world.projectiles_root.get_child_count() >= 1:
+			var pr := exp_world.projectiles_root.get_child(0) as Projectile3D
+			var spawn_p := pr.global_position
+			_check(spawn_p.distance_to(test_ship_origin) < 8.0, "Projectile spawns at ship muzzle (not world origin) for " + str(aim_d))
+			await get_tree().physics_frame
+			await get_tree().physics_frame
+			if is_instance_valid(pr):
+				var travel_dir := (pr.global_position - spawn_p).normalized()
+				_check(travel_dir.dot(aim_d) > 0.96, "Projectile flies accurately along aimed 3D vector " + str(aim_d))
+
 	# Enemy AI & Combat test
 	var enemy := EnemyShip3D.new()
 	enemy.setup("scout_drone", ship.global_position + Vector3(0, 0, -45), ship, exp_world.projectiles_root, exp_world.chunks_root)

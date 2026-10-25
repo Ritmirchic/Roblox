@@ -109,10 +109,10 @@ func _physics_process(delta: float) -> void:
 
 func _fire_at_player(aim_dir: Vector3) -> void:
 	var p := Projectile3D.new()
-	var muzzle_pos := global_position - global_transform.basis.z * 2.4
-	var xform := Transform3D(Basis.looking_at(aim_dir, Vector3.UP), muzzle_pos)
-	p.setup(false, "plasma" if enemy_id in ["plasma_hunter", "void_sentinel"] else "laser", attack_damage, 125.0, xform)
 	projectiles_root.add_child(p)
+	var muzzle_pos := global_position - global_transform.basis.z * 2.4
+	var xform := Projectile3D.make_aim_transform(muzzle_pos, aim_dir)
+	p.setup(false, "plasma" if enemy_id in ["plasma_hunter", "void_sentinel"] else "laser", attack_damage, 125.0, xform)
 
 func take_weapon_damage(dmg: float) -> void:
 	if _dead or dmg <= 0.0:

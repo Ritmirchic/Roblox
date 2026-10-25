@@ -25,12 +25,13 @@ No external runtimes, Python, Godot Editor, or developer tools are required.
 -----------------------------------------
 - W / S:                  Forward / Reverse Thrusters
 - A / D:                  Port / Starboard Lateral Thrusters
-- Space / Ctrl (or Q/E):  Ascend / Descend Vertical Thrusters
+- Space / Ctrl:           Ascend / Descend Vertical Thrusters
+- Q / E:                  Roll Spacecraft Left / Right
 - Shift:                  Afterburner Boost (watch thruster heat & MW!)
 - Mouse Move:             Pitch & Yaw Ship Steering (toggle cursor with Tab)
-- Left Mouse Button:      Fire Mining Lasers / Plasma Drills at 3D Asteroids
-- Right Mouse Button / F: Fire Mounted Weapons (Turrets auto-track targets!)
-- T:                      Lock Nearest Hostile Spacecraft
+- Left Mouse Button:      Fire Mounted Weapons (Turrets aim at your reticle!)
+- Right Mouse Button / F: Fire Mining Lasers / Plasma Drills at 3D Asteroids
+- T:                      Toggle Lock on Nearest Hostile Spacecraft
 - H / Esc:                Open Tactical Comms -> Warp Extract Back to Hangar
 
 KEY PROGRESSION RULES

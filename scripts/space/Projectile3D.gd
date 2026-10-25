@@ -10,8 +10,29 @@ var turn_rate: float = 0.0
 var target_node: Node3D = null
 var _lifetime: float = 4.0
 var _velocity: Vector3 = Vector3.FORWARD
+var _start_xform: Transform3D = Transform3D.IDENTITY
+var _has_start_xform: bool = false
 
-func setup(is_player: bool, wtype: String, dmg: float, spd: float, start_xform: Transform3D, splash: float = 0.0, homing_turn: float = 0.0, tgt: Node3D = null) -> void:
+static func make_aim_transform(origin: Vector3, dir: Vector3, preferred_up: Vector3 = Vector3.UP) -> Transform3D:
+	var fwd := dir.normalized()
+	if fwd.length_squared() < 0.001:
+		fwd = Vector3.FORWARD
+	var up_ref := preferred_up.normalized()
+	if up_ref.length_squared() < 0.001 or absf(fwd.dot(up_ref)) > 0.96:
+		up_ref = Vector3.UP if absf(fwd.dot(Vector3.UP)) <= 0.96 else Vector3.RIGHT
+	return Transform3D(Basis.looking_at(fwd, up_ref), origin)
+
+func setup(
+	is_player: bool,
+	wtype: String,
+	dmg: float,
+	spd: float,
+	start_xform: Transform3D,
+	splash: float = 0.0,
+	homing_turn: float = 0.0,
+	tgt: Node3D = null,
+	inherited_velocity: Vector3 = Vector3.ZERO
+) -> void:
 	from_player = is_player
 	weapon_type = wtype
 	damage = dmg
@@ -19,11 +40,26 @@ func setup(is_player: bool, wtype: String, dmg: float, spd: float, start_xform: 
 	splash_radius = splash
 	turn_rate = homing_turn
 	target_node = tgt
-	global_transform = start_xform
-	_velocity = (-global_transform.basis.z).normalized() * speed
+	_start_xform = start_xform
+	_has_start_xform = true
+
+	# Compute direction directly from start_xform (safe even before entering SceneTree!)
+	var fwd_dir := (-start_xform.basis.z).normalized()
+	if fwd_dir.length_squared() < 0.001:
+		fwd_dir = Vector3.FORWARD
+
+	transform = start_xform
+	if is_inside_tree():
+		global_transform = start_xform
+
+	_velocity = fwd_dir * speed + inherited_velocity
 	_lifetime = 5.5 if wtype in ["rocket", "missile"] else 2.8
 
 	_build_visual(wtype, is_player)
+
+func _ready() -> void:
+	if _has_start_xform:
+		global_transform = _start_xform
 
 func _build_visual(wtype: String, is_player: bool) -> void:
 	if wtype in ["rocket", "missile"]:
@@ -70,10 +106,10 @@ func _physics_process(delta: float) -> void:
 	if turn_rate > 0.0 and is_instance_valid(target_node):
 		var desired := (target_node.global_position - global_position).normalized()
 		var cur_dir := _velocity.normalized()
-		var new_dir := cur_dir.slerp(desired, clampf(turn_rate * delta, 0.0, 1.0)).normalized()
-		_velocity = new_dir * speed
-		if new_dir.length_squared() > 0.5 and absf(new_dir.dot(Vector3.UP)) < 0.98:
-			look_at(global_position + new_dir, Vector3.UP)
+		if desired.length_squared() > 0.5 and cur_dir.length_squared() > 0.5:
+			var new_dir := cur_dir.slerp(desired, clampf(turn_rate * delta, 0.0, 1.0)).normalized()
+			_velocity = new_dir * speed
+			global_transform = Projectile3D.make_aim_transform(global_position, new_dir, global_transform.basis.y)
 
 	var prev_pos := global_position
 	var next_pos := prev_pos + _velocity * delta

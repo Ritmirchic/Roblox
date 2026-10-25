@@ -208,9 +208,12 @@ jobs:
 
           $tag = "space-miner-v1.0.0"
           $notes = @"
-          # SPACE MINER: BUILD & CONQUER — v1.0.0 (64-Bit Windows Release)
+          # SPACE MINER: BUILD & CONQUER — v1.0.1 (64-Bit Windows Release)
 
           Complete standalone 64-bit Windows 3D space mining, modular ship construction, orbital combat, and collectible card progression game built on **Godot Engine 4.3**.
+
+          ### v1.0.1 Fix
+          - Fixed `Projectile3D` SceneTree `global_transform` / velocity initialization and reticle target-lock aiming so all weapons, rotating turrets, drones, and enemy spacecraft fire accurately in every 3D direction from their physical muzzle mounts.
 
           ## Downloads
           - **Windows Standalone Portable (`SPACE_MINER_WINDOWS.zip`)**: Extract and launch `SPACE_MINER.exe`. No external runtimes required.
@@ -235,9 +238,9 @@ jobs:
 
           if ($exists) {
             gh release upload $tag "dist\SPACE_MINER_WINDOWS.zip" "dist\SPACE_MINER_SETUP.exe" "dist\SPACE_MINER_SOURCE.zip" "dist\SHA256SUMS.txt" --clobber --repo "${{ github.repository }}"
-            gh release edit $tag --title "SPACE MINER: BUILD & CONQUER v1.0.0" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
+            gh release edit $tag --title "SPACE MINER: BUILD & CONQUER v1.0.1" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
           } else {
-            gh release create $tag "dist\SPACE_MINER_WINDOWS.zip" "dist\SPACE_MINER_SETUP.exe" "dist\SPACE_MINER_SOURCE.zip" "dist\SHA256SUMS.txt" --target "${{ github.sha }}" --title "SPACE MINER: BUILD & CONQUER v1.0.0" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
+            gh release create $tag "dist\SPACE_MINER_WINDOWS.zip" "dist\SPACE_MINER_SETUP.exe" "dist\SPACE_MINER_SOURCE.zip" "dist\SHA256SUMS.txt" --target "${{ github.sha }}" --title "SPACE MINER: BUILD & CONQUER v1.0.1" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
           }
 
           Write-Host "::notice title=ReleasePublished::https://github.com/${{ github.repository }}/releases/tag/$tag"
