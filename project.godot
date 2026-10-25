@@ -1,0 +1,57 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="SPACE MINER: BUILD & CONQUER"
+config/description="3D Modular Spaceship Construction, Physics-Based Space Flight, Asteroid Mining, Combat & Collectible Crew Card Game."
+config/version="1.0.0"
+run/main_scene="res://scenes/main/Main.tscn"
+config/features=PackedStringArray("4.3", "GL Compatibility")
+boot_splash/bg_color=Color(0.0235, 0.0392, 0.0941, 1)
+boot_splash/image="res://assets/branding/boot_splash.png"
+boot_splash/fullsize=true
+boot_splash/use_filter=true
+config/icon="res://assets/branding/icon_256.png"
+config/windows_native_icon="res://assets/branding/icon.ico"
+
+[autoload]
+
+GameData="*res://scripts/autoload/GameData.gd"
+AudioManager="*res://scripts/autoload/AudioManager.gd"
+ShipGrid="*res://scripts/autoload/ShipGrid.gd"
+CrewManager="*res://scripts/autoload/CrewManager.gd"
+UpgradeManager="*res://scripts/autoload/UpgradeManager.gd"
+PackManager="*res://scripts/autoload/PackManager.gd"
+AchievementManager="*res://scripts/autoload/AchievementManager.gd"
+SaveManager="*res://scripts/autoload/SaveManager.gd"
+ThemeHelper="*res://scripts/autoload/ThemeHelper.gd"
+
+[display]
+
+window/size/viewport_width=1600
+window/size/viewport_height=900
+window/size/resizable=true
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[physics]
+
+common/physics_ticks_per_second=60
+3d/default_gravity=0.0
+3d/default_linear_damp=0.35
+3d/default_angular_damp=1.2
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+anti_aliasing/quality/msaa_3d=1
+lights_and_shadows/directional_shadow/size=2048

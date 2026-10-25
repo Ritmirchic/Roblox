@@ -1,0 +1,227 @@
+name: Build, Test & Publish SPACE MINER Release
+
+on:
+  push:
+    branches:
+      - "arena/**"
+      - "main"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows-build-test-release:
+    name: Windows x64 Build, Engine Tests, Installer & Release
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python & Run Asset/GDScript Integrity Suite
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate Assets, 53 PBR GLBs, Cards, Audio & GDScript AST
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install pillow pygltflib "gdtoolkit==4.*" pytest
+          pytest -v tests/test_assets_and_spec.py
+          Write-Host "::notice title=StaticTests::pytest asset, GLB PBR, card art, audio, and gdparse suite passed."
+
+      - name: Install Godot 4.3-stable (Win64) & Export Templates
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path "C:\godot" | Out-Null
+          $godotZip = "C:\godot\godot.zip"
+          $tpzFile  = "C:\godot\templates.tpz"
+          $rcedit   = "C:\godot\rcedit-x64.exe"
+
+          Write-Host "Downloading Godot 4.3-stable Win64..."
+          curl.exe -L --retry 4 -o $godotZip "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_win64.exe.zip"
+          Expand-Archive -Path $godotZip -DestinationPath "C:\godot" -Force
+
+          Write-Host "Downloading Godot 4.3-stable Export Templates..."
+          curl.exe -L --retry 4 -o $tpzFile "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz"
+          7z x $tpzFile -o"C:\godot\tpl_extract" -y | Out-Null
+
+          $tplDest = Join-Path $env:APPDATA "Godot\export_templates\4.3.stable"
+          New-Item -ItemType Directory -Force -Path $tplDest | Out-Null
+          Copy-Item -Path "C:\godot\tpl_extract\templates\windows_*_x86_64*" -Destination $tplDest -Force
+
+          curl.exe -L --retry 4 -o $rcedit "https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe"
+          $edCfgDir = Join-Path $env:APPDATA "Godot"
+          $edCfg = Join-Path $edCfgDir "editor_settings-4.tres"
+          @(
+            '[gd_resource type="EditorSettings" format=3]',
+            '',
+            '[resource]',
+            'filesystem/tools/rcedit = "C:/godot/rcedit-x64.exe"'
+          ) | Set-Content -Path $edCfg -Encoding UTF8
+
+          if (-not (Test-Path "$tplDest\windows_release_x86_64.exe")) {
+            Write-Host "::error::Export template windows_release_x86_64.exe missing!"
+            exit 1
+          }
+
+      - name: Import 3D GLB/Shader/Audio Assets & Run Godot Engine Unit Tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          $godotConsole = "C:\godot\Godot_v4.3-stable_win64_console.exe"
+
+          Write-Host "Importing project resources..."
+          $impOut = & $godotConsole --headless --path "$PWD" --import 2>&1
+          $impOut | ForEach-Object { Write-Host $_ }
+
+          Write-Host "Running automated Godot 4.3 TestScene.tscn suite..."
+          $testOut = & $godotConsole --headless --path "$PWD" "res://tests/TestScene.tscn" 2>&1
+          $exitCode = $LASTEXITCODE
+          foreach ($line in $testOut) {
+            Write-Host $line
+            if ($line -match "SCRIPT ERROR|Parse Error|TEST FAILED|FAILURE:") {
+              Write-Host "::error::$line"
+            }
+            if ($line -match "TEST SUMMARY:") {
+              Write-Host "::notice title=EngineUnitTests::$line"
+            }
+          }
+          if ($exitCode -ne 0 -or -not (($testOut -join "`n") -match "ALL_AUTOMATED_TESTS_PASSED_OK")) {
+            Write-Host "::error::Godot automated unit test suite failed (exit=$exitCode)"
+            exit 1
+          }
+
+      - name: Export 64-Bit Windows Standalone Build & Package Archives
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Continue"
+          $godotConsole = "C:\godot\Godot_v4.3-stable_win64_console.exe"
+          New-Item -ItemType Directory -Force -Path "build\windows" | Out-Null
+          New-Item -ItemType Directory -Force -Path "dist" | Out-Null
+
+          $expOut = & $godotConsole --headless --path "$PWD" --export-release "Windows Desktop" "build/windows/SPACE_MINER.exe" 2>&1
+          $expExit = $LASTEXITCODE
+          foreach ($line in $expOut) {
+            Write-Host $line
+            if ($line -match "ERROR:") {
+              Write-Host "::error::$line"
+            }
+          }
+          if ($expExit -ne 0 -or -not (Test-Path "build\windows\SPACE_MINER.exe") -or -not (Test-Path "build\windows\SPACE_MINER.pck")) {
+            Write-Host "::error::Windows export failed to produce SPACE_MINER.exe and SPACE_MINER.pck"
+            exit 1
+          }
+
+          Copy-Item "README_CONTROLS.txt" "build\windows\README_CONTROLS.txt" -Force
+          Copy-Item "THIRDPARTY_LICENSES.txt" "build\windows\THIRDPARTY_LICENSES.txt" -Force
+
+          # Package SPACE_MINER_WINDOWS.zip with clean root folder SPACE_MINER_WINDOWS/
+          New-Item -ItemType Directory -Force -Path "build\package_root\SPACE_MINER_WINDOWS" | Out-Null
+          Copy-Item -Path "build\windows\*" -Destination "build\package_root\SPACE_MINER_WINDOWS" -Recurse -Force
+          7z a -tzip "dist\SPACE_MINER_WINDOWS.zip" ".\build\package_root\SPACE_MINER_WINDOWS" | Out-Null
+
+          # Package clean SPACE_MINER_SOURCE.zip via git archive
+          git archive --format=zip --prefix="SPACE_MINER_SOURCE/" -o "dist/SPACE_MINER_SOURCE.zip" HEAD
+
+      - name: Compile Inno Setup Installer & Run Packaged Self-Test Verification
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          & $iscc "installer\space_miner_setup.iss"
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path "dist\SPACE_MINER_SETUP.exe")) {
+            Write-Host "::error::Inno Setup failed to compile SPACE_MINER_SETUP.exe"
+            exit 1
+          }
+
+          # Silently install SPACE_MINER_SETUP.exe to a clean directory and run --self-test on the installed EXE!
+          $installDir = "C:\SpaceMinerInstalledTest"
+          $proc = Start-Process -FilePath "$PWD\dist\SPACE_MINER_SETUP.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=$installDir" -Wait -PassThru
+          if ($proc.ExitCode -ne 0 -or -not (Test-Path "$installDir\SPACE_MINER.exe")) {
+            Write-Host "::error::Silent install test of SPACE_MINER_SETUP.exe failed (exit=$($proc.ExitCode))"
+            exit 1
+          }
+
+          $reportFile = "$installDir\selftest_report.txt"
+          $env:SPACE_MINER_SELFTEST_OUT = $reportFile
+          $stProc = Start-Process -FilePath "$installDir\SPACE_MINER.exe" -ArgumentList "--headless","--self-test" -Wait -PassThru
+          if ($stProc.ExitCode -ne 0 -or -not (Test-Path $reportFile)) {
+            Write-Host "::error::Installed SPACE_MINER.exe --self-test failed (exit=$($stProc.ExitCode))"
+            exit 1
+          }
+          $repText = Get-Content -Path $reportFile -Raw
+          Write-Host $repText
+          if (-not ($repText -match "SPACE_MINER_SELF_TEST_OK")) {
+            Write-Host "::error::Self-test report did not pass: $repText"
+            exit 1
+          }
+          Write-Host "::notice title=PackagedSelfTest::Installed SPACE_MINER.exe passed MainMenu + Hangar + 5 Space Sectors + Save/Load runtime verification."
+
+      - name: Compute SHA-256 Checksums & Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $winZip = Get-Item "dist\SPACE_MINER_WINDOWS.zip"
+          $setupExe = Get-Item "dist\SPACE_MINER_SETUP.exe"
+          $srcZip = Get-Item "dist\SPACE_MINER_SOURCE.zip"
+
+          $winSha = (Get-FileHash $winZip.FullName -Algorithm SHA256).Hash.ToLower()
+          $setupSha = (Get-FileHash $setupExe.FullName -Algorithm SHA256).Hash.ToLower()
+          $srcSha = (Get-FileHash $srcZip.FullName -Algorithm SHA256).Hash.ToLower()
+
+          $shaLines = @(
+            "$winSha  SPACE_MINER_WINDOWS.zip",
+            "$setupSha  SPACE_MINER_SETUP.exe",
+            "$srcSha  SPACE_MINER_SOURCE.zip"
+          )
+          $shaLines | Set-Content -Path "dist\SHA256SUMS.txt" -Encoding ASCII
+
+          Write-Host "::notice title=SHA256_WINDOWS_ZIP::$winSha ($($winZip.Length) bytes)"
+          Write-Host "::notice title=SHA256_SETUP_EXE::$setupSha ($($setupExe.Length) bytes)"
+          Write-Host "::notice title=SHA256_SOURCE_ZIP::$srcSha ($($srcZip.Length) bytes)"
+
+          $tag = "space-miner-v1.0.0"
+          $notes = @"
+          # SPACE MINER: BUILD & CONQUER — v1.0.0 (64-Bit Windows Release)
+
+          Complete standalone 64-bit Windows 3D space mining, modular ship construction, orbital combat, and collectible card progression game built on **Godot Engine 4.3**.
+
+          ## Downloads
+          - **Windows Standalone Portable (`SPACE_MINER_WINDOWS.zip`)**: Extract and launch `SPACE_MINER.exe`. No external runtimes required.
+          - **Windows Installer (`SPACE_MINER_SETUP.exe`)**: Full Inno Setup 64-bit Windows installer with Start Menu & optional Desktop shortcuts and uninstaller.
+          - **Complete Source Code (`SPACE_MINER_SOURCE.zip`)**: Clean Godot 4.3 project, shaders, 53 PBR `.glb` 3D assets, 72 original card illustrations, audio, automated test suites, and installer script.
+
+          ## SHA-256 Checksums
+          ```text
+          $winSha  SPACE_MINER_WINDOWS.zip
+          $setupSha  SPACE_MINER_SETUP.exe
+          $srcSha  SPACE_MINER_SOURCE.zip
+          ```
+          "@
+
+          $notes | Set-Content -Path "dist\RELEASE_NOTES.md" -Encoding UTF8
+
+          $ErrorActionPreference = "Continue"
+          $exists = $false
+          gh release view $tag --repo "${{ github.repository }}" *> $null
+          if ($LASTEXITCODE -eq 0) { $exists = $true }
+          $ErrorActionPreference = "Stop"
+
+          if ($exists) {
+            gh release upload $tag "dist\SPACE_MINER_WINDOWS.zip" "dist\SPACE_MINER_SETUP.exe" "dist\SPACE_MINER_SOURCE.zip" "dist\SHA256SUMS.txt" --clobber --repo "${{ github.repository }}"
+            gh release edit $tag --title "SPACE MINER: BUILD & CONQUER v1.0.0" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
+          } else {
+            gh release create $tag "dist\SPACE_MINER_WINDOWS.zip" "dist\SPACE_MINER_SETUP.exe" "dist\SPACE_MINER_SOURCE.zip" "dist\SHA256SUMS.txt" --target "${{ github.sha }}" --title "SPACE MINER: BUILD & CONQUER v1.0.0" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
+          }
+
+          Write-Host "::notice title=ReleasePublished::https://github.com/${{ github.repository }}/releases/tag/$tag"

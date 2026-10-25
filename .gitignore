@@ -1,0 +1,9 @@
+.venv/
+.godot/
+__pycache__/
+*.pyc
+build/
+dist/
+out/
+preview_renders/
+*.tmp
