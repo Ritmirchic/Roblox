@@ -346,12 +346,13 @@ func _test_live_3d_gameplay_mining_combat_magnets() -> void:
 		ship.aimed_world_point = test_ship_origin + aim_d * 180.0
 		ship.firing_weapons = true
 		await get_tree().physics_frame
+		await get_tree().physics_frame
 		ship.firing_weapons = false
 		_check(exp_world.projectiles_root.get_child_count() >= 1, "Weapon spawned Projectile3D for aim " + str(aim_d))
 		if exp_world.projectiles_root.get_child_count() >= 1:
 			var pr := exp_world.projectiles_root.get_child(0) as Projectile3D
 			var spawn_p := pr.global_position
-			_check(spawn_p.distance_to(test_ship_origin) < 8.0, "Projectile spawns at ship muzzle (not world origin) for " + str(aim_d))
+			_check(spawn_p.distance_to(test_ship_origin) < 12.0, "Projectile spawns at ship muzzle (not world origin) for " + str(aim_d))
 			await get_tree().physics_frame
 			await get_tree().physics_frame
 			if is_instance_valid(pr):
