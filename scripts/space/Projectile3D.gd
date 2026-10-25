@@ -1,6 +1,8 @@
 class_name Projectile3D
 extends Node3D
 
+signal impacted(hit_pos: Vector3, collider: Object)
+
 var from_player: bool = true
 var weapon_type: String = "kinetic"
 var damage: float = 20.0
@@ -8,6 +10,7 @@ var speed: float = 160.0
 var splash_radius: float = 0.0
 var turn_rate: float = 0.0
 var target_node: Node3D = null
+var ignore_rid: RID = RID()
 var _lifetime: float = 4.0
 var _velocity: Vector3 = Vector3.FORWARD
 var _start_xform: Transform3D = Transform3D.IDENTITY
@@ -116,6 +119,8 @@ func _physics_process(delta: float) -> void:
 
 	var space_state := get_world_3d().direct_space_state
 	var query := PhysicsRayQueryParameters3D.create(prev_pos, next_pos)
+	if ignore_rid.is_valid():
+		query.exclude = [ignore_rid]
 	var hit := space_state.intersect_ray(query)
 	if not hit.is_empty():
 		var col: Object = hit["collider"]
@@ -131,6 +136,7 @@ func _physics_process(delta: float) -> void:
 	global_position = next_pos
 
 func _on_impact(hit_pos: Vector3, collider: Object) -> void:
+	impacted.emit(hit_pos, collider)
 	var parent_scene := get_parent()
 	if splash_radius > 0.1 and from_player and parent_scene:
 		VFXFactory.spawn_explosion(parent_scene, hit_pos, Color(1.0, 0.55, 0.18), 1.35)

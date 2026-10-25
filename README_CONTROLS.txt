@@ -1,5 +1,5 @@
 ================================================================================
-SPACE MINER: BUILD & CONQUER — v1.0.0 (Windows 64-bit Edition)
+SPACE MINER: BUILD & CONQUER — v1.0.3 (Windows 64-bit Edition)
 ================================================================================
 
 LAUNCHING THE GAME
@@ -28,8 +28,10 @@ No external runtimes, Python, Godot Editor, or developer tools are required.
 - Space / Ctrl:           Ascend / Descend Vertical Thrusters
 - Q / E:                  Roll Spacecraft Left / Right
 - Shift:                  Afterburner Boost (watch thruster heat & MW!)
-- Mouse Move:             Pitch & Yaw Ship Steering (toggle cursor with Tab)
-- Left Mouse Button:      Fire Mounted Weapons (Turrets aim at your reticle!)
+- Mouse Move:             Smooth Pitch & Yaw Steering (Crosshair #1 = Aim/Steer;
+                          Crosshair #2 = Exact 3D Point Where Bullets Land!)
+- C Key:                  Instantly Recenter Flight Cursor
+- Left Mouse Button:      Fire Mounted Weapons (Turrets track Crosshair #1)
 - Right Mouse Button / F: Fire Mining Lasers / Plasma Drills at 3D Asteroids
 - T:                      Toggle Lock on Nearest Hostile Spacecraft
 - H / Esc:                Open Tactical Comms -> Warp Extract Back to Hangar

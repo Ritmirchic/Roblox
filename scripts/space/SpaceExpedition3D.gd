@@ -23,12 +23,9 @@ var _target_cam_dist: float = 17.0
 var _cam_yaw_off: float = 0.0
 var _cam_pitch_off: float = -10.0
 var _cam_bank_deg: float = 0.0
-var _mouse_steer: Vector2 = Vector2.ZERO
-var _smoothed_mouse_vel: Vector2 = Vector2.ZERO
 var _virtual_stick: Vector2 = Vector2.ZERO
+var _smoothed_stick: Vector2 = Vector2.ZERO
 var _mouse_idle_time: float = 0.0
-var _smoothed_pipper_pos: Vector2 = Vector2(-1.0, -1.0)
-var _last_hud_delta: float = 0.016
 var _mouse_captured: bool = true
 const STEER_RING_RADIUS_PX: float = 165.0
 
@@ -458,11 +455,11 @@ func _draw_hud_world_overlays() -> void:
 	_overlay_canvas.draw_line(center + Vector2(2, 0), center + Vector2(7, 0), nose_col, 1.4)
 	_overlay_canvas.draw_line(center + Vector2(0, -7), center + Vector2(0, -2), nose_col, 1.4)
 	_overlay_canvas.draw_line(center + Vector2(0, 2), center + Vector2(0, 7), nose_col, 1.4)
-	if _virtual_stick.length() > 0.06:
+	if _smoothed_stick.length() > 0.04:
 		_overlay_canvas.draw_arc(center, STEER_RING_RADIUS_PX, 0.0, TAU, 48, Color(0.20, 0.62, 0.88, 0.16), 1.2)
 
 	# CROSSHAIR #1: Primary Steering & Aiming Reticle (Cyan)
-	var aim_screen_pos: Vector2 = center + _virtual_stick * STEER_RING_RADIUS_PX
+	var aim_screen_pos: Vector2 = center + _smoothed_stick * STEER_RING_RADIUS_PX
 	if aim_screen_pos.distance_to(center) > 4.0:
 		_overlay_canvas.draw_line(center, aim_screen_pos, Color(0.28, 0.86, 1.0, 0.28), 1.5)
 	var aim_col := Color(0.28, 0.92, 1.0, 0.88)
@@ -476,43 +473,57 @@ func _draw_hud_world_overlays() -> void:
 	if not is_instance_valid(player_ship) or not is_instance_valid(_cam):
 		return
 
-	# CROSSHAIR #2: Live Ballistic Bullet Flight Pipper (shows exact 3D point where bullets fly!)
+	# CROSSHAIR #2: Exact 3D Terminal Bullet Impact Sight (zero 2D lag — shows the exact point where the bullet lands!)
 	var ballistics := player_ship.get_ballistic_sight_info()
 	var impact_world: Vector3 = ballistics["world_pos"]
 	if not _cam.is_position_behind(impact_world):
 		var raw_pipper: Vector2 = _cam.unproject_position(impact_world)
-		raw_pipper.x = clampf(raw_pipper.x, 24.0, vp.x - 24.0)
-		raw_pipper.y = clampf(raw_pipper.y, 24.0, vp.y - 24.0)
-		if _smoothed_pipper_pos.x < 0.0 or _smoothed_pipper_pos.distance_to(raw_pipper) > 260.0:
-			_smoothed_pipper_pos = raw_pipper
-		else:
-			_smoothed_pipper_pos = _smoothed_pipper_pos.lerp(raw_pipper, 1.0 - exp(-38.0 * _last_hud_delta))
+		var on_screen := (
+			raw_pipper.x >= 16.0 and raw_pipper.x <= vp.x - 16.0
+			and raw_pipper.y >= 16.0 and raw_pipper.y <= vp.y - 16.0
+		)
+		var pipper_pos := Vector2(
+			clampf(raw_pipper.x, 20.0, vp.x - 20.0),
+			clampf(raw_pipper.y, 20.0, vp.y - 20.0)
+		)
 
 		var hit_kind := str(ballistics["hit_kind"])
-		var pip_col := Color(1.0, 0.78, 0.22, 0.96) # Default Amber-Gold bullet sight
+		var pip_col := Color(1.0, 0.78, 0.22, 0.96) # Default Amber-Gold terminal sight
 		if hit_kind == "enemy":
-			pip_col = Color(0.24, 1.0, 0.54, 0.98)   # Bright Green when bullet ray hits enemy!
+			pip_col = Color(0.24, 1.0, 0.54, 0.98)   # Bright Green when barrel ray hits enemy!
 		elif hit_kind == "asteroid":
-			pip_col = Color(0.52, 0.98, 0.82, 0.94)  # Aqua-Gold on asteroid surface
+			pip_col = Color(0.52, 0.98, 0.82, 0.95)  # Aqua-Gold exact rock impact point
 
-		# Trajectory tether line from Aim Crosshair (#1) -> Bullet Flight Pipper (#2)
-		if _smoothed_pipper_pos.distance_to(aim_screen_pos) > 5.0:
-			_overlay_canvas.draw_line(aim_screen_pos, _smoothed_pipper_pos, Color(pip_col.r, pip_col.g, pip_col.b, 0.38), 1.5)
+		# Trajectory tether line from Aim Crosshair (#1) -> Exact Bullet Impact Point (#2)
+		if pipper_pos.distance_to(aim_screen_pos) > 5.0:
+			_overlay_canvas.draw_line(aim_screen_pos, pipper_pos, Color(pip_col.r, pip_col.g, pip_col.b, 0.36), 1.5)
 
-		# Distinct Ballistic Pipper ring + 4 angled X-ticks + center bullet dot
+		# Distinct Impact Sight ring + 4 angled X-ticks + exact bullet arrival dot
 		var p_rad := 10.5 if hit_kind == "enemy" else 9.0
-		_overlay_canvas.draw_arc(_smoothed_pipper_pos, p_rad, 0.0, TAU, 28, pip_col, 2.2)
+		var draw_col := pip_col if on_screen else Color(pip_col.r, pip_col.g, pip_col.b, 0.55)
+		_overlay_canvas.draw_arc(pipper_pos, p_rad, 0.0, TAU, 28, draw_col, 2.2)
 		var d_in := p_rad * 0.72
 		var d_out := p_rad + 5.5
 		for sx in [-1.0, 1.0]:
 			for sy in [-1.0, 1.0]:
 				var diag := Vector2(sx, sy).normalized()
-				_overlay_canvas.draw_line(_smoothed_pipper_pos + diag * d_in, _smoothed_pipper_pos + diag * d_out, pip_col, 2.0)
-		_overlay_canvas.draw_circle(_smoothed_pipper_pos, 3.0, pip_col.lightened(0.25))
+				_overlay_canvas.draw_line(pipper_pos + diag * d_in, pipper_pos + diag * d_out, draw_col, 2.0)
+		_overlay_canvas.draw_circle(pipper_pos, 2.8, draw_col.lightened(0.25))
 
-		if hit_kind in ["enemy", "asteroid"] and ThemeHelper.font_mono:
+		if hit_kind in ["enemy", "asteroid"] and on_screen and ThemeHelper.font_mono:
 			var dist_txt := "%dm" % int(round(float(ballistics["distance"])))
-			_overlay_canvas.draw_string(ThemeHelper.font_mono, _smoothed_pipper_pos + Vector2(14, 5), dist_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, pip_col)
+			_overlay_canvas.draw_string(ThemeHelper.font_mono, pipper_pos + Vector2(14, 5), dist_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, draw_col)
+
+		# Secondary weapon impact dots if ship carries mixed turrets + fixed barrels aiming at distinct 3D points
+		var sec_impacts: Array = ballistics.get("secondary_impacts", [])
+		for sec_item in sec_impacts:
+			var sec_w: Vector3 = sec_item as Vector3
+			if not _cam.is_position_behind(sec_w):
+				var sec_sp: Vector2 = _cam.unproject_position(sec_w)
+				if sec_sp.distance_to(pipper_pos) > 8.0 and sec_sp.x >= 16.0 and sec_sp.x <= vp.x - 16.0 and sec_sp.y >= 16.0 and sec_sp.y <= vp.y - 16.0:
+					var scol := Color(pip_col.r, pip_col.g, pip_col.b, 0.72)
+					_overlay_canvas.draw_arc(sec_sp, 5.0, 0.0, TAU, 20, scol, 1.5)
+					_overlay_canvas.draw_circle(sec_sp, 1.8, scol.lightened(0.2))
 
 	# Target Lead Pipper ahead of moving locked enemy
 	if bool(ballistics.get("has_lead", false)) and is_instance_valid(player_ship.locked_enemy):
@@ -606,7 +617,6 @@ func _draw_radar_minimap() -> void:
 # FLIGHT LOOP, CAMERA ANTI-CLIPPING, HAZARDS & EXTRACTION
 # ==============================================================================
 func _process(delta: float) -> void:
-	_last_hud_delta = clampf(delta, 0.001, 0.05)
 	if not is_instance_valid(player_ship) or _extracting:
 		return
 
@@ -615,8 +625,9 @@ func _process(delta: float) -> void:
 	if neb is Node3D:
 		neb.global_position = player_ship.global_position
 
-	_handle_flight_inputs(delta)
+	_handle_flight_steering(delta)
 	_update_third_person_camera(delta)
+	_update_aim_ray_and_lock()
 	_process_sector_spawns_and_hazards(delta)
 
 	# Check Extraction Warp Gate proximity
@@ -627,7 +638,7 @@ func _process(delta: float) -> void:
 	_overlay_canvas.queue_redraw()
 	_radar_canvas.queue_redraw()
 
-func _handle_flight_inputs(delta: float) -> void:
+func _handle_flight_steering(delta: float) -> void:
 	if autopilot_override:
 		return
 	if _pause_panel.visible:
@@ -635,7 +646,8 @@ func _handle_flight_inputs(delta: float) -> void:
 		player_ship.rot_input = Vector3.ZERO
 		player_ship.firing_weapons = false
 		player_ship.firing_mining = false
-		_smoothed_mouse_vel = Vector2.ZERO
+		_virtual_stick = Vector2.ZERO
+		_smoothed_stick = Vector2.ZERO
 		return
 
 	var th := Vector3.ZERO
@@ -648,53 +660,59 @@ func _handle_flight_inputs(delta: float) -> void:
 	player_ship.thrust_input = th
 	player_ship.boost_active = Input.is_key_pressed(KEY_SHIFT)
 
-	# Smooth Hybrid 360-Degree Steering:
-	# 1) Instant exponentially-filtered mouse angular response for crisp aiming
-	# 2) Virtual Flight Stick deflection so holding off-center effortlessly loops/spins 360 deg without lifting mouse!
+	# Calm, Controllable Virtual Flight Stick with Precision Fine-Aim Curve:
+	# - Small mouse moves give gentle 4-25 deg/s precision aiming
+	# - Full deflection gives calm ~85-90 deg/s 360-degree turns/loops (never wild spins!)
 	_mouse_idle_time += delta
-	var sens := ThemeHelper.camera_sensitivity
-	var raw_vel := (_mouse_steer / maxf(0.002, delta)) if _mouse_captured else Vector2.ZERO
-	_mouse_steer = Vector2.ZERO
-	_smoothed_mouse_vel = _smoothed_mouse_vel.lerp(raw_vel, 1.0 - exp(-28.0 * delta))
-
 	if not _mouse_captured:
 		_virtual_stick = _virtual_stick.lerp(Vector2.ZERO, 1.0 - exp(-8.0 * delta))
-	elif _mouse_idle_time > 0.42:
-		_virtual_stick = _virtual_stick.lerp(Vector2.ZERO, 1.0 - exp(-1.75 * delta))
+	elif _virtual_stick.length() > 0.72:
+		if _mouse_idle_time > 0.55:
+			_virtual_stick = _virtual_stick.lerp(Vector2.ZERO, 1.0 - exp(-0.95 * delta))
+	elif _mouse_idle_time > 0.16:
+		_virtual_stick = _virtual_stick.lerp(Vector2.ZERO, 1.0 - exp(-2.5 * delta))
 
-	var stick_mag := _virtual_stick.length()
+	_smoothed_stick = _smoothed_stick.lerp(_virtual_stick, 1.0 - exp(-22.0 * delta))
+
+	var stick_mag := _smoothed_stick.length()
 	var stick_drive := Vector2.ZERO
-	if stick_mag > 0.045:
-		var norm_m := (stick_mag - 0.045) / 0.955
-		stick_drive = _virtual_stick.normalized() * pow(norm_m, 1.15)
+	if stick_mag > 0.035:
+		var norm_m := clampf((stick_mag - 0.035) / 0.965, 0.0, 1.0)
+		stick_drive = _smoothed_stick.normalized() * pow(norm_m, 1.85)
 
 	var rot := Vector3.ZERO
 	if _mouse_captured:
-		rot.y = clampf(-_smoothed_mouse_vel.x * 0.00105 * sens - stick_drive.x * 1.38 * sens, -2.5, 2.5)
-		rot.x = clampf(-_smoothed_mouse_vel.y * 0.00105 * sens - stick_drive.y * 1.38 * sens, -2.5, 2.5)
+		rot.y = clampf(-stick_drive.x, -1.0, 1.0)
+		rot.x = clampf(-stick_drive.y, -1.0, 1.0)
 
-	# Full 360-degree pitch/yaw/barrel-roll keyboard authority
-	if Input.is_key_pressed(KEY_LEFT): rot.y += 1.55
-	if Input.is_key_pressed(KEY_RIGHT): rot.y -= 1.55
-	if Input.is_key_pressed(KEY_UP): rot.x += 1.45
-	if Input.is_key_pressed(KEY_DOWN): rot.x -= 1.45
-	if Input.is_key_pressed(KEY_Q): rot.z += 1.65
-	if Input.is_key_pressed(KEY_E): rot.z -= 1.65
+	# Smooth 360-degree pitch/yaw/barrel-roll keyboard authority (strictly clamped to [-1, 1])
+	if Input.is_key_pressed(KEY_LEFT): rot.y += 1.0
+	if Input.is_key_pressed(KEY_RIGHT): rot.y -= 1.0
+	if Input.is_key_pressed(KEY_UP): rot.x += 1.0
+	if Input.is_key_pressed(KEY_DOWN): rot.x -= 1.0
+	if Input.is_key_pressed(KEY_Q): rot.z += 1.0
+	if Input.is_key_pressed(KEY_E): rot.z -= 1.0
+	rot.x = clampf(rot.x, -1.0, 1.0)
+	rot.y = clampf(rot.y, -1.0, 1.0)
+	rot.z = clampf(rot.z, -1.0, 1.0)
 	player_ship.rot_input = rot
 
 	player_ship.firing_weapons = _mouse_captured and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
 	player_ship.firing_mining = (_mouse_captured and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)) or Input.is_key_pressed(KEY_F)
 
-	# Project 3D Aim Ray directly through Crosshair #1 (steer reticle) starting ahead of the ship
+func _update_aim_ray_and_lock() -> void:
+	if autopilot_override:
+		return
+	# Project 3D Aim Ray through Crosshair #1 using THIS frame's updated _cam transform
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
-	var steer_screen: Vector2 = vp_size * 0.5 + _virtual_stick * STEER_RING_RADIUS_PX
+	var steer_screen: Vector2 = vp_size * 0.5 + _smoothed_stick * STEER_RING_RADIUS_PX
 	var aim_ray_dir := _cam.project_ray_normal(steer_screen).normalized()
 	if aim_ray_dir.length_squared() < 0.01:
 		aim_ray_dir = (-_cam.global_transform.basis.z).normalized()
 	var cam_to_ship_d := _cam.global_position.distance_to(player_ship.global_position)
 	var ray_origin := _cam.global_position + aim_ray_dir * (cam_to_ship_d + 2.5)
-	player_ship.aimed_world_point = _cam.global_position + aim_ray_dir * 220.0
-	var space_q := PhysicsRayQueryParameters3D.create(ray_origin, _cam.global_position + aim_ray_dir * 290.0)
+	player_ship.aimed_world_point = _cam.global_position + aim_ray_dir * 260.0
+	var space_q := PhysicsRayQueryParameters3D.create(ray_origin, _cam.global_position + aim_ray_dir * 600.0)
 	space_q.exclude = [player_ship.get_rid()]
 	var hit := get_world_3d().direct_space_state.intersect_ray(space_q)
 	if not hit.is_empty():
@@ -779,8 +797,7 @@ func _process_sector_spawns_and_hazards(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and _mouse_captured:
-		_mouse_steer += event.relative
-		_virtual_stick += event.relative * (0.0042 * ThemeHelper.camera_sensitivity)
+		_virtual_stick += event.relative * (0.0021 * ThemeHelper.camera_sensitivity)
 		if _virtual_stick.length() > 1.0:
 			_virtual_stick = _virtual_stick.normalized()
 		_mouse_idle_time = 0.0
@@ -799,7 +816,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_set_mouse_flight_mode(not _pause_panel.visible)
 		elif event.keycode == KEY_C:
 			_virtual_stick = Vector2.ZERO
-			_smoothed_mouse_vel = Vector2.ZERO
+			_smoothed_stick = Vector2.ZERO
 		elif event.keycode == KEY_T and is_instance_valid(player_ship):
 			_toggle_manual_target_lock()
 		elif event.keycode == KEY_Z and is_instance_valid(player_ship):

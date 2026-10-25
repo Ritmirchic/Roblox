@@ -188,7 +188,7 @@ func _show_main_menu() -> void:
 	vb.add_child(quit_btn)
 
 	var ver_lbl := Label.new()
-	ver_lbl.text = "v1.0.2 Windows 64-Bit Release  •  Orbital Forge Interactive"
+	ver_lbl.text = "v1.0.3 Windows 64-Bit Release  •  Orbital Forge Interactive"
 	ver_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ver_lbl.add_theme_font_size_override("font_size", 13)
 	ver_lbl.add_theme_color_override("font_color", Color(0.46, 0.60, 0.74))

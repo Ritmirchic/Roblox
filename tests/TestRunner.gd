@@ -359,46 +359,95 @@ func _test_live_3d_gameplay_mining_combat_magnets() -> void:
 				var travel_dir := (pr.global_position - spawn_p).normalized()
 				_check(travel_dir.dot(aim_d) > 0.96, "Projectile flies accurately along aimed 3D vector " + str(aim_d))
 
-	# 2nd Crosshair (Ballistic Bullet Sight) accuracy test under sideways ship velocity drift
+	# Crosshair #2 (Terminal Bullet Impact Sight) end-to-end 3D accuracy test:
+	# 1) Open-space terminal range check
 	for old_p in exp_world.projectiles_root.get_children():
 		old_p.queue_free()
 	await get_tree().process_frame
 	var drift_xf := Projectile3D.make_aim_transform(test_ship_origin, Vector3(0, 0, -1))
 	PhysicsServer3D.body_set_state(ship.get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM, drift_xf)
-	PhysicsServer3D.body_set_state(ship.get_rid(), PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, Vector3(45.0, 0, 0))
+	PhysicsServer3D.body_set_state(ship.get_rid(), PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, Vector3.ZERO)
+	PhysicsServer3D.body_set_state(ship.get_rid(), PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY, Vector3.ZERO)
 	ship.global_transform = drift_xf
-	ship.linear_velocity = Vector3(45.0, 0, 0)
-	ship.aimed_world_point = test_ship_origin + Vector3(0, 0, -180.0)
-	var b_info := ship.get_ballistic_sight_info()
-	var sight_dir: Vector3 = b_info["flight_dir"]
-	_check(sight_dir.x > 0.12, "2nd Ballistic Crosshair reflects sideways ship velocity drift")
+	ship.linear_velocity = Vector3.ZERO
+	ship.angular_velocity = Vector3.ZERO
+	ship.rot_input = Vector3.ZERO
+	ship.aimed_world_point = test_ship_origin + Vector3(0, 0, -250.0)
+	for _s in range(20):
+		await get_tree().physics_frame
+	var open_sight := ship.get_ballistic_sight_info()
+	_check(str(open_sight["hit_kind"]) == "none" and absf(float(open_sight["distance"]) - 210.0 * 2.8) < 1.0, "Crosshair #2 open-space point equals exact bullet max flight distance")
+
+	# 2) Off-bore 3D Asteroid impact: verify real fired Projectile3D lands at exact Crosshair #2 world_pos!
+	var target_ast := Asteroid3D.new()
+	var ast_pos := test_ship_origin + Vector3(18.0, 6.0, -64.0)
+	target_ast.setup(GameData.sectors[0], ast_pos, 1.8)
+	exp_world.asteroids_root.add_child(target_ast)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+
+	ship.aimed_world_point = ast_pos
+	for _s in range(45): # Let mechanical turret slew smoothly onto off-bore asteroid
+		await get_tree().physics_frame
+
+	var ast_sight := ship.get_ballistic_sight_info()
+	var predicted_impact: Vector3 = ast_sight["world_pos"]
+	_check(str(ast_sight["hit_kind"]) == "asteroid", "Crosshair #2 detects off-bore 3D Asteroid surface along barrel ray")
+
+	var hit_record := {"hit": false, "pos": Vector3.ZERO}
 	ship.current_energy = 120.0
 	ship._weapon_cooldowns.clear()
 	ship.firing_weapons = true
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 	ship.firing_weapons = false
-	if exp_world.projectiles_root.get_child_count() >= 1:
-		var pr_drift := exp_world.projectiles_root.get_child(0) as Projectile3D
-		var p0 := pr_drift.global_position
-		await get_tree().physics_frame
-		await get_tree().physics_frame
-		var actual_bullet_dir := (pr_drift.global_position - p0).normalized()
-		_check(actual_bullet_dir.dot(sight_dir) > 0.995, "2nd Ballistic Crosshair vector matches actual bullet trajectory 1:1")
 
-	# Full 360-degree vertical flip (upside-down pitch loop) & barrel roll test
+	if exp_world.projectiles_root.get_child_count() >= 1:
+		var pr_real := exp_world.projectiles_root.get_child(0) as Projectile3D
+		pr_real.impacted.connect(func(hp: Vector3, _col: Object) -> void:
+			hit_record["hit"] = true
+			hit_record["pos"] = hp
+		)
+		# Even if ship accelerates sideways AFTER firing, bullet must hit the exact predicted 3D point!
+		PhysicsServer3D.body_set_state(ship.get_rid(), PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, Vector3(32.0, 0.0, 0.0))
+		ship.linear_velocity = Vector3(32.0, 0.0, 0.0)
+		for _step_b in range(60):
+			await get_tree().physics_frame
+			if bool(hit_record["hit"]):
+				break
+	var impact_err := (hit_record["pos"] as Vector3).distance_to(predicted_impact)
+	_check(bool(hit_record["hit"]) and impact_err < 0.20, "Fired Projectile3D hits exact 3D point shown by Crosshair #2 (err < 0.20m)")
+	if is_instance_valid(target_ast):
+		target_ast.queue_free()
+	await get_tree().process_frame
+
+	# Controlled rotation speed check (must NOT turn too fast!) + smooth 180+ deg pitch loop without gimbal lock
+	PhysicsServer3D.body_set_state(ship.get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM, drift_xf)
+	PhysicsServer3D.body_set_state(ship.get_rid(), PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, Vector3.ZERO)
+	PhysicsServer3D.body_set_state(ship.get_rid(), PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY, Vector3.ZERO)
+	ship.global_transform = drift_xf
 	ship.linear_velocity = Vector3.ZERO
+	ship.angular_velocity = Vector3.ZERO
+	var init_fwd := (-ship.global_transform.basis.z).normalized()
+	ship.rot_input = Vector3(0.0, 1.0, 0.0) # Full yaw input for 0.25s (30 ticks @ 120Hz)
+	for _step_y in range(30):
+		await get_tree().physics_frame
+	var after_fwd := (-ship.global_transform.basis.z).normalized()
+	var yaw_quarter_deg := rad_to_deg(acos(clampf(init_fwd.dot(after_fwd), -1.0, 1.0)))
+	_check(yaw_quarter_deg > 7.0 and yaw_quarter_deg < 30.0 and ship.angular_velocity.length() < 2.2, "Turn rate is calm and controllable (~85-95 deg/s max, never overly fast)")
+
 	PhysicsServer3D.body_set_state(ship.get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM, drift_xf)
 	PhysicsServer3D.body_set_state(ship.get_rid(), PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY, Vector3.ZERO)
 	ship.global_transform = drift_xf
-	ship.rot_input = Vector3(1.8, 0.0, 0.0) # Pitch loop
+	ship.angular_velocity = Vector3.ZERO
+	ship.rot_input = Vector3(1.0, 0.0, 0.0) # Full pitch loop up to 2.0s (240 ticks @ 120Hz)
 	var went_upside_down := false
-	for _step in range(95):
+	for _step in range(240):
 		await get_tree().physics_frame
 		if ship.global_transform.basis.y.y < -0.5:
 			went_upside_down = true
 			break
-	_check(went_upside_down, "Ship effortlessly pitches past 180 deg upside-down without gimbal lock")
+	_check(went_upside_down, "Ship smoothly pitches past 180 deg upside-down without gimbal lock")
 	ship.rot_input = Vector3.ZERO
 
 	# Enemy AI & Combat test

@@ -298,20 +298,25 @@ func _apply_flight_physics(delta: float) -> void:
 		if com_offset.length_squared() > 0.05:
 			apply_torque(global_transform.basis * (com_offset.cross(Vector3(0, 0, -1)) * total_thrust * 0.012 * asym_scale))
 
-	# Smooth 6-DOF Full-360 Rotational Control (Quaternion/Basis local-frame: zero gimbal or horizon lock!)
+	# Smooth, Controlled 6-DOF 360-Degree Rotation (calm speed ~85-105 deg/s max, zero gimbal lock!)
 	var ang_acc := float(stats.get("angular_accel", 3.2))
-	var agility := clampf(0.95 + ang_acc * 0.14, 0.95, 2.25)
+	var agility := clampf(0.88 + (ang_acc - 3.2) * 0.04, 0.85, 1.32)
+	var rot_c := Vector3(
+		clampf(rot_input.x, -1.0, 1.0),
+		clampf(rot_input.y, -1.0, 1.0),
+		clampf(rot_input.z, -1.0, 1.0)
+	)
 	var desired_local_ang := Vector3(
-		rot_input.x * 3.1 * agility,
-		rot_input.y * 3.3 * agility,
-		rot_input.z * 4.2 * agility
+		rot_c.x * 1.45 * agility,
+		rot_c.y * 1.55 * agility,
+		rot_c.z * 1.85 * agility
 	)
 	var desired_world_ang := global_transform.basis * desired_local_ang
-	if rot_input.length_squared() > 0.0008:
-		var rot_blend := 1.0 - exp(-15.0 * delta)
+	if rot_c.length_squared() > 0.0004:
+		var rot_blend := 1.0 - exp(-8.5 * delta)
 		angular_velocity = angular_velocity.lerp(desired_world_ang, rot_blend)
 	elif stabilizer_enabled:
-		var damp_blend := 1.0 - exp(-7.5 * delta)
+		var damp_blend := 1.0 - exp(-6.8 * delta)
 		angular_velocity = angular_velocity.lerp(Vector3.ZERO, damp_blend)
 
 	# Smooth linear velocity stabilization when throttle is released
@@ -349,18 +354,24 @@ func _get_reticle_assisted_point(from_pos: Vector3) -> Vector3:
 	return aimed_world_point if (aimed_world_point - from_pos).length_squared() > 1.0 else (from_pos + base_dir * 160.0)
 
 func _update_turrets(delta: float) -> void:
-	var slew_alpha := 1.0 - exp(-18.0 * delta)
+	var max_slew_rad := 2.4 * delta # ~138 deg/sec smooth mechanical turret tracking
 	for uid in _turrets_by_uid.keys():
 		var tur: Node3D = _turrets_by_uid[uid]
 		if not is_instance_valid(tur):
 			continue
 		var target_pt := _get_reticle_assisted_point(tur.global_position)
-		var to_t := target_pt - tur.global_position
+		# Compensate for 0.05m vertical muzzle offset above turret pivot so the gun barrel intersects target_pt dead-center!
+		var to_t := (target_pt - tur.global_transform.basis.y * 0.05) - tur.global_position
 		if to_t.length_squared() > 1.0:
 			var aim_xform := Projectile3D.make_aim_transform(tur.global_position, to_t.normalized(), global_transform.basis.y)
 			var q_cur := tur.global_transform.basis.orthonormalized().get_rotation_quaternion()
 			var q_dst := aim_xform.basis.orthonormalized().get_rotation_quaternion()
-			tur.global_transform.basis = Basis(q_cur.slerp(q_dst, slew_alpha)).orthonormalized()
+			var ang := q_cur.angle_to(q_dst)
+			if ang > 0.0005:
+				var step_t := clampf(max_slew_rad / ang, 0.0, 1.0)
+				tur.global_transform.basis = Basis(q_cur.slerp(q_dst, step_t)).orthonormalized()
+			else:
+				tur.global_transform.basis = aim_xform.basis.orthonormalized()
 
 func get_weapon_fire_solution(uid: int) -> Dictionary:
 	var entry: Dictionary = ShipGrid.placed_modules[uid]
@@ -369,95 +380,29 @@ func get_weapon_fire_solution(uid: int) -> Dictionary:
 	var muzzle: Marker3D = _muzzles_by_uid[uid]
 	var m_pos := muzzle.global_position
 	var p_spd := float(def.get("proj_speed", 210.0))
-	var w_range := float(def.get("weapon_range", 200.0))
+	var wtype := str(def.get("weapon_type", "kinetic"))
+	var lifetime_sec := 5.5 if wtype in ["rocket", "missile"] else 2.8
+	var max_travel := p_spd * lifetime_sec
 
 	var barrel_dir: Vector3
 	if bool(def.get("is_turret", false)) and _turrets_by_uid.has(uid) and is_instance_valid(_turrets_by_uid[uid]):
 		var tur: Node3D = _turrets_by_uid[uid]
-		# Snap turret aim if target is already within 2 deg, otherwise use live slewing turret barrel!
-		var tgt_point := _get_reticle_assisted_point(m_pos)
-		var wish_dir := (tgt_point - m_pos).normalized()
-		var cur_tur_fwd := (-tur.global_transform.basis.z).normalized()
-		if wish_dir.length_squared() > 0.1 and cur_tur_fwd.dot(wish_dir) > 0.998:
-			barrel_dir = wish_dir
-		else:
-			barrel_dir = cur_tur_fwd
+		barrel_dir = (-tur.global_transform.basis.z).normalized()
+	elif _visuals_by_uid.has(uid) and is_instance_valid(_visuals_by_uid[uid]):
+		var vnode: Node3D = _visuals_by_uid[uid]
+		barrel_dir = (-vnode.global_transform.basis.z).normalized()
 	else:
-		var ship_fwd := (-global_transform.basis.z).normalized()
-		var tgt_point := _get_reticle_assisted_point(m_pos)
-		var wish_dir := (tgt_point - m_pos).normalized()
-		if wish_dir.length_squared() < 0.1:
-			barrel_dir = ship_fwd
-		elif ship_fwd.dot(wish_dir) >= 0.92:
-			barrel_dir = wish_dir
-		else:
-			# Smoothly clamp fixed mounts to a 23-deg forward gimbal cone around ship nose
-			barrel_dir = ship_fwd.slerp(wish_dir, 0.25).normalized()
+		barrel_dir = (-global_transform.basis.z).normalized()
 
 	if barrel_dir.length_squared() < 0.1:
 		barrel_dir = (-global_transform.basis.z).normalized()
 
-	var shot_vel: Vector3 = barrel_dir * p_spd + linear_velocity
-	var flight_dir: Vector3 = shot_vel.normalized() if shot_vel.length_squared() > 0.1 else barrel_dir
-	return {
-		"muzzle_pos": m_pos,
-		"barrel_dir": barrel_dir,
-		"flight_dir": flight_dir,
-		"proj_speed": p_spd,
-		"shot_vel": shot_vel,
-		"range": w_range,
-	}
-
-func get_ballistic_sight_info() -> Dictionary:
-	var sum_origin := Vector3.ZERO
-	var sum_flight_dir := Vector3.ZERO
-	var sum_speed := 0.0
-	var max_range := 190.0
-	var count := 0
-
-	for uid in ShipGrid.placed_modules.keys():
-		var entry: Dictionary = ShipGrid.placed_modules[uid]
-		var mod_id: String = entry["mod_id"]
-		var def: Dictionary = GameData.modules[mod_id]
-		if not def.has("weapon_type") or not _muzzles_by_uid.has(uid):
-			continue
-		if ShipGrid.get_module_efficiency(entry) <= 0.0:
-			continue
-		var sol := get_weapon_fire_solution(uid)
-		sum_origin += sol["muzzle_pos"] as Vector3
-		sum_flight_dir += sol["flight_dir"] as Vector3
-		sum_speed += float(sol["proj_speed"])
-		max_range = maxf(max_range, float(sol["range"]))
-		count += 1
-
-	var origin: Vector3
-	var flight_dir: Vector3
-	var avg_spd: float
-	if count > 0:
-		origin = sum_origin / float(count)
-		flight_dir = (sum_flight_dir / float(count)).normalized()
-		avg_spd = sum_speed / float(count)
-	else:
-		# Fallback ballistic sight along nose + ship drift when only mining gear is equipped
-		var s_xf := get_smoothed_transform()
-		var nose_fwd := (-s_xf.basis.z).normalized()
-		origin = s_xf.origin + nose_fwd * 2.4
-		avg_spd = 210.0
-		var v := nose_fwd * avg_spd + linear_velocity
-		flight_dir = v.normalized() if v.length_squared() > 0.1 else nose_fwd
-
-	if flight_dir.length_squared() < 0.01:
-		flight_dir = (-global_transform.basis.z).normalized()
-
-	var ref_dist := 165.0
-	if is_instance_valid(locked_enemy):
-		ref_dist = clampf(origin.distance_to(locked_enemy.global_position), 25.0, max_range)
-
-	var impact_pos := origin + flight_dir * ref_dist
+	# Raycast exact straight-line bullet trajectory in world space to find where the bullet WILL arrive/impact!
+	var impact_pos: Vector3 = m_pos + barrel_dir * max_travel
 	var hit_kind := "none"
 	var space_state := get_world_3d().direct_space_state
 	if space_state != null:
-		var q := PhysicsRayQueryParameters3D.create(origin, origin + flight_dir * max_range)
+		var q := PhysicsRayQueryParameters3D.create(m_pos, impact_pos)
 		q.exclude = [get_rid()]
 		var hit := space_state.intersect_ray(q)
 		if not hit.is_empty():
@@ -470,7 +415,71 @@ func get_ballistic_sight_info() -> Dictionary:
 			else:
 				hit_kind = "prop"
 
-	# Compute moving-target ballistic lead point if an enemy is targeted
+	return {
+		"muzzle_pos": m_pos,
+		"barrel_dir": barrel_dir,
+		"flight_dir": barrel_dir,
+		"proj_speed": p_spd,
+		"max_travel": max_travel,
+		"impact_pos": impact_pos,
+		"hit_kind": hit_kind,
+	}
+
+func get_ballistic_sight_info() -> Dictionary:
+	var primary_impact := Vector3.ZERO
+	var primary_origin := Vector3.ZERO
+	var primary_dir := Vector3.ZERO
+	var primary_hit_kind := "none"
+	var avg_spd := 210.0
+	var secondary_impacts: Array[Vector3] = []
+	var count := 0
+
+	for uid in ShipGrid.placed_modules.keys():
+		var entry: Dictionary = ShipGrid.placed_modules[uid]
+		var mod_id: String = entry["mod_id"]
+		var def: Dictionary = GameData.modules[mod_id]
+		if not def.has("weapon_type") or not _muzzles_by_uid.has(uid):
+			continue
+		if ShipGrid.get_module_efficiency(entry) <= 0.0:
+			continue
+		var sol := get_weapon_fire_solution(uid)
+		var imp: Vector3 = sol["impact_pos"]
+		if count == 0:
+			primary_impact = imp
+			primary_origin = sol["muzzle_pos"] as Vector3
+			primary_dir = sol["barrel_dir"] as Vector3
+			primary_hit_kind = str(sol["hit_kind"])
+			avg_spd = float(sol["proj_speed"])
+		else:
+			secondary_impacts.append(imp)
+			if primary_hit_kind == "none" and str(sol["hit_kind"]) != "none":
+				primary_hit_kind = str(sol["hit_kind"])
+				primary_impact = imp
+		count += 1
+
+	if count == 0:
+		# Fallback sight along ship nose / mining mount when no weapons are installed yet
+		var nose_fwd := (-global_transform.basis.z).normalized()
+		primary_origin = global_position + nose_fwd * 2.4
+		primary_dir = nose_fwd
+		var max_d := 300.0
+		primary_impact = primary_origin + nose_fwd * max_d
+		var space_state := get_world_3d().direct_space_state
+		if space_state != null:
+			var q := PhysicsRayQueryParameters3D.create(primary_origin, primary_impact)
+			q.exclude = [get_rid()]
+			var hit := space_state.intersect_ray(q)
+			if not hit.is_empty():
+				primary_impact = hit["position"]
+				var col: Object = hit["collider"]
+				if col is EnemyShip3D or (col is Node and col.is_in_group("enemies")):
+					primary_hit_kind = "enemy"
+				elif col is Asteroid3D:
+					primary_hit_kind = "asteroid"
+				else:
+					primary_hit_kind = "prop"
+
+	# Moving-target intercept lead indicator (accounts for enemy motion during bullet flight time)
 	var has_lead := false
 	var lead_pos := Vector3.ZERO
 	if is_instance_valid(locked_enemy):
@@ -478,17 +487,18 @@ func get_ballistic_sight_info() -> Dictionary:
 		var en_vel := Vector3.ZERO
 		if locked_enemy is CharacterBody3D:
 			en_vel = (locked_enemy as CharacterBody3D).velocity
-		var dist_to_en := origin.distance_to(en_pos)
+		var dist_to_en := primary_origin.distance_to(en_pos)
 		var tof := dist_to_en / maxf(40.0, avg_spd)
-		lead_pos = en_pos + (en_vel - linear_velocity) * tof
+		lead_pos = en_pos + en_vel * tof
 		has_lead = true
 
 	return {
-		"origin": origin,
-		"flight_dir": flight_dir,
-		"world_pos": impact_pos,
-		"distance": origin.distance_to(impact_pos),
-		"hit_kind": hit_kind,
+		"origin": primary_origin,
+		"flight_dir": primary_dir,
+		"world_pos": primary_impact,
+		"secondary_impacts": secondary_impacts,
+		"distance": primary_origin.distance_to(primary_impact),
+		"hit_kind": primary_hit_kind,
 		"has_weapons": count > 0,
 		"has_lead": has_lead,
 		"lead_world_pos": lead_pos,
@@ -585,6 +595,7 @@ func _process_weapons(delta: float) -> void:
 
 		var dmg := GameData.get_module_scaled_stat(mod_id, "weapon_damage", int(entry["level"])) * eff * dmg_mult
 		var p := Projectile3D.new()
+		p.ignore_rid = get_rid()
 		projectiles_root.add_child(p)
 		var xform := Projectile3D.make_aim_transform(m_pos, barrel_dir, global_transform.basis.y)
 		p.setup(
@@ -596,7 +607,7 @@ func _process_weapons(delta: float) -> void:
 			float(def.get("splash_radius", 0.0)),
 			float(def.get("turn_rate", 0.0)),
 			locked_enemy if wtype == "missile" else null,
-			linear_velocity
+			Vector3.ZERO
 		)
 
 		match wtype:
@@ -666,8 +677,9 @@ func _process_orbiting_drones(delta: float) -> void:
 			for dn in _orbit_drones:
 				var dir := (nearest.global_position - dn.global_position).normalized()
 				var p := Projectile3D.new()
+				p.ignore_rid = get_rid()
 				projectiles_root.add_child(p)
-				p.setup(true, "laser", 20.0 * float(stats.get("damage_mult", 1.0)), 220.0, Projectile3D.make_aim_transform(dn.global_position, dir), 0.0, 0.0, null, linear_velocity)
+				p.setup(true, "laser", 20.0 * float(stats.get("damage_mult", 1.0)), 220.0, Projectile3D.make_aim_transform(dn.global_position, dir), 0.0, 0.0, null, Vector3.ZERO)
 
 func receive_enemy_hit(raw_damage: float, hit_world_pos: Vector3, shape_idx: int = 0) -> void:
 	if raw_damage <= 0.0:
