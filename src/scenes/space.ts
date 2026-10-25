@@ -21,6 +21,13 @@ import { RNG } from '../core/rng.ts';
 
 const UP = new THREE.Vector3(0, 1, 0);
 
+/**
+ * Converts the design's kN-per-tonne figure into world acceleration.
+ * Tuned so the starter frame (260 kN / ~775 t) accelerates at ~40 u/s^2, which reaches
+ * cruising speed in a couple of seconds while heavy builds still feel heavy.
+ */
+const ACCEL_SCALE = 120;
+
 interface AsteroidEntity {
   mesh: THREE.Mesh;
   radius: number;
@@ -95,6 +102,19 @@ export interface ExpeditionHUD {
   radarBlips: { x: number; y: number; type: 'enemy' | 'rock' | 'chunk' }[];
   warnings: string[];
   elapsed: number;
+}
+
+/**
+ * Segment-vs-sphere test. Projectiles can travel further than a target's radius in a
+ * single frame, so collisions are evaluated along the whole swept segment.
+ */
+function sweptHit(from: THREE.Vector3, to: THREE.Vector3, center: THREE.Vector3, radius: number): boolean {
+  const seg = to.clone().sub(from);
+  const lenSq = seg.lengthSq();
+  if (lenSq < 1e-8) return from.distanceTo(center) <= radius;
+  const t = THREE.MathUtils.clamp(center.clone().sub(from).dot(seg) / lenSq, 0, 1);
+  const closest = from.clone().addScaledVector(seg, t);
+  return closest.distanceTo(center) <= radius;
 }
 
 export class SpaceScene {
@@ -253,7 +273,7 @@ export class SpaceScene {
     const weights = ids.map((id) => table[id]);
     const resource = this.rng.weighted(ids, weights);
     const hardness = 1 + this.sector.danger * 0.45;
-    const maxHealth = radius * 26 * hardness;
+    const maxHealth = radius * 20 * hardness;
     const entity: AsteroidEntity = {
       mesh: built.mesh,
       radius,
@@ -405,7 +425,7 @@ export class SpaceScene {
     this.boost = THREE.MathUtils.lerp(this.boost, boosting && this.energy > 5 ? 1 : 0, dt * 6);
 
     const totalThrust = Math.max(60, stats.thrust) * thrustMult * (1 + this.boost * 0.65);
-    const accel = totalThrust / this.mass;
+    const accel = (totalThrust / this.mass) * ACCEL_SCALE;
     const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(this.shipPivot.quaternion);
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.shipPivot.quaternion);
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(this.shipPivot.quaternion);
@@ -423,9 +443,11 @@ export class SpaceScene {
     const maxSpeed = 240 * thrustMult * (1 + this.boost * 0.5);
     if (this.velocity.length() > maxSpeed) this.velocity.setLength(maxSpeed);
 
-    // Energy: boosting and firing drain, generators refill.
+    // Energy: installed modules draw continuously, generators refill, boosting costs extra.
+    // A negative balance drains the buffer and eventually silences lasers and weapons.
     const energyRegen = stats.energyGen * mult(bonuses, 'energyRegenMult');
-    this.energy = THREE.MathUtils.clamp(this.energy + (energyRegen - this.boost * 12) * dt, 0, this.maxEnergy);
+    const netEnergy = energyRegen - stats.energyDraw - this.boost * 12;
+    this.energy = THREE.MathUtils.clamp(this.energy + netEnergy * dt, 0, this.maxEnergy);
 
     // Thruster visuals follow the actual inputs.
     for (const p of this.plumes) {
@@ -449,6 +471,10 @@ export class SpaceScene {
     const firing = this.input.mouse.right;
     this.miningTargets.clear();
     if (!firing || this.miningMuzzles.length === 0) return;
+    if (this.energy <= 0.5) {
+      if (Math.random() < 0.01) this.onNotify?.('Not enough power for the mining array.', 'error');
+      return;
+    }
 
     const bonuses = this.state.bonuses();
     const rareBonus = additive(bonuses, 'rareChance') + this.state.ship.stats().rareBonus;
@@ -729,6 +755,7 @@ export class SpaceScene {
           p.velocity.lerp(desired, Math.min(1, p.homing * dt));
         }
       }
+      const prevPos = p.mesh.position.clone();
       p.mesh.position.addScaledVector(p.velocity, dt);
       if (p.velocity.lengthSq() > 0.01) {
         p.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), p.velocity.clone().normalize());
@@ -743,7 +770,7 @@ export class SpaceScene {
       if (p.friendly) {
         for (const e of this.enemies) {
           if (e.dead) continue;
-          if (p.mesh.position.distanceTo(e.group.position) < e.def.scale * 4.2) {
+          if (sweptHit(prevPos, p.mesh.position, e.group.position, e.def.scale * 4.6)) {
             this.damageEnemy(e, p.damage, p.mesh.position.clone());
             hit = true;
             break;
@@ -751,7 +778,7 @@ export class SpaceScene {
         }
         if (!hit) {
           for (const a of this.asteroids) {
-            if (p.mesh.position.distanceTo(a.mesh.position) < a.radius) {
+            if (sweptHit(prevPos, p.mesh.position, a.mesh.position, a.radius)) {
               a.health -= p.damage * 0.5;
               this.fx.impact(p.mesh.position, 0xffa366, 10, 20);
               if (a.health <= 0) this.destroyAsteroid(a, 0);
@@ -760,11 +787,9 @@ export class SpaceScene {
             }
           }
         }
-      } else {
-        if (p.mesh.position.distanceTo(this.shipPivot.position) < 7) {
-          this.damagePlayer(p.damage, p.mesh.position.clone());
-          hit = true;
-        }
+      } else if (sweptHit(prevPos, p.mesh.position, this.shipPivot.position, 7)) {
+        this.damagePlayer(p.damage, p.mesh.position.clone());
+        hit = true;
       }
 
       if (hit || p.life <= 0) {

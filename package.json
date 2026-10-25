@@ -6,7 +6,10 @@
     "dev": "vite --host 0.0.0.0 --port 5173",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
-    "test": "node scripts/run-tests.mjs"
+    "test": "node --experimental-strip-types scripts/run-tests.mjs",
+    "smoke": "node --experimental-strip-types scripts/smoke-test.mjs",
+    "preview:art": "node --experimental-strip-types scripts/render-preview.mjs preview",
+    "release": "bash scripts/build-release.sh"
   },
   "dependencies": {
     "three": "^0.160.0"
@@ -14,6 +17,7 @@
   "devDependencies": {
     "@types/three": "^0.160.0",
     "typescript": "^5.5.0",
-    "vite": "^5.2.0"
+    "vite": "^5.2.0",
+    "@napi-rs/canvas": "^0.1.60"
   }
 }

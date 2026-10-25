@@ -15,6 +15,10 @@ echo ">> 1. automated tests"
 node --experimental-strip-types scripts/run-tests.mjs
 
 echo
+echo ">> 1b. headless gameplay smoke test"
+node --experimental-strip-types scripts/smoke-test.mjs 2>&1 | grep -v "toNonIndexed"
+
+echo
 echo ">> 2. type check"
 npx tsc --noEmit -p tsconfig.json
 echo "   no type errors"

@@ -114,7 +114,7 @@ export const MODULES: ModuleDef[] = [
     id: 'cockpit_basic', name: 'Command Cockpit', category: 'command', size: [1, 1, 1],
     mass: 180, durability: 420, energy: 2, price: 0, tier: 1, maxLevel: 4,
     description: 'Pressurised command module. Every ship requires exactly one cockpit.',
-    stats: { energyCap: 60, energyGen: 6, torque: 1 }, color: 0x2e3a5c, accent: 0x00e5ff,
+    stats: { energyCap: 90, energyGen: 16, torque: 1 }, color: 0x2e3a5c, accent: 0x00e5ff,
   },
   {
     id: 'cockpit_tactical', name: 'Tactical Bridge', category: 'command', size: [2, 1, 1],
@@ -125,7 +125,7 @@ export const MODULES: ModuleDef[] = [
   // ---------------------------------------------------------------- propulsion
   {
     id: 'engine_basic', name: 'Ion Thruster', category: 'propulsion', size: [1, 1, 1],
-    mass: 140, durability: 220, energy: 6, price: 600, tier: 1, maxLevel: 6, surfaceMount: true,
+    mass: 140, durability: 220, energy: 4, price: 600, tier: 1, maxLevel: 6, surfaceMount: true,
     description: 'Reliable ion drive. Thrust is applied from its real mounting point on the hull.',
     stats: { thrust: 260, torque: 0.9 }, color: 0x3a4766, accent: 0x33ccff,
   },
@@ -150,9 +150,9 @@ export const MODULES: ModuleDef[] = [
   // ---------------------------------------------------------------- mining
   {
     id: 'laser_basic', name: 'Basic Mining Laser', category: 'mining', size: [1, 1, 1],
-    mass: 95, durability: 180, energy: 8, price: 0, tier: 1, maxLevel: 6, surfaceMount: true,
+    mass: 95, durability: 180, energy: 5, price: 0, tier: 1, maxLevel: 6, surfaceMount: true,
     description: 'Entry level cutting laser. Carves ore from asteroid surfaces at short range.',
-    stats: { miningDps: 26, miningRange: 95 }, color: 0x3b4a63, accent: 0xff4d4d,
+    stats: { miningDps: 34, miningRange: 95 }, color: 0x3b4a63, accent: 0xff4d4d,
   },
   {
     id: 'laser_advanced', name: 'Advanced Mining Laser', category: 'mining', size: [1, 1, 1],
@@ -206,7 +206,7 @@ export const MODULES: ModuleDef[] = [
   // ---------------------------------------------------------------- weapons
   {
     id: 'gun_machine', name: 'Machine Gun', category: 'weapon', size: [1, 1, 1],
-    mass: 110, durability: 200, energy: 4, price: 1200, tier: 1, maxLevel: 6, surfaceMount: true,
+    mass: 110, durability: 200, energy: 3, price: 1200, tier: 1, maxLevel: 6, surfaceMount: true,
     description: 'Rapid fire kinetic turret. Tracks targets and leads its shots automatically.',
     stats: { damage: 9, fireRate: 7.5, projectileSpeed: 420, weaponRange: 190 }, color: 0x3c4760, accent: 0xffd166,
   },

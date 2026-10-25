@@ -72,6 +72,45 @@
 --------------------------------------------
 
 
+>> 1b. headless gameplay smoke test
+
+============================================
+ SPACE MINER - HEADLESS GAMEPLAY SMOKE TEST
+============================================
+
+[scene construction]
+  PASS  hangar environment builds — 167 meshes, 6 stations
+  PASS  hangar animation tick runs
+  PASS  every module builds real geometry — 33 modules, 41,366 triangles total
+  PASS  all 44 crew cards render original art — 44 cards
+
+[expedition simulation]
+  PASS  test ship assembled — 10 modules, 1435t, thrust 260kN
+  PASS  sector field populated — 25 asteroids
+  PASS  thrust moves the ship — 10.5 units travelled
+  PASS  velocity is finite and sane — 20.2 m/s
+  PASS  mining lasers damage asteroids — asteroid destroyed
+  PASS  mining spawns collectible chunks — 4 chunks in flight, 0 units in cargo
+  PASS  magnets collect ore into cargo — 16 / 40 cargo
+  PASS  ore manifest tracks resource types — iron:16
+  PASS  enemies spawn during the expedition — 2 hostiles after 0.0s
+  PASS  weapons damage enemy craft — enemy destroyed
+  PASS  enemy AI moves the craft — target eliminated
+  PASS  HUD reports live telemetry — hull 2540/2540, 7 radar contacts
+  PASS  expedition summary pays out — 408 CR, 16 ore, 1 rocks, 2 kills
+  PASS  credits bank correctly
+
+[persistence]
+  PASS  save writes to storage
+  PASS  save round-trips the ship — 10 modules restored
+  PASS  save round-trips the collection — 1 cards restored
+  PASS  save round-trips currencies
+
+--------------------------------------------
+ SMOKE TEST PASSED
+--------------------------------------------
+
+
 >> 2. type check
    no type errors
 
@@ -87,11 +126,11 @@ rendering chunks...
 computing gzip size...
 dist/index.html                   0.79 kB │ gzip:   0.51 kB
 dist/assets/index-XzZF7f46.css    8.73 kB │ gzip:   2.51 kB
-dist/assets/index-BRtycQMH.js   736.22 kB │ gzip: 203.00 kB
-✓ built in 2.23s
+dist/assets/index-D83Kmwoq.js   736.60 kB │ gzip: 203.13 kB
+✓ built in 2.22s
 
 >> 4. application icon
-icon written: /home/user/Roblox/build/spaceminer.ico (95420 bytes, 7 sizes)
+icon written: /home/user/Roblox/build/spaceminer.ico (95830 bytes, 7 sizes)
 
 >> 5. native Windows binaries (x86_64-windows-gnu)
    SpaceMiner.exe, setup_stub.exe, uninstall.exe built
@@ -110,17 +149,17 @@ launcher self-test passed
 [1/6] staging the portable Windows build
   staged 7 files
 [2/6] building SPACE_MINER_WINDOWS.zip
-  461.2 KB
+  462.0 KB
 [3/6] packing SPACE_MINER_SETUP.exe
   8 payload entries, 1.53 MB
 [4/6] verifying the installer payload with the native extractor
   extracted and byte-compared 8 files - all match
 [5/6] building SPACE_MINER_SOURCE.zip
-  275.5 KB
+  1.87 MB
 [6/6] checksums
-  SPACE_MINER_WINDOWS.zip      461.2 KB  sha256 642c9d29da2bb03489f960df7543723d6414eb18f39727282fb08721b6f98697
-  SPACE_MINER_SETUP.exe         1.53 MB  sha256 ccc01155d7dfd350b5eb3434bcc0be1e1a1045fe00562e40967e5b0feeec277c
-  SPACE_MINER_SOURCE.zip       275.5 KB  sha256 72451539ce430a689355e48f381d3397b86f41d088cc566eb6753479de445ad8
+  SPACE_MINER_WINDOWS.zip      462.0 KB  sha256 7354187ab738445cd434fa5ab11ff6bc01a672fb905354eef62e9c530ece610c
+  SPACE_MINER_SETUP.exe         1.53 MB  sha256 0bf0d9e17a3b5b5512ae112a84c6db7a0e64fe48da4431f2e551b7ee46adb065
+  SPACE_MINER_SOURCE.zip        1.87 MB  sha256 956bfcbc90d77b2a32518d7dadacca323526b3553eee5a2b45251fca472ba1c6
 
 Release artifacts ready in /home/user/Roblox/release
 
@@ -130,34 +169,34 @@ Release artifacts ready in /home/user/Roblox/release
     machine      : x86-64 PE32+
     subsystem    : Windows GUI
     sections     : .text, .rdata, .buildid, .data, .pdata, .tls, .rsrc, .reloc
-    resources    : 96760 bytes (icon + version info)
+    resources    : 97168 bytes (icon + version info)
     imports      : advapi32.dll, comctl32.dll, gdi32.dll, kernel32.dll, ole32.dll, shell32.dll, user32.dll, ws2_32.dll
-    size         : 1,607,044 bytes
+    size         : 1,609,367 bytes
   build/SpaceMiner.exe
     machine      : x86-64 PE32+
     subsystem    : Windows GUI
     sections     : .text, .rdata, .buildid, .data, .pdata, .tls, .rsrc, .reloc
-    resources    : 96760 bytes (icon + version info)
+    resources    : 97168 bytes (icon + version info)
     imports      : kernel32.dll, shell32.dll, user32.dll, ws2_32.dll
-    size         : 256,000 bytes
+    size         : 256,512 bytes
   build/uninstall.exe
     machine      : x86-64 PE32+
     subsystem    : Windows GUI
     sections     : .text, .rdata, .buildid, .data, .pdata, .tls, .rsrc, .reloc
-    resources    : 96760 bytes (icon + version info)
+    resources    : 97168 bytes (icon + version info)
     imports      : advapi32.dll, kernel32.dll, shell32.dll, user32.dll
-    size         : 249,344 bytes
+    size         : 249,856 bytes
 
   PE verification passed
 
 ==============================================
  BUILD COMPLETE
 ==============================================
-total 2324
-drwxr-xr-x  2 user user    4096 Oct 25 17:04 .
-drwxr-xr-x 12 user user    4096 Oct 25 17:04 ..
--rw-r--r--  1 user user     267 Oct 25 17:04 SHA256SUMS.txt
--rw-r--r--  1 user user 1607044 Oct 25 17:04 SPACE_MINER_SETUP.exe
--rw-r--r--  1 user user  282143 Oct 25 17:04 SPACE_MINER_SOURCE.zip
--rw-r--r--  1 user user  472227 Oct 25 17:04 SPACE_MINER_WINDOWS.zip
+total 3968
+drwxr-xr-x  2 user user    4096 Oct 25 17:15 .
+drwxr-xr-x 14 user user    4096 Oct 25 17:15 ..
+-rw-r--r--  1 user user     267 Oct 25 17:15 SHA256SUMS.txt
+-rw-r--r--  1 user user 1609367 Oct 25 17:15 SPACE_MINER_SETUP.exe
+-rw-r--r--  1 user user 1965654 Oct 25 17:15 SPACE_MINER_SOURCE.zip
+-rw-r--r--  1 user user  473085 Oct 25 17:15 SPACE_MINER_WINDOWS.zip
 EXIT=0
