@@ -1,0 +1,21 @@
+{
+  "name": "space-miner",
+  "version": "1.0.0",
+  "description": "Space Miner - Premium Space Mining Adventure",
+  "main": "src/index.html",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 5173",
+    "test": "node tools/test.js",
+    "pack:win": "node tools/build_win.js",
+    "installer": "node tools/build_installer.js"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  },
+  "dependencies": {
+    "pkg": "^5.8.1"
+  }
+}

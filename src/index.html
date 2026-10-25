@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPACE MINER - Premium Space Mining Adventure</title>
+<link rel="icon" type="image/png" href="./assets/app_icon.png">
+<link rel="stylesheet" href="./styles/main.css">
+</head>
+<body>
+<!-- Loading Screen -->
+<div id="loading-screen">
+  <div class="loading-logo"><img src="./assets/app_icon.png" alt="logo"></div>
+  <div class="loading-title">SPACE <span>MINER</span></div>
+  <div class="loading-sub">Premium Space Mining Adventure &bull; v1.0.0</div>
+  <div class="loading-bar-wrap"><div class="loading-bar" id="loading-bar"></div></div>
+  <div class="loading-text" id="loading-text">Initializing quantum drives...</div>
+</div>
+
+<!-- Main Menu -->
+<div id="main-menu">
+  <div class="menu-top">
+    <div class="menu-hero">
+      <div class="hero-badge"><i></i> BUILD 1.0.0 &bull; 5 SECTORS &bull; 15 RESOURCES</div>
+      <div class="hero-title">SPACE<br><b>MINER</b></div>
+      <div class="hero-desc">Command a mining vessel through uncharted asteroid fields. Extract rare minerals, battle hostile drones, deploy autonomous fleets and build an interstellar empire.</div>
+      <div class="hero-stats">
+        <div class="stat-chip"><div class="v">5</div><div class="k">Sectors</div></div>
+        <div class="stat-chip"><div class="v">15</div><div class="k">Resources</div></div>
+        <div class="stat-chip"><div class="v">12+</div><div class="k">Upgrades</div></div>
+        <div class="stat-chip"><div class="v">∞</div><div class="k">Asteroids</div></div>
+      </div>
+    </div>
+    <div class="menu-actions">
+      <button class="btn-main primary" id="btn-play">LAUNCH MISSION <span>&rarr;</span></button>
+      <button class="btn-main secondary" id="btn-continue">CONTINUE EXPEDITION &mdash; <span id="continue-info" style="opacity:0.7;font-size:12px">No save</span></button>
+      <button class="btn-main secondary" id="btn-ship-select">SHIP YARD &bull; 3 VESSELS</button>
+      <button class="btn-main secondary" id="btn-settings-menu">SETTINGS &amp; CONTROLS</button>
+      <button class="btn-main secondary" id="btn-achievements-menu">ACHIEVEMENTS</button>
+      <div style="display:flex;gap:8px">
+        <div style="flex:1;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:10px;color:var(--muted)">CREDITS</div><div id="menu-credits" style="font-weight:800;color:var(--gold)">0</div>
+        </div>
+        <div style="flex:1;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:10px;color:var(--muted)">LEVEL</div><div id="menu-level" style="font-weight:800">1</div>
+        </div>
+        <div style="flex:1;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:10px;color:var(--muted)">SECTOR</div><div id="menu-sector" style="font-weight:800;color:var(--accent2)">Starter Belt</div>
+        </div>
+      </div>
+    </div>
+    <div class="menu-preview">
+      <img src="./assets/loading_bg.png" alt="preview">
+      <div class="overlay">
+        <div style="font-weight:800;font-size:13px">ACTIVE FLEET STATUS</div>
+        <div class="mini-row">
+          <div class="mini-card"><div class="t">Hull</div><div class="n" style="color:#2ecc71">100%</div></div>
+          <div class="mini-card"><div class="t">Cargo</div><div class="n" id="preview-cargo">0 / 100</div></div>
+          <div class="mini-card"><div class="t">Drones</div><div class="n" id="preview-drones">0</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="menu-bottom">
+    <div class="ver">© 2026 SPACE MINER STUDIOS &bull; WINDOWS 64-BIT &bull; BUILT WITH WEBGL</div>
+    <div class="links"><span>WASD Move</span><span>Mouse Aim</span><span>Space Mine</span><span>E Collect</span><span>Q Shield</span></div>
+  </div>
+</div>
+
+<!-- Game -->
+<div id="game-container">
+  <canvas id="game-canvas"></canvas>
+  <div class="hud">
+    <div class="hud-top">
+      <div class="hud-panel hud-left">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:800;font-size:12px;letter-spacing:1px"><span id="hud-sector-name">STARTER BELT</span> <span style="color:var(--muted);font-weight:400" id="hud-sector-num">SECTOR 1/5</span></div>
+          <div style="font-size:11px;background:rgba(58,139,255,0.15);border:1px solid rgba(58,139,255,0.3);padding:3px 8px;border-radius:20px">LVL <b id="hud-level">1</b> &bull; <span id="hud-xp">0</span> XP</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <div style="flex:1">
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted)"><span>ENERGY</span><span id="hud-energy-text">100/100</span></div>
+            <div class="bar energy"><div class="bar-fill" id="hud-energy-bar" style="width:100%"></div></div>
+          </div>
+          <div style="flex:1">
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted)"><span>SHIELD</span><span id="hud-shield-text">50/50</span></div>
+            <div class="bar shield"><div class="bar-fill" id="hud-shield-bar" style="width:100%"></div></div>
+          </div>
+          <div style="flex:1">
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted)"><span>HULL</span><span id="hud-hull-text">100/100</span></div>
+            <div class="bar hull"><div class="bar-fill" id="hud-hull-bar" style="width:100%"></div></div>
+          </div>
+        </div>
+        <div class="hud-resources" id="hud-resources"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;align-items:flex-end">
+        <div class="hud-panel hud-right">
+          <div class="hud-stat">
+            <div class="label">Credits</div><div class="value" style="color:var(--gold)" id="hud-credits">0</div><div class="sub">Sell at Station [T]</div>
+          </div>
+          <div class="hud-stat" style="border-left:1px solid var(--border);padding-left:12px">
+            <div class="label">Cargo</div><div class="value" id="hud-cargo">0 / 100</div><div class="sub" id="hud-cargo-sub">Hold [I]</div>
+          </div>
+          <div class="hud-stat" style="border-left:1px solid var(--border);padding-left:12px">
+            <div class="label">Drones</div><div class="value" id="hud-drones">0</div><div class="sub">Auto Mining</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="ctrl-btn" id="btn-pause" style="pointer-events:auto">II Pause [Esc]</button>
+          <button class="ctrl-btn" id="btn-save" style="pointer-events:auto">Save</button>
+        </div>
+      </div>
+    </div>
+    <div class="hud-bottom">
+      <div class="hud-controls">
+        <button class="ctrl-btn" id="hud-btn-inv"><kbd>I</kbd> Inventory</button>
+        <button class="ctrl-btn" id="hud-btn-upgrades"><kbd>U</kbd> Upgrades</button>
+        <button class="ctrl-btn" id="hud-btn-map"><kbd>M</kbd> Sector Map</button>
+        <button class="ctrl-btn" id="hud-btn-drones"><kbd>O</kbd> Drones</button>
+        <button class="ctrl-btn" id="hud-btn-shop"><kbd>B</kbd> Ship Yard</button>
+      </div>
+      <div class="hud-minimap" id="minimap-wrap">
+        <div class="minimap-label">Long Range Scanner</div>
+        <canvas id="minimap" width="180" height="180"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Overlays -->
+<div class="overlay-panel" id="panel-inventory">
+  <div class="panel-window">
+    <div class="panel-header"><h2><i></i> CARGO HOLD &mdash; Inventory</h2><button class="panel-close" data-close="panel-inventory">✕</button></div>
+    <div class="panel-tabs"><div class="tab active">All Resources</div><div class="tab">Sell Controls: [T] sells all at current market value &bull; Prices vary by sector</div></div>
+    <div class="panel-body"><div class="inv-grid" id="inv-grid"></div><div style="margin-top:14px;display:flex;gap:10px"><button class="btn-main primary" id="btn-sell-all" style="flex:1;padding:12px">SELL ALL CARGO</button><div style="flex:1;background:rgba(255,184,0,0.1);border:1px solid rgba(255,184,0,0.2);border-radius:10px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--muted)">EST. VALUE</div><div style="font-weight:800;color:var(--gold);font-size:18px" id="inv-total-value">0 CR</div></div></div></div>
+  </div>
+</div>
+<div class="overlay-panel" id="panel-upgrades">
+  <div class="panel-window" style="width:min(920px,96vw)">
+    <div class="panel-header"><h2><i></i> SHIP SYSTEMS &mdash; Upgrade Tree</h2><button class="panel-close" data-close="panel-upgrades">✕</button></div>
+    <div class="panel-body"><div class="upgrade-grid" id="upgrade-grid"></div></div>
+  </div>
+</div>
+<div class="overlay-panel" id="panel-map">
+  <div class="panel-window">
+    <div class="panel-header"><h2><i></i> NAVIGATION &mdash; Sector Map</h2><button class="panel-close" data-close="panel-map">✕</button></div>
+    <div class="panel-body"><div class="sector-grid" id="sector-grid"></div><div style="margin-top:14px;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:10px;padding:10px;font-size:11px;color:var(--muted)">Tip: Higher sectors contain rarer resources but more dangerous enemies. Unlock by reaching required level and paying credits. Warp via map selection.</div></div>
+  </div>
+</div>
+<div class="overlay-panel" id="panel-drones">
+  <div class="panel-window">
+    <div class="panel-header"><h2><i></i> DRONE BAY &mdash; Autonomous Fleet</h2><button class="panel-close" data-close="panel-drones">✕</button></div>
+    <div class="panel-body">
+      <div class="drone-grid" id="drone-grid"></div>
+      <div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:12px;padding:12px">
+          <div style="font-weight:800;font-size:12px">HOW DRONES WORK</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">Drones autonomously seek asteroids, mine, collect and return resources to your ship. They are visible, navigate around obstacles, show mining beams and have limited cargo. Upgrade drone speed, capacity and count.</div>
+        </div>
+        <div style="background:rgba(58,139,255,0.08);border:1px solid rgba(58,139,255,0.2);border-radius:12px;padding:12px;text-align:center">
+          <div style="font-size:11px;color:var(--muted)">ACTIVE DRONES</div><div style="font-size:28px;font-weight:900" id="drone-active-count">0 / 3</div><button class="btn-main primary" id="btn-buy-drone" style="width:100%;margin-top:8px;padding:10px">BUY DRONE &mdash; <span id="drone-price">500 CR</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="overlay-panel" id="panel-shop">
+  <div class="panel-window">
+    <div class="panel-header"><h2><i></i> SHIP YARD &mdash; Vessel Selection</h2><button class="panel-close" data-close="panel-shop">✕</button></div>
+    <div class="panel-body"><div class="ship-grid" id="ship-grid"></div></div>
+  </div>
+</div>
+<div class="overlay-panel" id="panel-settings">
+  <div class="panel-window" style="width:min(560px,96vw)">
+    <div class="panel-header"><h2><i></i> SETTINGS &amp; CONTROLS</h2><button class="panel-close" data-close="panel-settings">✕</button></div>
+    <div class="panel-body">
+      <div class="setting-row"><label>Master Volume</label><input type="range" id="set-volume" min="0" max="100" value="70"></div>
+      <div class="setting-row"><label>Particle Quality</label><select id="set-particles"><option>High</option><option>Medium</option><option>Low</option></select></div>
+      <div class="setting-row"><label>Show Hints</label><input type="checkbox" id="set-hints" checked></div>
+      <div class="setting-row"><label>Auto-Save</label><input type="checkbox" id="set-autosave" checked></div>
+      <div style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:12px;padding:12px;margin-top:12px">
+        <div style="font-weight:800;font-size:12px;margin-bottom:8px">CONTROLS</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;color:var(--muted)">
+          <div><b style="color:var(--text)">WASD</b> Thrust / Strafe</div><div><b style="color:var(--text)">Mouse</b> Aim Ship</div>
+          <div><b style="color:var(--text)">Space / LMB</b> Mine Laser</div><div><b style="color:var(--text)">E</b> Collect Resources</div>
+          <div><b style="color:var(--text)">Q</b> Shield Burst</div><div><b style="color:var(--text)">R</b> Scan Asteroids</div>
+          <div><b style="color:var(--text)">Shift</b> Boost</div><div><b style="color:var(--text)">I/U/M/O/B</b> Panels</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn-main secondary" id="btn-reset-save" style="flex:1">RESET PROGRESS</button>
+        <button class="btn-main primary" id="btn-close-settings" style="flex:1">CLOSE</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="overlay-panel" id="panel-achievements">
+  <div class="panel-window">
+    <div class="panel-header"><h2><i></i> ACHIEVEMENTS &mdash; Milestones</h2><button class="panel-close" data-close="panel-achievements">✕</button></div>
+    <div class="panel-body" id="achievements-body"></div>
+  </div>
+</div>
+<div class="overlay-panel" id="panel-pause">
+  <div class="panel-window" style="width:min(420px,96vw)">
+    <div class="panel-header"><h2><i></i> MISSION PAUSED</h2><button class="panel-close" data-close="panel-pause">✕</button></div>
+    <div class="panel-body" style="display:flex;flex-direction:column;gap:10px">
+      <button class="btn-main primary" id="btn-resume">RESUME</button>
+      <button class="btn-main secondary" id="btn-pause-save">SAVE &amp; RESUME</button>
+      <button class="btn-main secondary" id="btn-quit-menu">QUIT TO MENU</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script type="module" src="./js/game.js"></script>
+</body>
+</html>
