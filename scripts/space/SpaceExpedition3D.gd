@@ -13,6 +13,7 @@ var chunks_root: Node3D
 var projectiles_root: Node3D
 var beams_root: Node3D
 var _warp_gate: Node3D
+var _gate_lbl_3d: Label3D
 var _lightning_beam: MeshInstance3D
 
 # Camera & 360-degree smooth flight rig
@@ -33,22 +34,38 @@ const STEER_RING_RADIUS_PX: float = 165.0
 var _enemy_spawn_cd: float = 5.0
 var _hazard_cd: float = 9.0
 var _hazard_flash_t: float = 0.0
+var _radar_sweep_angle: float = 0.0
 
 # HUD elements
 var _hud_layer: CanvasLayer
 var _hud_root: Control
 var _overlay_canvas: Control
 var _radar_canvas: Control
+var _status_box: PanelContainer
+var _radar_box: PanelContainer
+var _min_task_pill: PanelContainer
+var _hint_pill: PanelContainer
+
 var _hp_bar: ProgressBar
 var _shld_bar: ProgressBar
 var _eng_bar: ProgressBar
 var _heat_bar: ProgressBar
 var _cargo_bar: ProgressBar
+var _bar_name_lbls: Dictionary = {}
+var _bar_val_lbls: Dictionary = {}
+
 var _telemetry_lbl: Label
 var _sector_lbl: Label
 var _min_ach_lbl: Label
 var _hazard_warn_lbl: Label
+var _ret_btn: Button
+var _hint_lbl: Label
 var _pause_panel: PanelContainer
+var _pause_title_lbl: Label
+var _pause_lang_lbl: Label
+var _pause_res_btn: Button
+var _pause_ext_btn: Button
+
 var _extracting: bool = false
 var autopilot_override: bool = false
 var _manual_locked_enemy: Node3D = null
@@ -66,6 +83,8 @@ func _ready() -> void:
 	_spawn_player_and_containers()
 	_populate_asteroids_and_props()
 	_build_expedition_hud()
+	L.language_changed.connect(func(_lang: String): _apply_hud_localization())
+	_apply_hud_localization()
 	_set_mouse_flight_mode(true)
 
 func _exit_tree() -> void:
@@ -74,7 +93,6 @@ func _exit_tree() -> void:
 
 func _set_mouse_flight_mode(active: bool) -> void:
 	_mouse_captured = active
-	# Avoid capturing mouse during headless automated tests
 	if DisplayServer.get_name() == "headless":
 		return
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if active else Input.MOUSE_MODE_VISIBLE
@@ -106,7 +124,6 @@ func _build_sector_environment() -> void:
 	sun.rotation_degrees = Vector3(-38, 42, 0)
 	add_child(sun)
 
-	# 3D Starfield & Nebula Dust Particles around ship
 	var stars := CPUParticles3D.new()
 	stars.name = "NebulaParticles"
 	stars.amount = maxi(40, int(round(140.0 * VFXFactory.get_particle_scale())))
@@ -159,7 +176,6 @@ func _spawn_player_and_containers() -> void:
 	player_ship.cockpit_destroyed.connect(_on_ship_destroyed)
 	player_ship.ship_telemetry_updated.connect(_on_ship_telemetry)
 
-	# Smooth Third-Person Camera Rig
 	_cam_pivot = Node3D.new()
 	add_child(_cam_pivot)
 	_cam = Camera3D.new()
@@ -167,7 +183,6 @@ func _spawn_player_and_containers() -> void:
 	_cam.far = 900.0
 	_cam_pivot.add_child(_cam)
 
-	# Extraction Return Buoy Gate behind spawn at (0, 0, 52)
 	_warp_gate = Node3D.new()
 	_warp_gate.position = Vector3(0, 0, 52)
 	add_child(_warp_gate)
@@ -177,20 +192,22 @@ func _spawn_player_and_containers() -> void:
 			_warp_gate.add_child(bps.instantiate())
 	var portal := VFXFactory.create_holo_panel(Vector2(11.5, 11.5), Color(0.20, 0.95, 0.68, 0.48))
 	_warp_gate.add_child(portal)
-	var gate_lbl := Label3D.new()
-	gate_lbl.text = "HANGAR WARP GATE"
-	gate_lbl.font_size = 48
-	gate_lbl.modulate = Color(0.35, 1.0, 0.72)
-	gate_lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	gate_lbl.position = Vector3(0, 9.6, 0)
-	_warp_gate.add_child(gate_lbl)
+	_gate_lbl_3d = Label3D.new()
+	if ThemeHelper.font_display:
+		_gate_lbl_3d.font = ThemeHelper.font_display
+	_gate_lbl_3d.text = L.tr_ui("warp_gate_3d")
+	_gate_lbl_3d.font_size = 44
+	_gate_lbl_3d.modulate = Color(0.35, 1.0, 0.72)
+	_gate_lbl_3d.outline_size = 8
+	_gate_lbl_3d.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_gate_lbl_3d.position = Vector3(0, 9.6, 0)
+	_warp_gate.add_child(_gate_lbl_3d)
 
 func _populate_asteroids_and_props() -> void:
 	var count: int = int(sector_def.get("asteroid_count", 45))
 	for _i in range(count):
 		_spawn_single_asteroid(32.0, 250.0)
 
-	# Iron Graveyard abandoned freighter hulks
 	if str(sector_def.get("hazard", "")) == "debris_field" and ResourceLoader.exists("res://assets/models/hangar/env_derelict_hull.glb"):
 		var dps: PackedScene = load("res://assets/models/hangar/env_derelict_hull.glb")
 		if dps:
@@ -206,7 +223,6 @@ func _populate_asteroids_and_props() -> void:
 				wreck.add_child(dps.instantiate())
 				add_child(wreck)
 
-	# Initial enemy patrol wave
 	var init_enemies := mini(3, int(sector_def.get("enemy_cap", 4)))
 	for _k in range(init_enemies):
 		_spawn_sector_enemy()
@@ -220,7 +236,6 @@ func _spawn_single_asteroid(min_dist: float, max_dist: float) -> void:
 	var ast := Asteroid3D.new()
 	ast.setup(sector_def, pos, randf_range(0.85, 2.15))
 	ast.destroyed.connect(func(_a, _wp):
-		# Maintain rich belt population
 		if is_inside_tree() and asteroids_root.get_child_count() < int(sector_def.get("asteroid_count", 45)):
 			_spawn_single_asteroid(85.0, 260.0)
 	)
@@ -238,7 +253,7 @@ func _spawn_sector_enemy() -> void:
 	enemies_root.add_child(en)
 
 # ==============================================================================
-# EXPEDITION HUD, SCANNER BRACKETS & TACTICAL RADAR
+# REBUILT NON-OVERLAPPING EXPEDITION HUD, SCANNER BRACKETS & TACTICAL RADAR
 # ==============================================================================
 func _build_expedition_hud() -> void:
 	_hud_layer = CanvasLayer.new()
@@ -250,116 +265,147 @@ func _build_expedition_hud() -> void:
 	_hud_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hud_layer.add_child(_hud_root)
 
-	# 2D World-Projected Scanner & Reticle Canvas
 	_overlay_canvas = Control.new()
 	_overlay_canvas.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_overlay_canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_overlay_canvas.draw.connect(_draw_hud_world_overlays)
 	_hud_root.add_child(_overlay_canvas)
 
-	# Top-Left Ship Status Panel
-	var status_box := PanelContainer.new()
-	status_box.offset_left = 16
-	status_box.offset_top = 14
-	status_box.offset_right = 370
-	status_box.offset_bottom = 232
-	_hud_root.add_child(status_box)
+	# 1. Top-Left Ship Status Panel (x: 14..362, y: 12..236)
+	_status_box = PanelContainer.new()
+	_status_box.name = "FlightStatusPanel"
+	_status_box.offset_left = 14
+	_status_box.offset_top = 12
+	_status_box.offset_right = 362
+	_status_box.offset_bottom = 236
+	_status_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hud_root.add_child(_status_box)
 
 	var svb := VBoxContainer.new()
 	svb.add_theme_constant_override("separation", 5)
-	status_box.add_child(svb)
+	_status_box.add_child(svb)
 
 	_sector_lbl = Label.new()
-	_sector_lbl.text = str(sector_def["name"]).to_upper()
+	_sector_lbl.clip_text = true
 	if ThemeHelper.font_display:
 		_sector_lbl.add_theme_font_override("font", ThemeHelper.font_display)
-	_sector_lbl.add_theme_font_size_override("font_size", 17)
+	_sector_lbl.add_theme_font_size_override("font_size", 16)
 	_sector_lbl.add_theme_color_override("font_color", sector_def["sun_color"])
 	svb.add_child(_sector_lbl)
 
-	_hp_bar = _make_hud_bar(svb, "HULL", Color(0.24, 0.90, 0.52))
-	_shld_bar = _make_hud_bar(svb, "SHIELD", Color(0.20, 0.74, 1.0))
-	_eng_bar = _make_hud_bar(svb, "POWER", Color(1.0, 0.84, 0.25))
-	_heat_bar = _make_hud_bar(svb, "HEAT", Color(1.0, 0.45, 0.18))
-	_cargo_bar = _make_hud_bar(svb, "CARGO", Color(0.78, 0.52, 1.0))
+	_hp_bar = _make_hud_bar(svb, "hud_hull", Color(0.24, 0.90, 0.52))
+	_shld_bar = _make_hud_bar(svb, "hud_shield", Color(0.20, 0.74, 1.0))
+	_eng_bar = _make_hud_bar(svb, "hud_power", Color(1.0, 0.84, 0.25))
+	_heat_bar = _make_hud_bar(svb, "hud_heat", Color(1.0, 0.45, 0.18))
+	_cargo_bar = _make_hud_bar(svb, "hud_cargo", Color(0.78, 0.52, 1.0))
 
 	_telemetry_lbl = Label.new()
+	_telemetry_lbl.clip_text = true
 	if ThemeHelper.font_mono:
 		_telemetry_lbl.add_theme_font_override("font", ThemeHelper.font_mono)
-	_telemetry_lbl.add_theme_font_size_override("font_size", 14)
+	_telemetry_lbl.add_theme_font_size_override("font_size", 12)
+	_telemetry_lbl.add_theme_color_override("font_color", Color(0.82, 0.93, 1.0))
 	svb.add_child(_telemetry_lbl)
 
-	# Top-Center Hazard & Minute-Task Banner
+	# 2. Top-Center Minute-Task Pill & Hazard Alert (strictly between x=376 and x=W-224!)
+	_min_task_pill = PanelContainer.new()
+	_min_task_pill.name = "FlightMinuteTaskPill"
+	_min_task_pill.anchor_left = 0.0
+	_min_task_pill.anchor_right = 1.0
+	_min_task_pill.anchor_top = 0.0
+	_min_task_pill.anchor_bottom = 0.0
+	_min_task_pill.offset_left = 376
+	_min_task_pill.offset_right = -224
+	_min_task_pill.offset_top = 12
+	_min_task_pill.offset_bottom = 46
+	_min_task_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_min_task_pill.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(Color(0.02, 0.045, 0.105, 0.88), Color(0.22, 0.75, 1.0, 0.58), 10, 12, 5))
+	_hud_root.add_child(_min_task_pill)
+
 	_min_ach_lbl = Label.new()
-	_min_ach_lbl.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_min_ach_lbl.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_min_ach_lbl.offset_left = -320
-	_min_ach_lbl.offset_right = 320
-	_min_ach_lbl.offset_top = 14
 	_min_ach_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_min_ach_lbl.add_theme_color_override("font_color", Color(0.68, 0.92, 1.0))
-	_hud_root.add_child(_min_ach_lbl)
+	_min_ach_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_min_ach_lbl.clip_text = true
+	_min_ach_lbl.add_theme_font_size_override("font_size", 13)
+	_min_ach_lbl.add_theme_color_override("font_color", Color(0.76, 0.94, 1.0))
+	_min_task_pill.add_child(_min_ach_lbl)
 
 	_hazard_warn_lbl = Label.new()
-	_hazard_warn_lbl.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_hazard_warn_lbl.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_hazard_warn_lbl.offset_left = -280
-	_hazard_warn_lbl.offset_right = 280
-	_hazard_warn_lbl.offset_top = 44
+	_hazard_warn_lbl.anchor_left = 0.0
+	_hazard_warn_lbl.anchor_right = 1.0
+	_hazard_warn_lbl.offset_left = 376
+	_hazard_warn_lbl.offset_right = -224
+	_hazard_warn_lbl.offset_top = 54
+	_hazard_warn_lbl.offset_bottom = 86
 	_hazard_warn_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hazard_warn_lbl.clip_text = true
 	if ThemeHelper.font_bold:
 		_hazard_warn_lbl.add_theme_font_override("font", ThemeHelper.font_bold)
-	_hazard_warn_lbl.add_theme_font_size_override("font_size", 21)
+	_hazard_warn_lbl.add_theme_font_size_override("font_size", 18)
 	_hazard_warn_lbl.add_theme_color_override("font_color", Color(1.0, 0.38, 0.42))
 	_hud_root.add_child(_hazard_warn_lbl)
 
-	# Top-Right Tactical Radar Minimap + Return Button
-	var radar_box := PanelContainer.new()
-	radar_box.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	radar_box.offset_left = -214
-	radar_box.offset_right = -16
-	radar_box.offset_top = 14
-	radar_box.offset_bottom = 258
-	radar_box.mouse_filter = Control.MOUSE_FILTER_STOP
-	_hud_root.add_child(radar_box)
+	# 3. Top-Right Tactical Radar Minimap + Return Button (x: W-210..W-14, y: 12..246)
+	_radar_box = PanelContainer.new()
+	_radar_box.name = "FlightRadarPanel"
+	_radar_box.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_radar_box.offset_left = -210
+	_radar_box.offset_right = -14
+	_radar_box.offset_top = 12
+	_radar_box.offset_bottom = 248
+	_radar_box.mouse_filter = Control.MOUSE_FILTER_STOP
+	_hud_root.add_child(_radar_box)
 
 	var rvb := VBoxContainer.new()
 	rvb.alignment = BoxContainer.ALIGNMENT_CENTER
-	radar_box.add_child(rvb)
+	rvb.add_theme_constant_override("separation", 6)
+	_radar_box.add_child(rvb)
 
 	_radar_canvas = Control.new()
-	_radar_canvas.custom_minimum_size = Vector2(170, 170)
+	_radar_canvas.custom_minimum_size = Vector2(162, 162)
 	_radar_canvas.draw.connect(_draw_radar_minimap)
 	rvb.add_child(_radar_canvas)
 
-	var ret_btn := Button.new()
-	ret_btn.text = "RETURN HANGAR [H]"
-	ret_btn.add_theme_font_size_override("font_size", 15)
-	ThemeHelper.style_accent_button(ret_btn, Color(0.18, 0.78, 0.56))
-	ret_btn.pressed.connect(_complete_expedition_and_return)
-	rvb.add_child(ret_btn)
+	_ret_btn = Button.new()
+	_ret_btn.clip_text = true
+	_ret_btn.custom_minimum_size = Vector2(0, 34)
+	_ret_btn.add_theme_font_size_override("font_size", 13)
+	ThemeHelper.style_accent_button(_ret_btn, Color(0.18, 0.78, 0.56))
+	_ret_btn.pressed.connect(_complete_expedition_and_return)
+	rvb.add_child(_ret_btn)
 
-	# Bottom Flight Controls Hint
-	var hint := Label.new()
-	hint.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	hint.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	hint.offset_left = -520
-	hint.offset_right = 520
-	hint.offset_top = -36
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.text = "WASD/Space/Ctrl: 6-DOF • Mouse: 360 Steer (C: Center) • Q/E: 360 Flip/Roll • LMB: Guns [2nd Pipper = Bullet] • RMB/F: Mine • T: Lock • Z: Assist"
-	hint.add_theme_font_size_override("font_size", 14)
-	hint.add_theme_color_override("font_color", Color(0.66, 0.82, 0.96))
-	_hud_root.add_child(hint)
+	# 4. Bottom Flight Controls Hint Pill
+	_hint_pill = PanelContainer.new()
+	_hint_pill.name = "FlightHintPill"
+	_hint_pill.anchor_left = 0.0
+	_hint_pill.anchor_right = 1.0
+	_hint_pill.anchor_top = 1.0
+	_hint_pill.anchor_bottom = 1.0
+	_hint_pill.offset_left = 60
+	_hint_pill.offset_right = -60
+	_hint_pill.offset_top = -42
+	_hint_pill.offset_bottom = -10
+	_hint_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hint_pill.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(Color(0.015, 0.035, 0.085, 0.84), Color(0.20, 0.62, 0.90, 0.45), 9, 14, 4))
+	_hud_root.add_child(_hint_pill)
 
-	# Pause / Cursor Menu
+	_hint_lbl = Label.new()
+	_hint_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hint_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_hint_lbl.clip_text = true
+	_hint_lbl.add_theme_font_size_override("font_size", 12)
+	_hint_lbl.add_theme_color_override("font_color", Color(0.72, 0.86, 0.98))
+	_hint_pill.add_child(_hint_lbl)
+
+	# 5. Pause / Expedition Command Overlay (with 10-Language Selector)
 	_pause_panel = PanelContainer.new()
 	_pause_panel.visible = false
 	_pause_panel.set_anchors_preset(Control.PRESET_CENTER)
 	_pause_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_pause_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_pause_panel.custom_minimum_size = Vector2(400, 240)
+	_pause_panel.custom_minimum_size = Vector2(460, 290)
 	_pause_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	_pause_panel.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(Color(0.025, 0.048, 0.115, 0.97), Color(0.24, 0.80, 1.0, 0.90), 16, 2, 22))
 	_hud_root.add_child(_pause_panel)
 
 	var pvb := VBoxContainer.new()
@@ -367,71 +413,130 @@ func _build_expedition_hud() -> void:
 	pvb.add_theme_constant_override("separation", 14)
 	_pause_panel.add_child(pvb)
 
-	var ptitle := Label.new()
-	ptitle.text = "EXPEDITION COMMAND"
-	ptitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_pause_title_lbl = Label.new()
+	_pause_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if ThemeHelper.font_display:
-		ptitle.add_theme_font_override("font", ThemeHelper.font_display)
-	pvb.add_child(ptitle)
+		_pause_title_lbl.add_theme_font_override("font", ThemeHelper.font_display)
+	_pause_title_lbl.add_theme_font_size_override("font_size", 21)
+	_pause_title_lbl.add_theme_color_override("font_color", ThemeHelper.COL_CYAN)
+	pvb.add_child(_pause_title_lbl)
 
-	var b_res := Button.new()
-	b_res.text = "RESUME FLIGHT"
-	ThemeHelper.style_accent_button(b_res, Color(0.20, 0.75, 1.0))
-	b_res.pressed.connect(func():
+	var lang_hb := HBoxContainer.new()
+	lang_hb.alignment = BoxContainer.ALIGNMENT_CENTER
+	lang_hb.add_theme_constant_override("separation", 10)
+	pvb.add_child(lang_hb)
+
+	_pause_lang_lbl = Label.new()
+	_pause_lang_lbl.add_theme_color_override("font_color", ThemeHelper.COL_GOLD)
+	lang_hb.add_child(_pause_lang_lbl)
+	lang_hb.add_child(ThemeHelper.make_language_dropdown(true))
+
+	_pause_res_btn = Button.new()
+	_pause_res_btn.custom_minimum_size = Vector2(0, 44)
+	ThemeHelper.style_accent_button(_pause_res_btn, Color(0.20, 0.75, 1.0))
+	_pause_res_btn.pressed.connect(func():
 		_pause_panel.visible = false
 		_set_mouse_flight_mode(true)
 	)
-	pvb.add_child(b_res)
+	pvb.add_child(_pause_res_btn)
 
-	var b_ext := Button.new()
-	b_ext.text = "EXTRACT TO HANGAR (KEEP CARGO)"
-	ThemeHelper.style_accent_button(b_ext, Color(0.18, 0.80, 0.52))
-	b_ext.pressed.connect(_complete_expedition_and_return)
-	pvb.add_child(b_ext)
+	_pause_ext_btn = Button.new()
+	_pause_ext_btn.custom_minimum_size = Vector2(0, 44)
+	ThemeHelper.style_accent_button(_pause_ext_btn, Color(0.18, 0.82, 0.52))
+	_pause_ext_btn.pressed.connect(_complete_expedition_and_return)
+	pvb.add_child(_pause_ext_btn)
 
-func _make_hud_bar(parent: VBoxContainer, label_txt: String, col: Color) -> ProgressBar:
+	ThemeHelper.animate_entry(_status_box, 0.0, Vector2(0.96, 0.96))
+	ThemeHelper.animate_entry(_radar_box, 0.04, Vector2(0.96, 0.96))
+	ThemeHelper.animate_entry(_min_task_pill, 0.06, Vector2(0.97, 0.97))
+
+func _make_hud_bar(parent: VBoxContainer, loc_key: String, col: Color) -> ProgressBar:
 	var hb := HBoxContainer.new()
-	hb.add_theme_constant_override("separation", 8)
+	hb.add_theme_constant_override("separation", 6)
 	parent.add_child(hb)
+
 	var l := Label.new()
-	l.text = label_txt
-	l.custom_minimum_size = Vector2(62, 0)
-	l.add_theme_font_size_override("font_size", 14)
+	l.custom_minimum_size = Vector2(78, 0)
+	l.clip_text = true
+	l.add_theme_font_size_override("font_size", 12)
+	l.add_theme_color_override("font_color", ThemeHelper.COL_MUTED)
 	hb.add_child(l)
+	_bar_name_lbls[loc_key] = l
+
 	var pb := ProgressBar.new()
 	pb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	pb.custom_minimum_size = Vector2(0, 14)
+	pb.custom_minimum_size = Vector2(0, 13)
 	pb.show_percentage = false
-	var fill := ThemeHelper.make_panel_style(col, col.lightened(0.3), 3, 1)
+	var fill := ThemeHelper.make_panel_style(col, col.lightened(0.3), 4, 1, 0)
 	fill.shadow_size = 0
 	pb.add_theme_stylebox_override("fill", fill)
 	hb.add_child(pb)
+
+	var vl := Label.new()
+	vl.custom_minimum_size = Vector2(68, 0)
+	vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	if ThemeHelper.font_mono:
+		vl.add_theme_font_override("font", ThemeHelper.font_mono)
+	vl.add_theme_font_size_override("font_size", 11)
+	vl.add_theme_color_override("font_color", col.lightened(0.28))
+	hb.add_child(vl)
+	_bar_val_lbls[loc_key] = vl
 	return pb
+
+func _apply_hud_localization() -> void:
+	if not is_instance_valid(_sector_lbl):
+		return
+	_sector_lbl.text = L.sector_name(sector_def).to_upper()
+	for k in _bar_name_lbls.keys():
+		var l: Label = _bar_name_lbls[k]
+		if is_instance_valid(l):
+			l.text = L.tr_ui(str(k))
+	_ret_btn.text = L.tr_ui("hud_return_hangar")
+	_hint_lbl.text = L.tr_ui("hud_flight_hint")
+	_pause_title_lbl.text = L.tr_ui("pause_title")
+	_pause_lang_lbl.text = L.tr_ui("settings_language") + ":"
+	_pause_res_btn.text = L.tr_ui("pause_resume")
+	_pause_ext_btn.text = L.tr_ui("pause_extract")
+	if is_instance_valid(_gate_lbl_3d):
+		_gate_lbl_3d.text = L.tr_ui("warp_gate_3d")
 
 func _on_ship_telemetry(tel: Dictionary) -> void:
 	if not is_instance_valid(_hp_bar):
 		return
-	_hp_bar.max_value = maxf(1.0, float(tel["max_hp"]))
-	_hp_bar.value = float(tel["hp"])
-	_shld_bar.max_value = maxf(1.0, float(tel["max_shield"]))
-	_shld_bar.value = float(tel["shield"])
-	_eng_bar.max_value = maxf(1.0, float(tel["max_energy"]))
-	_eng_bar.value = float(tel["energy"])
+	var hp := float(tel["hp"])
+	var max_hp := maxf(1.0, float(tel["max_hp"]))
+	var sh := float(tel["shield"])
+	var max_sh := maxf(1.0, float(tel["max_shield"]))
+	var en := float(tel["energy"])
+	var max_en := maxf(1.0, float(tel["max_energy"]))
+	var ht := float(tel["heat"])
+
+	_hp_bar.max_value = max_hp
+	_hp_bar.value = hp
+	_shld_bar.max_value = max_sh
+	_shld_bar.value = sh
+	_eng_bar.max_value = max_en
+	_eng_bar.value = en
 	_heat_bar.max_value = 100.0
-	_heat_bar.value = float(tel["heat"])
+	_heat_bar.value = ht
 
 	var cap := maxi(1, int(player_ship.stats.get("cargo_capacity", 40)))
 	var used := ShipGrid.get_current_cargo_units()
 	_cargo_bar.max_value = float(cap)
 	_cargo_bar.value = float(used)
 
+	(_bar_val_lbls["hud_hull"] as Label).text = "%d/%d" % [int(round(hp)), int(round(max_hp))]
+	(_bar_val_lbls["hud_shield"] as Label).text = "%d/%d" % [int(round(sh)), int(round(max_sh))]
+	(_bar_val_lbls["hud_power"] as Label).text = "%d/%d" % [int(round(en)), int(round(max_en))]
+	(_bar_val_lbls["hud_heat"] as Label).text = "%d%%" % int(round(ht))
+	(_bar_val_lbls["hud_cargo"] as Label).text = "%d/%d" % [used, cap]
+
 	var mag_r := int(round(float(player_ship.stats.get("bullet_magnet_range", 0.0))))
-	var mag_txt := ("  •  MAG-RADAR %dm" % mag_r) if mag_r > 0 else ""
-	_telemetry_lbl.text = "SPD %3.0f m/s  •  CR %d  •  CRY %d  •  ASTB %s%s" % [
+	var mag_txt := (" • MAG %dm" % mag_r) if mag_r > 0 else ""
+	_telemetry_lbl.text = "%3.0f m/s • %d CR • %d CRY • ASTB:%s%s" % [
 		float(tel["speed"]), ShipGrid.credits, ShipGrid.crystals, ("ON" if bool(tel["stabilizer"]) else "OFF"), mag_txt
 	]
 
-	# Live Minute Achievement ticker
 	var mtasks: Array = AchievementManager.active_tasks.get("minute", [])
 	if not mtasks.is_empty():
 		var active_sample: Dictionary = mtasks[0]
@@ -439,19 +544,18 @@ func _on_ship_telemetry(tel: Dictionary) -> void:
 			if not bool(mt["completed"]):
 				active_sample = mt
 				break
-		_min_ach_lbl.text = "MINUTE TASK (%ds): %s (%d/%d)  •  +%d CRY" % [
+		_min_ach_lbl.text = L.tr_ui("hud_minute_task", [
 			AchievementManager.get_seconds_until_reset("minute"),
-			active_sample["objective"],
+			L.ach_objective(active_sample),
 			int(floor(float(active_sample["progress"]))),
 			int(active_sample["target"]),
 			int(active_sample["crystal_reward"])
-		]
+		])
 
 func _draw_hud_world_overlays() -> void:
 	var vp: Vector2 = get_viewport().get_visible_rect().size
 	var center: Vector2 = vp * 0.5
 
-	# Subtle ship nose reference mark (+) & 360-degree maneuver zone ring at screen center
 	var nose_col := Color(0.55, 0.78, 0.95, 0.34)
 	_overlay_canvas.draw_line(center + Vector2(-7, 0), center + Vector2(-2, 0), nose_col, 1.4)
 	_overlay_canvas.draw_line(center + Vector2(2, 0), center + Vector2(7, 0), nose_col, 1.4)
@@ -490,19 +594,17 @@ func _draw_hud_world_overlays() -> void:
 		)
 
 		var hit_kind := str(ballistics["hit_kind"])
-		var pip_col := Color(1.0, 0.78, 0.22, 0.96) # Default Amber-Gold terminal sight
+		var pip_col := Color(1.0, 0.78, 0.22, 0.96)
 		if hit_kind == "magnetic_enemy":
-			pip_col = Color(0.96, 0.38, 1.0, 0.98)   # Electric Magnet-Magenta when Magnetic Homing Radar locks bullet onto enemy!
+			pip_col = Color(0.96, 0.38, 1.0, 0.98)
 		elif hit_kind == "enemy":
-			pip_col = Color(0.24, 1.0, 0.54, 0.98)   # Bright Green when barrel ray hits enemy!
+			pip_col = Color(0.24, 1.0, 0.54, 0.98)
 		elif hit_kind == "asteroid":
-			pip_col = Color(0.52, 0.98, 0.82, 0.95)  # Aqua-Gold exact rock impact point
+			pip_col = Color(0.52, 0.98, 0.82, 0.95)
 
-		# Trajectory tether line from Aim Crosshair (#1) -> Exact Bullet Impact Point (#2)
 		if pipper_pos.distance_to(aim_screen_pos) > 5.0:
 			_overlay_canvas.draw_line(aim_screen_pos, pipper_pos, Color(pip_col.r, pip_col.g, pip_col.b, 0.36), 1.5)
 
-		# Distinct Impact Sight ring + 4 angled X-ticks + exact bullet arrival dot
 		var p_rad := 11.5 if hit_kind in ["enemy", "magnetic_enemy"] else 9.0
 		var draw_col := pip_col if on_screen else Color(pip_col.r, pip_col.g, pip_col.b, 0.55)
 		if hit_kind == "magnetic_enemy":
@@ -521,7 +623,6 @@ func _draw_hud_world_overlays() -> void:
 			var dist_txt := "%s%dm" % [prefix, int(round(float(ballistics["distance"])))]
 			_overlay_canvas.draw_string(ThemeHelper.font_mono, pipper_pos + Vector2(16, 5), dist_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, draw_col)
 
-		# Secondary weapon impact dots if ship carries mixed turrets + fixed barrels aiming at distinct 3D points
 		var sec_impacts: Array = ballistics.get("secondary_impacts", [])
 		for sec_item in sec_impacts:
 			var sec_w: Vector3 = sec_item as Vector3
@@ -532,7 +633,6 @@ func _draw_hud_world_overlays() -> void:
 					_overlay_canvas.draw_arc(sec_sp, 5.0, 0.0, TAU, 20, scol, 1.5)
 					_overlay_canvas.draw_circle(sec_sp, 1.8, scol.lightened(0.2))
 
-	# Target Lead Pipper ahead of moving locked enemy
 	if bool(ballistics.get("has_lead", false)) and is_instance_valid(player_ship.locked_enemy):
 		var lead_w: Vector3 = ballistics["lead_world_pos"]
 		var en_w: Vector3 = player_ship.locked_enemy.global_position
@@ -551,7 +651,6 @@ func _draw_hud_world_overlays() -> void:
 				])
 				_overlay_canvas.draw_polyline(pts, lcol, 1.8)
 
-	# Resource Scanner 3D HUD Brackets (if Resource Scanner installed!)
 	var scan_range := float(player_ship.stats.get("scanner_range", 0.0))
 	if scan_range > 1.0:
 		for ast in asteroids_root.get_children():
@@ -564,7 +663,6 @@ func _draw_hud_world_overlays() -> void:
 						var rcol: Color = GameData.RESOURCES[ast3d.dominant_resource]["color"]
 						_overlay_canvas.draw_rect(Rect2(sp - Vector2(14, 14), Vector2(28, 28)), rcol, false, 1.8)
 
-	# Enemy HUD Target Boxes
 	var radar_r := float(player_ship.stats.get("radar_range", 140.0))
 	for en in enemies_root.get_children():
 		if en is EnemyShip3D:
@@ -576,16 +674,21 @@ func _draw_hud_world_overlays() -> void:
 				var col := Color(1.0, 0.25, 0.28, 0.95) if is_locked else Color(1.0, 0.55, 0.22, 0.78)
 				var sz := 22.0 if is_locked else 15.0
 				_overlay_canvas.draw_rect(Rect2(ep - Vector2(sz, sz), Vector2(sz * 2.0, sz * 2.0)), col, false, 2.2 if is_locked else 1.4)
-				# Enemy mini HP bar
 				var hp_pct := clampf(en3d.hp / maxf(1.0, en3d.max_hp), 0.0, 1.0)
 				_overlay_canvas.draw_rect(Rect2(ep + Vector2(-20, -sz - 8), Vector2(40.0 * hp_pct, 4)), Color(1.0, 0.32, 0.28), true)
 
 func _draw_radar_minimap() -> void:
 	var c := _radar_canvas.size * 0.5
 	var r := minf(c.x, c.y) - 6.0
-	_radar_canvas.draw_circle(c, r, Color(0.02, 0.05, 0.11, 0.92))
+	_radar_canvas.draw_circle(c, r, Color(0.018, 0.042, 0.098, 0.94))
 	_radar_canvas.draw_arc(c, r, 0.0, TAU, 36, Color(0.22, 0.76, 1.0, 0.85), 2.0)
-	_radar_canvas.draw_arc(c, r * 0.5, 0.0, TAU, 28, Color(0.18, 0.52, 0.76, 0.45), 1.0)
+	_radar_canvas.draw_arc(c, r * 0.5, 0.0, TAU, 28, Color(0.18, 0.52, 0.76, 0.42), 1.0)
+
+	# Rotating radar sweep beam
+	if not ThemeHelper.reduced_motion:
+		var sweep_end := c + Vector2(cos(_radar_sweep_angle), sin(_radar_sweep_angle)) * (r - 2.0)
+		_radar_canvas.draw_line(c, sweep_end, Color(0.24, 0.92, 0.78, 0.50), 1.6)
+
 	_radar_canvas.draw_circle(c, 3.5, Color.WHITE)
 
 	if not is_instance_valid(player_ship):
@@ -593,7 +696,6 @@ func _draw_radar_minimap() -> void:
 	var max_r := maxf(80.0, float(player_ship.stats.get("radar_range", 140.0)))
 	var inv_basis := player_ship.global_transform.basis.inverse()
 
-	# Warp Gate blip (Green)
 	if is_instance_valid(_warp_gate):
 		var rel_g := inv_basis * (_warp_gate.global_position - player_ship.global_position)
 		var g2 := Vector2(rel_g.x, rel_g.z) / max_r * r
@@ -601,7 +703,6 @@ func _draw_radar_minimap() -> void:
 			g2 = g2.normalized() * (r - 4.0)
 		_radar_canvas.draw_circle(c + g2, 4.5, Color(0.28, 1.0, 0.65))
 
-	# Asteroids (Cyan dots)
 	for ast in asteroids_root.get_children():
 		if ast is Node3D:
 			var ast_n := ast as Node3D
@@ -610,7 +711,6 @@ func _draw_radar_minimap() -> void:
 			if a2.length() <= r - 3.0:
 				_radar_canvas.draw_circle(c + a2, 2.0, Color(0.32, 0.82, 1.0, 0.65))
 
-	# Enemies (Red blips)
 	for en in enemies_root.get_children():
 		if en is Node3D:
 			var en_n := en as Node3D
@@ -627,7 +727,8 @@ func _process(delta: float) -> void:
 	if not is_instance_valid(player_ship) or _extracting:
 		return
 
-	# Keep nebula particles centered near ship
+	_radar_sweep_angle = fmod(_radar_sweep_angle + delta * 2.1, TAU)
+
 	var neb := get_node_or_null("NebulaParticles")
 	if neb is Node3D:
 		neb.global_position = player_ship.global_position
@@ -637,7 +738,6 @@ func _process(delta: float) -> void:
 	_update_aim_ray_and_lock()
 	_process_sector_spawns_and_hazards(delta)
 
-	# Check Extraction Warp Gate proximity
 	if is_instance_valid(_warp_gate) and player_ship.global_position.distance_to(_warp_gate.global_position) < 9.5:
 		_complete_expedition_and_return()
 		return
@@ -667,9 +767,6 @@ func _handle_flight_steering(delta: float) -> void:
 	player_ship.thrust_input = th
 	player_ship.boost_active = Input.is_key_pressed(KEY_SHIFT)
 
-	# Calm, Controllable Virtual Flight Stick with Precision Fine-Aim Curve:
-	# - Small mouse moves give gentle 4-25 deg/s precision aiming
-	# - Full deflection gives calm ~85-90 deg/s 360-degree turns/loops (never wild spins!)
 	_mouse_idle_time += delta
 	if not _mouse_captured:
 		_virtual_stick = _virtual_stick.lerp(Vector2.ZERO, 1.0 - exp(-8.0 * delta))
@@ -692,7 +789,6 @@ func _handle_flight_steering(delta: float) -> void:
 		rot.y = clampf(-stick_drive.x, -1.0, 1.0)
 		rot.x = clampf(-stick_drive.y, -1.0, 1.0)
 
-	# Smooth 360-degree pitch/yaw/barrel-roll keyboard authority (strictly clamped to [-1, 1])
 	if Input.is_key_pressed(KEY_LEFT): rot.y += 1.0
 	if Input.is_key_pressed(KEY_RIGHT): rot.y -= 1.0
 	if Input.is_key_pressed(KEY_UP): rot.x += 1.0
@@ -710,7 +806,6 @@ func _handle_flight_steering(delta: float) -> void:
 func _update_aim_ray_and_lock() -> void:
 	if autopilot_override:
 		return
-	# Project 3D Aim Ray through Crosshair #1 using THIS frame's updated _cam transform
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
 	var steer_screen: Vector2 = vp_size * 0.5 + _smoothed_stick * STEER_RING_RADIUS_PX
 	var aim_ray_dir := _cam.project_ray_normal(steer_screen).normalized()
@@ -742,7 +837,6 @@ func _update_aim_ray_and_lock() -> void:
 		player_ship.locked_enemy = best_en
 
 func _update_third_person_camera(delta: float) -> void:
-	# Sub-frame interpolated ship transform + Quaternion slerp (zero 60/144Hz stutter, zero upside-down gimbal flips!)
 	var smooth_xf := player_ship.get_smoothed_transform()
 	var target_pos := smooth_xf.origin + smooth_xf.basis * Vector3(0, 1.85, 0)
 	var pos_alpha := 1.0 - exp(-22.0 * delta)
@@ -763,7 +857,6 @@ func _update_third_person_camera(delta: float) -> void:
 	var desired_dist := _cam_dist + spd_ratio * 3.4
 	_cam.fov = lerpf(_cam.fov, 64.0 + spd_ratio * 11.0, 1.0 - exp(-7.0 * delta))
 
-	# Anti-clipping raycast from pivot to desired camera position
 	var desired_world := _cam_pivot.global_position + _cam_pivot.global_transform.basis.z * desired_dist
 	var rq := PhysicsRayQueryParameters3D.create(_cam_pivot.global_position, desired_world)
 	rq.exclude = [player_ship.get_rid()]
@@ -791,7 +884,7 @@ func _process_sector_spawns_and_hazards(delta: float) -> void:
 	if haz == "plasma_lightning":
 		_hazard_cd -= delta
 		if _hazard_cd <= 2.0 and _hazard_cd > 0.0:
-			_hazard_warn_lbl.text = "WARNING: PLASMA STORM DISCHARGE IMMINENT!"
+			_hazard_warn_lbl.text = L.tr_ui("hud_plasma_warn")
 		elif _hazard_cd <= 0.0:
 			_hazard_cd = randf_range(8.5, 14.0)
 			_hazard_flash_t = 0.55
@@ -821,6 +914,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.keycode in [KEY_ESCAPE, KEY_TAB]:
 			_pause_panel.visible = not _pause_panel.visible
 			_set_mouse_flight_mode(not _pause_panel.visible)
+			if _pause_panel.visible:
+				ThemeHelper.animate_entry(_pause_panel, 0.0, Vector2(0.92, 0.92))
 		elif event.keycode == KEY_C:
 			_virtual_stick = Vector2.ZERO
 			_smoothed_stick = Vector2.ZERO
@@ -869,7 +964,6 @@ func _on_ship_destroyed() -> void:
 	if _extracting:
 		return
 	_extracting = true
-	# Emergency tug recovery back to Hangar (repairs cockpit; 25% loose ore lost)
 	for k in ShipGrid.cargo.keys():
 		ShipGrid.cargo[k] = int(floor(float(int(ShipGrid.cargo[k])) * 0.75))
 	ShipGrid.repair_all_modules()

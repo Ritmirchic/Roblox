@@ -2,7 +2,7 @@
 #define MyAppName "SPACE MINER: BUILD & CONQUER"
 #define MySafeFolderName "SPACE MINER - BUILD & CONQUER"
 #define MyAppExeName "SPACE_MINER.exe"
-#define MyAppVersion "1.0.4"
+#define MyAppVersion "2.0.0"
 #define MyAppPublisher "Orbital Forge Interactive"
 
 [Setup]
@@ -33,6 +33,7 @@ Compression=lzma2/fast
 SolidCompression=yes
 
 [Languages]
+Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]

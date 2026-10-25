@@ -44,6 +44,7 @@ func build_save_payload() -> Dictionary:
 		"upg_equipped": UpgradeManager.active_equipped.duplicate(true),
 		"achievements": AchievementManager.serialize_state(),
 		"settings": {
+			"language": L.current_lang,
 			"master_volume": AudioManager.master_volume,
 			"music_volume": AudioManager.music_volume,
 			"sfx_volume": AudioManager.sfx_volume,
@@ -212,9 +213,11 @@ func apply_loaded_payload(data: Dictionary) -> bool:
 	# Settings
 	if typeof(data.get("settings")) == TYPE_DICTIONARY:
 		var st: Dictionary = data["settings"]
+		if st.has("language"):
+			L.set_language(str(st.get("language", "ru")), false)
 		AudioManager.master_volume = clampf(float(st.get("master_volume", 0.85)), 0.0, 1.0)
-		AudioManager.music_volume = clampf(float(st.get("music_volume", 0.65)), 0.0, 1.0)
-		AudioManager.sfx_volume = clampf(float(st.get("sfx_volume", 0.85)), 0.0, 1.0)
+		AudioManager.music_volume = clampf(float(st.get("music_volume", 0.58)), 0.0, 1.0)
+		AudioManager.sfx_volume = clampf(float(st.get("sfx_volume", 0.78)), 0.0, 1.0)
 		AudioManager.muted = bool(st.get("muted", false))
 		AudioManager.apply_volumes()
 		ThemeHelper.reduced_motion = bool(st.get("reduced_motion", false))

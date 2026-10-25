@@ -26,6 +26,7 @@ func _ready() -> void:
 	_test_achievements_and_utc_resets()
 	await _test_live_3d_gameplay_mining_combat_magnets()
 	_test_save_load_and_corruption_recovery()
+	await _test_multilingual_localization_and_gui_non_overlap()
 
 	print("=== TEST SUMMARY: %d PASSED, %d FAILED ===" % [_passed, _failed])
 	if _failed > 0:
@@ -566,3 +567,85 @@ func _test_save_load_and_corruption_recovery() -> void:
 
 	_check(SaveManager.load_game(SaveManager.DEFAULT_SAVE_PATH), "Recovered cleanly from .bak when primary save is corrupted")
 	_check(SaveManager.last_load_status == "recovered_from_backup", "Reported recovered_from_backup status")
+
+# 10. Multilingual Localization (10 Languages, Russian Default) & Zero-Overlap GUI Geometry
+func _test_multilingual_localization_and_gui_non_overlap() -> void:
+	L.set_language("ru")
+	_check(L.current_lang == "ru", "Russian (ru) is active primary language")
+	_check(L.LANG_ORDER.size() == 10, "All 10 major world languages registered in Localization")
+	_check(L.tr_ui("menu_enter_hangar").find("АНГАР") >= 0, "Russian Main Menu translation active")
+
+	# Verify font fallback chain loaded cleanly on all 4 primary FontFiles
+	_check(ThemeHelper.font_display != null and ThemeHelper.font_display.fallbacks.size() == 4, "Display font loaded with 4 CJK/Symbol fallbacks")
+	_check(ThemeHelper.font_body != null and ThemeHelper.font_body.fallbacks.size() == 4, "Body font loaded with 4 CJK/Symbol fallbacks")
+
+	# Cycle all 10 languages & verify SaveManager persists language selection
+	for code_var in L.LANG_ORDER:
+		var code: String = str(code_var)
+		L.set_language(code)
+		_check(L.current_lang == code, "Switched language to " + code)
+		_check(not L.tr_ui("menu_enter_hangar").is_empty(), "Non-empty menu_enter_hangar in " + code)
+		_check(not L.mod_name("magnetic_radar").is_empty(), "Non-empty magnetic_radar name in " + code)
+		_check(not L.crew_bonus(GameData.crew_cards[0]).is_empty(), "Non-empty crew bonus in " + code)
+		_check(not L.sector_name(GameData.sectors[0]).is_empty(), "Non-empty sector title in " + code)
+
+	L.set_language("ja")
+	var lang_save := "user://test_lang_save.json"
+	_check(SaveManager.save_game(lang_save), "Saved game with Japanese language")
+	L.set_language("en")
+	_check(SaveManager.load_game(lang_save) and L.current_lang == "ja", "Restored persisted language from save file")
+	L.set_language("ru")
+
+	# Instantiate Hangar3D and verify ZERO pairwise rectangle overlap across all 5 HUD docks + mouse guard
+	var hangar := Hangar3D.new()
+	add_child(hangar)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var h_panels: Array[Control] = [
+		hangar._top_bar,
+		hangar._left_panel,
+		hangar._right_panel,
+		hangar._status_box,
+		hangar._bottom_dock,
+	]
+	for i in range(h_panels.size()):
+		for j in range(i + 1, h_panels.size()):
+			var ra: Rect2 = h_panels[i].get_global_rect()
+			var rb: Rect2 = h_panels[j].get_global_rect()
+			_check(not ra.intersects(rb), "Zero overlap between %s and %s" % [h_panels[i].name, h_panels[j].name])
+
+	var vp_rect: Rect2 = get_viewport().get_visible_rect()
+	_check(hangar._is_screen_pos_over_hud(hangar._left_panel.get_global_rect().get_center()), "Mouse guard blocks clicks over HangarLeftPanel")
+	_check(hangar._is_screen_pos_over_hud(hangar._bottom_dock.get_global_rect().get_center()), "Mouse guard blocks clicks over HangarBottomDock")
+	_check(not hangar._is_screen_pos_over_hud(vp_rect.get_center()), "Center 3D Shipbay viewport remains open for 3D raycast")
+
+	for tab in ["shop", "crew", "packs", "upgrades", "achievements", "launch", "settings"]:
+		hangar._station_panels.open_tab(tab)
+		await get_tree().process_frame
+	hangar._station_panels.close_panel()
+	hangar.queue_free()
+	await get_tree().process_frame
+
+	# Instantiate SpaceExpedition3D and verify ZERO pairwise rectangle overlap across Flight HUD panels
+	var exp_hud := SpaceExpedition3D.new()
+	exp_hud.setup_sector(0)
+	add_child(exp_hud)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var f_panels: Array[Control] = [
+		exp_hud._status_box,
+		exp_hud._min_task_pill,
+		exp_hud._radar_box,
+		exp_hud._hint_pill,
+	]
+	for i in range(f_panels.size()):
+		for j in range(i + 1, f_panels.size()):
+			var fa: Rect2 = f_panels[i].get_global_rect()
+			var fb: Rect2 = f_panels[j].get_global_rect()
+			_check(not fa.intersects(fb), "Zero Flight HUD overlap between %s and %s" % [f_panels[i].name, f_panels[j].name])
+
+	exp_hud.queue_free()
+	await get_tree().process_frame
+

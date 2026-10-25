@@ -12,7 +12,7 @@ config_version=5
 
 config/name="SPACE MINER: BUILD & CONQUER"
 config/description="3D Modular Spaceship Construction, Physics-Based Space Flight, Asteroid Mining, Combat & Collectible Crew Card Game."
-config/version="1.0.4"
+config/version="2.0.0"
 run/main_scene="res://scenes/main/Main.tscn"
 config/features=PackedStringArray("4.3", "GL Compatibility")
 boot_splash/bg_color=Color(0.0235, 0.0392, 0.0941, 1)
@@ -25,14 +25,15 @@ config/windows_native_icon="res://assets/branding/icon.ico"
 [autoload]
 
 GameData="*res://scripts/autoload/GameData.gd"
+L="*res://scripts/autoload/Localization.gd"
 AudioManager="*res://scripts/autoload/AudioManager.gd"
+ThemeHelper="*res://scripts/autoload/ThemeHelper.gd"
 ShipGrid="*res://scripts/autoload/ShipGrid.gd"
 CrewManager="*res://scripts/autoload/CrewManager.gd"
 UpgradeManager="*res://scripts/autoload/UpgradeManager.gd"
 PackManager="*res://scripts/autoload/PackManager.gd"
 AchievementManager="*res://scripts/autoload/AchievementManager.gd"
 SaveManager="*res://scripts/autoload/SaveManager.gd"
-ThemeHelper="*res://scripts/autoload/ThemeHelper.gd"
 
 [display]
 

@@ -10,6 +10,7 @@ var _ghost_root: Node3D
 var _com_gizmo: Node3D
 var _gantry_node: Node3D
 var _robot_arms: Array[Node3D] = []
+var _station_labels_3d: Array[Dictionary] = []
 
 var _cam_pivot: Node3D
 var _cam: Camera3D
@@ -32,20 +33,43 @@ var hovered_anchor: Vector3i = Vector3i(0, 0, -1)
 var hover_valid: bool = false
 var hover_reason: String = ""
 var _ghost_cached_mod: String = ""
+var _side_panels_collapsed: bool = false
 
 # UI references
 var _hud_layer: CanvasLayer
 var _ui_root: Control
+var _top_bar: PanelContainer
+var _left_panel: PanelContainer
+var _right_panel: PanelContainer
+var _status_box: PanelContainer
+var _bottom_dock: PanelContainer
+
+var _menu_btn: Button
+var _collapse_btn: Button
+var _top_settings_btn: Button
+var _top_launch_btn: Button
 var _credits_lbl: Label
 var _crystals_lbl: Label
+
+var _ed_title_lbl: Label
+var _buy_cell_btn: Button
 var _crew_prog_lbl: Label
 var _crew_prog_bar: ProgressBar
-var _buy_cell_btn: Button
-var _stats_rtl: RichTextLabel
+var _btn_place: Button
+var _btn_rem: Button
+var _btn_rot: Button
+var _pal_lbl: Label
 var _palette_list: VBoxContainer
-var _status_banner: Label
 var _blueprint_le: LineEdit
+var _bp_save_btn: Button
 var _blueprint_opt: OptionButton
+var _bp_load_btn: Button
+
+var _rt_title_lbl: Label
+var _telemetry_rows_vb: VBoxContainer
+var _cam_help_lbl: Label
+var _status_banner: Label
+var _dock_buttons: Dictionary = {}
 var _station_panels: HangarStationPanels
 
 var _anim_time: float = 0.0
@@ -60,15 +84,19 @@ func _ready() -> void:
 
 	ShipGrid.ship_changed.connect(_on_ship_changed)
 	ShipGrid.credits_changed.connect(func(_c): _refresh_ui())
+	ShipGrid.crystals_changed.connect(func(_c): _refresh_ui())
 	CrewManager.crew_changed.connect(_refresh_ui)
 	UpgradeManager.upgrades_changed.connect(_refresh_ui)
+	AchievementManager.achievements_updated.connect(_refresh_ui)
+	L.language_changed.connect(func(_lang: String): _apply_localization_and_refresh())
+
+	_apply_localization_and_refresh()
 	_on_ship_changed()
 
 func _build_3d_hangar_environment() -> void:
 	_env_root = Node3D.new()
 	add_child(_env_root)
 
-	# WorldEnvironment & Atmospheric Lighting
 	var we := WorldEnvironment.new()
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
@@ -100,7 +128,6 @@ func _build_3d_hangar_environment() -> void:
 		ol.omni_range = 32.0
 		_env_root.add_child(ol)
 
-	# Textured PBR Hangar Deck Floor
 	var floor_mi := MeshInstance3D.new()
 	var fbox := BoxMesh.new()
 	fbox.size = Vector3(58.0, 0.6, 58.0)
@@ -117,7 +144,6 @@ func _build_3d_hangar_environment() -> void:
 	floor_mi.material_override = fmat
 	_env_root.add_child(floor_mi)
 
-	# Side & Rear Industrial Bulkhead Walls + Ceiling Ribs
 	var wall_mat := StandardMaterial3D.new()
 	wall_mat.albedo_color = Color(0.11, 0.14, 0.20)
 	wall_mat.metallic = 0.75
@@ -135,13 +161,9 @@ func _build_3d_hangar_environment() -> void:
 		wmi.material_override = wall_mat
 		_env_root.add_child(wmi)
 
-	# Hydraulic Construction Platform at (0, -0.85, 0) so ship cells at y=0 sit right above deck
 	_spawn_glb(_env_root, "res://assets/models/hangar/hangar_platform.glb", Vector3(0, -0.95, 0), Vector3.ZERO)
-
-	# Overhead Animated Gantry Crane
 	_gantry_node = _spawn_glb(_env_root, "res://assets/models/hangar/hangar_gantry_crane.glb", Vector3(0, -0.8, -2.0), Vector3.ZERO)
 
-	# 4 Articulated Robotic Arms around construction bay
 	for rspec in [
 		[Vector3(-11.5, -0.9, -7.5), 135.0],
 		[Vector3(11.5, -0.9, -7.5), -135.0],
@@ -152,33 +174,31 @@ func _build_3d_hangar_environment() -> void:
 		if arm:
 			_robot_arms.append(arm)
 
-	# Industrial Cargo Container Stacks
 	_spawn_glb(_env_root, "res://assets/models/hangar/hangar_cargo_containers.glb", Vector3(-18.5, -0.9, 14.0), Vector3(0, 25, 0))
 	_spawn_glb(_env_root, "res://assets/models/hangar/hangar_cargo_containers.glb", Vector3(18.5, -0.9, 14.0), Vector3(0, -30, 0))
 
-	# Orbital Launch Gate at -Z looking out into space starfield!
 	_spawn_glb(_env_root, "res://assets/models/hangar/hangar_launch_gate.glb", Vector3(0, -0.9, -24.5), Vector3.ZERO)
 	var gate_field := VFXFactory.create_holo_panel(Vector2(27.5, 13.8), Color(0.14, 0.72, 1.0, 0.36))
 	gate_field.position = Vector3(0, 6.8, -24.5)
 	_env_root.add_child(gate_field)
 
-	# 6 Interactive 3D Hangar Stations around the platform!
 	var stations := [
-		["shop", "EQUIPMENT SHOP", Vector3(-15.5, -0.9, -3.5), 75.0, Color(0.22, 0.85, 1.0, 0.75)],
-		["crew", "CREW TERMINAL", Vector3(-15.5, -0.9, 4.5), 105.0, Color(0.35, 1.0, 0.68, 0.75)],
-		["packs", "CARD PACK STATION", Vector3(15.5, -0.9, -3.5), -75.0, Color(0.85, 0.42, 1.0, 0.75)],
-		["upgrades", "UPGRADE MATRIX", Vector3(15.5, -0.9, 4.5), -105.0, Color(1.0, 0.78, 0.25, 0.75)],
-		["achievements", "ACHIEVEMENT BOARD", Vector3(-8.5, -0.9, 15.5), 160.0, Color(1.0, 0.86, 0.32, 0.75)],
-		["launch", "LAUNCH CONTROL", Vector3(8.5, -0.9, -15.5), -20.0, Color(0.25, 1.0, 0.75, 0.85)],
+		["shop", "tab_shop", Vector3(-15.5, -0.9, -3.5), 75.0, Color(0.22, 0.85, 1.0, 0.75)],
+		["crew", "tab_crew", Vector3(-15.5, -0.9, 4.5), 105.0, Color(0.35, 1.0, 0.68, 0.75)],
+		["packs", "tab_packs", Vector3(15.5, -0.9, -3.5), -75.0, Color(0.85, 0.42, 1.0, 0.75)],
+		["upgrades", "tab_upgrades", Vector3(15.5, -0.9, 4.5), -105.0, Color(1.0, 0.78, 0.25, 0.75)],
+		["achievements", "tab_achievements", Vector3(-8.5, -0.9, 15.5), 160.0, Color(1.0, 0.86, 0.32, 0.75)],
+		["launch", "tab_launch", Vector3(8.5, -0.9, -15.5), -20.0, Color(0.25, 1.0, 0.75, 0.85)],
 	]
 	for st in stations:
 		_create_interactive_station(st[0], st[1], st[2], st[3], st[4])
 
-func _create_interactive_station(tab_id: String, title: String, pos: Vector3, yaw_deg: float, holo_col: Color) -> void:
+func _create_interactive_station(tab_id: String, loc_key: String, pos: Vector3, yaw_deg: float, holo_col: Color) -> void:
 	var sb := StaticBody3D.new()
 	sb.position = pos
 	sb.rotation_degrees = Vector3(0, yaw_deg, 0)
 	sb.set_meta("station_tab", tab_id)
+	sb.set_meta("station_loc_key", loc_key)
 	_env_root.add_child(sb)
 
 	var cshape := CollisionShape3D.new()
@@ -190,20 +210,21 @@ func _create_interactive_station(tab_id: String, title: String, pos: Vector3, ya
 
 	_spawn_glb(sb, "res://assets/models/hangar/hangar_terminal_station.glb", Vector3.ZERO, Vector3.ZERO)
 
-	var holo := VFXFactory.create_holo_panel(Vector2(2.1, 1.15), holo_col)
+	var holo := VFXFactory.create_holo_panel(Vector2(2.3, 1.15), holo_col)
 	holo.position = Vector3(0, 2.85, 0)
 	sb.add_child(holo)
 
 	var lbl3d := Label3D.new()
-	lbl3d.text = title
+	lbl3d.text = L.tr_ui(loc_key).to_upper()
 	if ThemeHelper.font_display:
 		lbl3d.font = ThemeHelper.font_display
-	lbl3d.font_size = 40
+	lbl3d.font_size = 36
 	lbl3d.modulate = holo_col.lightened(0.35)
 	lbl3d.outline_size = 8
 	lbl3d.position = Vector3(0, 2.88, 0.06)
 	lbl3d.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	sb.add_child(lbl3d)
+	_station_labels_3d.append({"label": lbl3d, "key": loc_key})
 
 func _spawn_glb(parent: Node, path: String, pos: Vector3, rot_deg: Vector3) -> Node3D:
 	if not ResourceLoader.exists(path):
@@ -236,7 +257,6 @@ func _apply_camera_transform() -> void:
 	_cam_pivot.position = _cam_target
 	_cam_pivot.rotation_degrees = Vector3(_cam_pitch, _cam_yaw, 0.0)
 	_cam.position = Vector3(0, 0, _cam_dist)
-	# Prevent floor clipping
 	if _cam.global_position.y < 0.45:
 		_cam.global_position.y = 0.45
 
@@ -248,7 +268,6 @@ func _build_ship_and_gizmos() -> void:
 	_ghost_root = Node3D.new()
 	_ship_preview_root.add_child(_ghost_root)
 
-	# 3D Center-of-Mass Visualization Gizmo (Amber Core + XYZ Crosshairs)
 	_com_gizmo = Node3D.new()
 	_ship_preview_root.add_child(_com_gizmo)
 
@@ -304,14 +323,12 @@ func _rebuild_ship_3d_preview(animate_last_uid: int = -1) -> void:
 		holder.set_meta("anchor_cell", anchor)
 		_ship_preview_root.add_child(holder)
 
-		# Click/raycast collision shape per occupied cell in local space of holder
 		var cells: Array = e["cells"]
 		for c in cells:
 			var cs := CollisionShape3D.new()
 			var bx := BoxShape3D.new()
 			bx.size = Vector3.ONE * (ShipGrid.CELL_SIZE * 0.98)
 			cs.shape = bx
-			# Transform world cell diff back into holder's rotated local coordinates
 			var world_off := Vector3(c.x - anchor.x, c.y - anchor.y, c.z - anchor.z) * ShipGrid.CELL_SIZE
 			cs.position = holder.transform.basis.inverse() * world_off
 			holder.add_child(cs)
@@ -351,7 +368,7 @@ func _apply_ghost_material_recursive(n: Node, col: Color) -> void:
 		_apply_ghost_material_recursive(c, col)
 
 # ==============================================================================
-# HANGAR & 3D SHIP EDITOR UI
+# REBUILT HANGAR & 3D SHIPBAY UI (ZERO OVERLAP, STRICT MOUSE ISOLATION)
 # ==============================================================================
 func _build_hangar_ui() -> void:
 	_hud_layer = CanvasLayer.new()
@@ -363,74 +380,99 @@ func _build_hangar_ui() -> void:
 	_ui_root.mouse_filter = Control.MOUSE_FILTER_PASS
 	_hud_layer.add_child(_ui_root)
 
-	# 1. Top Navigation & Currency Dock Bar
-	var top_bar := PanelContainer.new()
-	top_bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	top_bar.offset_bottom = 62
-	top_bar.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(Color(0.03, 0.055, 0.115, 0.95), Color(0.18, 0.68, 0.95), 0, 2))
-	_ui_root.add_child(top_bar)
+	# 1. TOP COMMAND HEADER BAR (y: 0..56)
+	_top_bar = PanelContainer.new()
+	_top_bar.name = "HangarTopBar"
+	_top_bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	_top_bar.offset_bottom = 56
+	_top_bar.mouse_filter = Control.MOUSE_FILTER_STOP
+	_top_bar.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(Color(0.022, 0.042, 0.095, 0.95), Color(0.20, 0.72, 1.0, 0.80), 0, 2, 10))
+	_ui_root.add_child(_top_bar)
 
 	var thb := HBoxContainer.new()
 	thb.add_theme_constant_override("separation", 10)
-	top_bar.add_child(thb)
+	_top_bar.add_child(thb)
 
-	var menu_btn := Button.new()
-	menu_btn.text = "MAIN MENU"
-	ThemeHelper.wire_button_fx(menu_btn)
-	menu_btn.pressed.connect(func():
+	_menu_btn = Button.new()
+	_menu_btn.custom_minimum_size = Vector2(142, 36)
+	ThemeHelper.wire_button_fx(_menu_btn)
+	_menu_btn.pressed.connect(func():
 		SaveManager.save_game()
 		request_main_menu.emit()
 	)
-	thb.add_child(menu_btn)
+	thb.add_child(_menu_btn)
 
-	# Currency badges with custom icons
-	_credits_lbl = _create_icon_stat(thb, "res://assets/icons/ui/icon_credits.png", Color(1.0, 0.82, 0.28))
-	_crystals_lbl = _create_icon_stat(thb, "res://assets/icons/ui/icon_crystals.png", Color(0.32, 0.92, 1.0))
+	_credits_lbl = _create_icon_stat(thb, "res://assets/icons/ui/icon_credits.png", ThemeHelper.COL_GOLD)
+	_crystals_lbl = _create_icon_stat(thb, "res://assets/icons/ui/icon_crystals.png", ThemeHelper.COL_CYAN)
 
 	var sp := Control.new()
 	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	thb.add_child(sp)
 
-	var nav_items := [
-		["shop", "EQUIPMENT SHOP", Color(0.18, 0.68, 0.95)],
-		["crew", "CREW CARDS", Color(0.22, 0.80, 0.56)],
-		["packs", "CARD PACKS", Color(0.75, 0.36, 0.98)],
-		["upgrades", "UPGRADES", Color(0.95, 0.68, 0.18)],
-		["achievements", "ACHIEVEMENTS", Color(0.95, 0.78, 0.24)],
-		["settings", "SETTINGS", Color(0.45, 0.58, 0.74)],
-		["launch", "LAUNCH EXPEDITION", Color(0.16, 0.85, 0.54)],
-	]
-	for item in nav_items:
-		var nb := Button.new()
-		nb.text = item[1]
-		ThemeHelper.style_accent_button(nb, item[2])
-		var tid: String = item[0]
-		nb.pressed.connect(func(): _station_panels.open_tab(tid))
-		thb.add_child(nb)
+	_collapse_btn = Button.new()
+	_collapse_btn.custom_minimum_size = Vector2(40, 36)
+	_collapse_btn.text = "◀▶"
+	ThemeHelper.wire_button_fx(_collapse_btn)
+	_collapse_btn.pressed.connect(func():
+		_side_panels_collapsed = not _side_panels_collapsed
+		_left_panel.visible = not _side_panels_collapsed
+		_right_panel.visible = not _side_panels_collapsed
+		if not _side_panels_collapsed:
+			ThemeHelper.animate_entry(_left_panel, 0.0)
+			ThemeHelper.animate_entry(_right_panel, 0.0)
+	)
+	thb.add_child(_collapse_btn)
 
-	# 2. Left Panel: Ship Expansion Economy, Module Palette & Blueprints
-	var left_panel := PanelContainer.new()
-	left_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	left_panel.offset_left = 14
-	left_panel.offset_right = 344
-	left_panel.offset_top = 74
-	left_panel.offset_bottom = 886
-	_ui_root.add_child(left_panel)
+	thb.add_child(ThemeHelper.make_language_dropdown(true))
+
+	_top_settings_btn = Button.new()
+	_top_settings_btn.custom_minimum_size = Vector2(128, 36)
+	ThemeHelper.wire_button_fx(_top_settings_btn)
+	_top_settings_btn.pressed.connect(func():
+		_station_panels.standalone_settings_mode = false
+		_station_panels.open_tab("settings")
+	)
+	thb.add_child(_top_settings_btn)
+
+	_top_launch_btn = Button.new()
+	_top_launch_btn.custom_minimum_size = Vector2(160, 36)
+	ThemeHelper.style_accent_button(_top_launch_btn, Color(0.16, 0.85, 0.54))
+	_top_launch_btn.pressed.connect(func():
+		_station_panels.standalone_settings_mode = false
+		_station_panels.open_tab("launch")
+	)
+	thb.add_child(_top_launch_btn)
+
+	# 2. LEFT 3D SHIP CONSTRUCTOR DOCK (x: 12..336, y: 66..H-80)
+	_left_panel = PanelContainer.new()
+	_left_panel.name = "HangarLeftPanel"
+	_left_panel.anchor_left = 0.0
+	_left_panel.anchor_right = 0.0
+	_left_panel.anchor_top = 0.0
+	_left_panel.anchor_bottom = 1.0
+	_left_panel.offset_left = 12
+	_left_panel.offset_right = 336
+	_left_panel.offset_top = 66
+	_left_panel.offset_bottom = -80
+	_left_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	_ui_root.add_child(_left_panel)
 
 	var lvb := VBoxContainer.new()
-	lvb.add_theme_constant_override("separation", 8)
-	left_panel.add_child(lvb)
+	lvb.add_theme_constant_override("separation", 7)
+	_left_panel.add_child(lvb)
 
-	var ed_title := Label.new()
-	ed_title.text = "3D SHIP CONSTRUCTOR"
+	_ed_title_lbl = Label.new()
+	_ed_title_lbl.clip_text = true
 	if ThemeHelper.font_display:
-		ed_title.add_theme_font_override("font", ThemeHelper.font_display)
-	ed_title.add_theme_font_size_override("font_size", 19)
-	ed_title.add_theme_color_override("font_color", Color(0.42, 0.92, 1.0))
-	lvb.add_child(ed_title)
+		_ed_title_lbl.add_theme_font_override("font", ThemeHelper.font_display)
+	_ed_title_lbl.add_theme_font_size_override("font_size", 16)
+	_ed_title_lbl.add_theme_color_override("font_color", ThemeHelper.COL_CYAN)
+	lvb.add_child(_ed_title_lbl)
 
 	_buy_cell_btn = Button.new()
-	_buy_cell_btn.custom_minimum_size = Vector2(0, 42)
+	_buy_cell_btn.custom_minimum_size = Vector2(0, 40)
+	_buy_cell_btn.clip_text = true
 	ThemeHelper.style_accent_button(_buy_cell_btn, Color(0.95, 0.68, 0.16))
 	_buy_cell_btn.pressed.connect(func():
 		if ShipGrid.purchase_expansion_cell():
@@ -440,149 +482,234 @@ func _build_hangar_ui() -> void:
 			SaveManager.save_game()
 			_refresh_ui()
 		else:
-			_status_banner.text = "Insufficient Credits to purchase Expansion Cell!"
+			_status_banner.text = L.tr_ui("not_enough_credits")
 			AudioManager.play_sfx("ui_error", 0.04, 0.7)
 	)
 	lvb.add_child(_buy_cell_btn)
 
 	_crew_prog_lbl = Label.new()
-	_crew_prog_lbl.add_theme_font_size_override("font_size", 15)
+	_crew_prog_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_crew_prog_lbl.add_theme_font_size_override("font_size", 12)
+	_crew_prog_lbl.add_theme_color_override("font_color", Color(0.82, 0.92, 1.0))
 	lvb.add_child(_crew_prog_lbl)
 
 	_crew_prog_bar = ProgressBar.new()
 	_crew_prog_bar.max_value = 10.0
 	_crew_prog_bar.show_percentage = false
-	_crew_prog_bar.custom_minimum_size = Vector2(0, 14)
+	_crew_prog_bar.custom_minimum_size = Vector2(0, 10)
 	lvb.add_child(_crew_prog_bar)
 
-	# Place / Remove / Rotate toolbar
 	var tool_hb := HBoxContainer.new()
-	tool_hb.add_theme_constant_override("separation", 6)
+	tool_hb.add_theme_constant_override("separation", 5)
 	lvb.add_child(tool_hb)
 
-	var btn_place := Button.new()
-	btn_place.text = "PLACE"
-	btn_place.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ThemeHelper.style_accent_button(btn_place, Color(0.18, 0.74, 0.52))
-	btn_place.pressed.connect(func():
+	_btn_place = Button.new()
+	_btn_place.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_btn_place.clip_text = true
+	_btn_place.pressed.connect(func():
 		editor_mode = "place"
 		_refresh_ghost_visual()
 		_refresh_ui()
 	)
-	tool_hb.add_child(btn_place)
+	tool_hb.add_child(_btn_place)
 
-	var btn_rem := Button.new()
-	btn_rem.text = "REMOVE [X]"
-	btn_rem.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ThemeHelper.style_accent_button(btn_rem, Color(0.86, 0.34, 0.34))
-	btn_rem.pressed.connect(func():
+	_btn_rem = Button.new()
+	_btn_rem.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_btn_rem.clip_text = true
+	_btn_rem.pressed.connect(func():
 		editor_mode = "remove" if editor_mode != "remove" else "place"
 		_refresh_ghost_visual()
 		_refresh_ui()
 	)
-	tool_hb.add_child(btn_rem)
+	tool_hb.add_child(_btn_rem)
 
-	var btn_rot := Button.new()
-	btn_rot.text = "ROT [R]"
-	ThemeHelper.wire_button_fx(btn_rot)
-	btn_rot.pressed.connect(func():
+	_btn_rot = Button.new()
+	_btn_rot.custom_minimum_size = Vector2(78, 0)
+	_btn_rot.clip_text = true
+	ThemeHelper.wire_button_fx(_btn_rot)
+	_btn_rot.pressed.connect(func():
 		current_yaw = (current_yaw + 1) % 4
 		_update_hover_validation()
 		_refresh_ghost_visual()
 	)
-	tool_hb.add_child(btn_rot)
+	tool_hb.add_child(_btn_rot)
 
-	var pal_lbl := Label.new()
-	pal_lbl.text = "OWNED MODULES (CLICK TO INSTALL):"
-	pal_lbl.add_theme_font_size_override("font_size", 15)
-	pal_lbl.add_theme_color_override("font_color", Color(0.68, 0.84, 0.98))
-	lvb.add_child(pal_lbl)
+	_pal_lbl = Label.new()
+	_pal_lbl.clip_text = true
+	_pal_lbl.add_theme_font_size_override("font_size", 12)
+	_pal_lbl.add_theme_color_override("font_color", ThemeHelper.COL_MUTED)
+	lvb.add_child(_pal_lbl)
 
 	var p_sc := ScrollContainer.new()
 	p_sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	p_sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	lvb.add_child(p_sc)
 
 	_palette_list = VBoxContainer.new()
 	_palette_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_palette_list.add_theme_constant_override("separation", 6)
+	_palette_list.add_theme_constant_override("separation", 5)
 	p_sc.add_child(_palette_list)
 
-	# Blueprint Save/Load Footer
-	var bp_hb := HBoxContainer.new()
-	bp_hb.add_theme_constant_override("separation", 6)
-	lvb.add_child(bp_hb)
+	# Blueprint Save Row
+	var bp_save_hb := HBoxContainer.new()
+	bp_save_hb.add_theme_constant_override("separation", 5)
+	lvb.add_child(bp_save_hb)
 
 	_blueprint_le = LineEdit.new()
-	_blueprint_le.placeholder_text = "Layout Name..."
 	_blueprint_le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bp_hb.add_child(_blueprint_le)
+	bp_save_hb.add_child(_blueprint_le)
 
-	var bp_save := Button.new()
-	bp_save.text = "SAVE"
-	ThemeHelper.wire_button_fx(bp_save)
-	bp_save.pressed.connect(func():
+	_bp_save_btn = Button.new()
+	_bp_save_btn.custom_minimum_size = Vector2(96, 32)
+	_bp_save_btn.clip_text = true
+	ThemeHelper.wire_button_fx(_bp_save_btn)
+	_bp_save_btn.pressed.connect(func():
 		var nm := _blueprint_le.text.strip_edges()
 		if nm.is_empty():
-			nm = "Layout_%d" % (ShipGrid.saved_layouts.size() + 1)
+			nm = "Ship_%d" % (ShipGrid.saved_layouts.size() + 1)
 		if ShipGrid.save_named_layout(nm):
+			_blueprint_le.release_focus()
 			SaveManager.save_game()
-			_status_banner.text = "Saved ship layout '%s'." % nm
+			_status_banner.text = L.tr_ui("saved_layout_msg", [nm])
 			_refresh_ui()
 	)
-	bp_hb.add_child(bp_save)
+	bp_save_hb.add_child(_bp_save_btn)
 
-	# 3. Right Panel: Real-Time Physical Ship Telemetry & Center of Mass
-	var right_panel := PanelContainer.new()
-	right_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	right_panel.offset_left = -336
-	right_panel.offset_right = -14
-	right_panel.offset_top = 74
-	right_panel.offset_bottom = 560
-	_ui_root.add_child(right_panel)
+	# Blueprint Load Row
+	var bp_load_hb := HBoxContainer.new()
+	bp_load_hb.add_theme_constant_override("separation", 5)
+	lvb.add_child(bp_load_hb)
+
+	_blueprint_opt = OptionButton.new()
+	_blueprint_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_blueprint_opt.clip_text = true
+	bp_load_hb.add_child(_blueprint_opt)
+
+	_bp_load_btn = Button.new()
+	_bp_load_btn.custom_minimum_size = Vector2(96, 32)
+	_bp_load_btn.clip_text = true
+	ThemeHelper.wire_button_fx(_bp_load_btn)
+	_bp_load_btn.pressed.connect(func():
+		if _blueprint_opt.item_count > 0 and _blueprint_opt.selected >= 0:
+			var sel_name := _blueprint_opt.get_item_text(_blueprint_opt.selected)
+			if ShipGrid.load_named_layout(sel_name):
+				AudioManager.play_sfx("module_place", 0.03, 0.85)
+				SaveManager.save_game()
+				_status_banner.text = L.tr_ui("loaded_layout_msg", [sel_name])
+				_on_ship_changed()
+	)
+	bp_load_hb.add_child(_bp_load_btn)
+
+	# 3. RIGHT PHYSICAL TELEMETRY DOCK (x: W-336..W-12, y: 66..H-80)
+	_right_panel = PanelContainer.new()
+	_right_panel.name = "HangarRightPanel"
+	_right_panel.anchor_left = 1.0
+	_right_panel.anchor_right = 1.0
+	_right_panel.anchor_top = 0.0
+	_right_panel.anchor_bottom = 1.0
+	_right_panel.offset_left = -336
+	_right_panel.offset_right = -12
+	_right_panel.offset_top = 66
+	_right_panel.offset_bottom = -80
+	_right_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	_ui_root.add_child(_right_panel)
 
 	var rvb := VBoxContainer.new()
 	rvb.add_theme_constant_override("separation", 8)
-	right_panel.add_child(rvb)
+	_right_panel.add_child(rvb)
 
-	var rt := Label.new()
-	rt.text = "SHIP TELEMETRY & PHYSICS"
+	_rt_title_lbl = Label.new()
+	_rt_title_lbl.clip_text = true
 	if ThemeHelper.font_display:
-		rt.add_theme_font_override("font", ThemeHelper.font_display)
-	rt.add_theme_font_size_override("font_size", 18)
-	rt.add_theme_color_override("font_color", Color(1.0, 0.82, 0.34))
-	rvb.add_child(rt)
+		_rt_title_lbl.add_theme_font_override("font", ThemeHelper.font_display)
+	_rt_title_lbl.add_theme_font_size_override("font_size", 16)
+	_rt_title_lbl.add_theme_color_override("font_color", ThemeHelper.COL_GOLD)
+	rvb.add_child(_rt_title_lbl)
 
-	_stats_rtl = RichTextLabel.new()
-	_stats_rtl.bbcode_enabled = true
-	_stats_rtl.fit_content = false
-	_stats_rtl.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	if ThemeHelper.font_mono:
-		_stats_rtl.add_theme_font_override("normal_font", ThemeHelper.font_mono)
-	_stats_rtl.add_theme_font_size_override("normal_font_size", 15)
-	rvb.add_child(_stats_rtl)
+	var tel_sc := ScrollContainer.new()
+	tel_sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	tel_sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	rvb.add_child(tel_sc)
 
-	var cam_help := Label.new()
-	cam_help.text = "RMB Drag: Orbit • MMB/WASD: Pan • Scroll: Zoom\nLMB: Snap Module / Open 3D Terminal • R: Rotate"
-	cam_help.add_theme_font_size_override("font_size", 13)
-	cam_help.add_theme_color_override("font_color", Color(0.62, 0.78, 0.92))
-	rvb.add_child(cam_help)
+	_telemetry_rows_vb = VBoxContainer.new()
+	_telemetry_rows_vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_telemetry_rows_vb.add_theme_constant_override("separation", 5)
+	tel_sc.add_child(_telemetry_rows_vb)
 
-	# 4. Bottom Center Placement Status Banner
-	var bot_bar := PanelContainer.new()
-	bot_bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	bot_bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	bot_bar.offset_left = -310
-	bot_bar.offset_right = 310
-	bot_bar.offset_top = -58
-	bot_bar.offset_bottom = -12
-	_ui_root.add_child(bot_bar)
+	var sep_help := HSeparator.new()
+	sep_help.modulate = Color(0.20, 0.62, 0.90, 0.35)
+	rvb.add_child(sep_help)
+
+	_cam_help_lbl = Label.new()
+	_cam_help_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_cam_help_lbl.add_theme_font_size_override("font_size", 12)
+	_cam_help_lbl.add_theme_color_override("font_color", ThemeHelper.COL_MUTED)
+	rvb.add_child(_cam_help_lbl)
+
+	# 4. FLOATING STATUS PILL (strictly between Left & Right panels and above Bottom Dock)
+	_status_box = PanelContainer.new()
+	_status_box.name = "HangarStatusToast"
+	_status_box.anchor_left = 0.0
+	_status_box.anchor_right = 1.0
+	_status_box.anchor_top = 1.0
+	_status_box.anchor_bottom = 1.0
+	_status_box.offset_left = 348
+	_status_box.offset_right = -348
+	_status_box.offset_top = -120
+	_status_box.offset_bottom = -80
+	_status_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_status_box.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(Color(0.02, 0.045, 0.105, 0.90), Color(0.22, 0.72, 1.0, 0.65), 10, 12, 6))
+	_ui_root.add_child(_status_box)
 
 	_status_banner = Label.new()
 	_status_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_status_banner.text = "Hover any ship module face to attach hardware, or click a 3D Hangar Terminal."
-	bot_bar.add_child(_status_banner)
+	_status_banner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_status_banner.clip_text = true
+	_status_banner.add_theme_font_size_override("font_size", 13)
+	_status_box.add_child(_status_banner)
 
-	# 5. Station Modal Panels
+	# 5. RELOCATED BOTTOM STATION DOCK (y: H-70..H-10)
+	_bottom_dock = PanelContainer.new()
+	_bottom_dock.name = "HangarBottomDock"
+	_bottom_dock.anchor_left = 0.0
+	_bottom_dock.anchor_right = 1.0
+	_bottom_dock.anchor_top = 1.0
+	_bottom_dock.anchor_bottom = 1.0
+	_bottom_dock.offset_left = 12
+	_bottom_dock.offset_right = -12
+	_bottom_dock.offset_top = -70
+	_bottom_dock.offset_bottom = -10
+	_bottom_dock.mouse_filter = Control.MOUSE_FILTER_STOP
+	_bottom_dock.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(Color(0.022, 0.044, 0.10, 0.95), Color(0.22, 0.72, 1.0, 0.82), 13, 2, 8))
+	_ui_root.add_child(_bottom_dock)
+
+	var dock_hb := HBoxContainer.new()
+	dock_hb.add_theme_constant_override("separation", 8)
+	_bottom_dock.add_child(dock_hb)
+
+	var dock_specs := [
+		["shop", "tab_shop", Color(0.18, 0.68, 0.95)],
+		["crew", "tab_crew", Color(0.22, 0.80, 0.56)],
+		["packs", "tab_packs", Color(0.75, 0.36, 0.98)],
+		["upgrades", "tab_upgrades", Color(0.95, 0.68, 0.18)],
+		["achievements", "tab_achievements", Color(0.95, 0.78, 0.24)],
+		["launch", "tab_launch", Color(0.16, 0.85, 0.54)],
+	]
+	for spec in dock_specs:
+		var tid: String = spec[0]
+		var db := Button.new()
+		db.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		db.custom_minimum_size = Vector2(0, 42)
+		db.clip_text = true
+		ThemeHelper.style_accent_button(db, spec[2])
+		db.pressed.connect(func():
+			_station_panels.standalone_settings_mode = false
+			_station_panels.open_tab(tid)
+		)
+		dock_hb.add_child(db)
+		_dock_buttons[tid] = {"btn": db, "key": spec[1]}
+
+	# 6. FULL-SCREEN STATION MODAL OVERLAY
 	_station_panels = HangarStationPanels.new()
 	_station_panels.launch_sector_requested.connect(func(sec_idx: int):
 		request_launch_expedition.emit(sec_idx)
@@ -599,12 +726,21 @@ func _build_hangar_ui() -> void:
 	)
 	_ui_root.add_child(_station_panels)
 
+	# Entrance animations
+	ThemeHelper.animate_entry(_top_bar, 0.0, Vector2(0.99, 0.99))
+	ThemeHelper.animate_entry(_left_panel, 0.04, Vector2(0.97, 0.97))
+	ThemeHelper.animate_entry(_right_panel, 0.07, Vector2(0.97, 0.97))
+	ThemeHelper.animate_entry(_bottom_dock, 0.10, Vector2(0.98, 0.98))
+
 func _create_icon_stat(parent: HBoxContainer, icon_path: String, col: Color) -> Label:
+	var pill := PanelContainer.new()
+	pill.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(Color(0.05, 0.09, 0.18, 0.92), col * Color(1, 1, 1, 0.55), 8, 9, 4))
+	parent.add_child(pill)
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 6)
-	parent.add_child(hb)
+	pill.add_child(hb)
 	var ic := TextureRect.new()
-	ic.custom_minimum_size = Vector2(28, 28)
+	ic.custom_minimum_size = Vector2(22, 22)
 	ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	if ResourceLoader.exists(icon_path):
@@ -613,10 +749,35 @@ func _create_icon_stat(parent: HBoxContainer, icon_path: String, col: Color) -> 
 	var l := Label.new()
 	if ThemeHelper.font_bold:
 		l.add_theme_font_override("font", ThemeHelper.font_bold)
-	l.add_theme_font_size_override("font_size", 21)
+	l.add_theme_font_size_override("font_size", 16)
 	l.add_theme_color_override("font_color", col)
 	hb.add_child(l)
 	return l
+
+func _apply_localization_and_refresh() -> void:
+	if not is_instance_valid(_menu_btn):
+		return
+	_menu_btn.text = "◄ " + L.tr_ui("nav_menu")
+	_top_settings_btn.text = "◈ " + L.tr_ui("tab_settings")
+	_top_launch_btn.text = "▶ " + L.tr_ui("tab_launch")
+	_ed_title_lbl.text = L.tr_ui("hangar_constructor")
+	_btn_place.text = L.tr_ui("mode_place")
+	_btn_rem.text = L.tr_ui("mode_remove")
+	_btn_rot.text = L.tr_ui("rotate_btn")
+	_pal_lbl.text = L.tr_ui("owned_modules_hdr")
+	_blueprint_le.placeholder_text = L.tr_ui("layout_placeholder")
+	_bp_save_btn.text = L.tr_ui("save_layout")
+	_bp_load_btn.text = L.tr_ui("load_layout")
+	_rt_title_lbl.text = L.tr_ui("hangar_telemetry")
+	_cam_help_lbl.text = L.tr_ui("hangar_cam_help")
+	_status_banner.text = L.tr_ui("hangar_status_default")
+
+	for item in _station_labels_3d:
+		var lbl3d: Label3D = item["label"]
+		if is_instance_valid(lbl3d):
+			lbl3d.text = L.tr_ui(str(item["key"])).to_upper()
+
+	_refresh_ui()
 
 func _on_ship_changed() -> void:
 	_rebuild_ship_3d_preview()
@@ -630,44 +791,94 @@ func _refresh_ui() -> void:
 	_credits_lbl.text = "%d CR" % ShipGrid.credits
 	_crystals_lbl.text = "%d CRY" % ShipGrid.crystals
 
-	_buy_cell_btn.text = "BUY EXPANSION CELL (%d CR)" % ShipGrid.get_next_cell_price()
+	_buy_cell_btn.text = L.tr_ui("buy_cell_btn", [ShipGrid.get_next_cell_price()])
 	var c_slots := ShipGrid.get_unlocked_crew_slots()
 	var c_prog := ShipGrid.get_cells_toward_next_crew_slot()
-	_crew_prog_lbl.text = "Crew Slots: %d  (Purchased Cells: %d • Next Slot: %d/10)" % [c_slots, ShipGrid.purchased_expansion_cells, c_prog]
+	_crew_prog_lbl.text = L.tr_ui("crew_slots_info", [c_slots, ShipGrid.purchased_expansion_cells, c_prog])
 	_crew_prog_bar.value = float(c_prog)
+
+	ThemeHelper.style_accent_button(_btn_place, Color(0.18, 0.80, 0.54) if editor_mode == "place" else Color(0.24, 0.36, 0.52))
+	ThemeHelper.style_accent_button(_btn_rem, Color(0.90, 0.32, 0.36) if editor_mode == "remove" else Color(0.38, 0.24, 0.30))
+
+	# Update Bottom Station Dock labels & live achievement badge
+	var ready_ach := AchievementManager.get_claimable_count()
+	for tid in _dock_buttons.keys():
+		var info: Dictionary = _dock_buttons[tid]
+		var db: Button = info["btn"]
+		var txt := L.tr_ui(str(info["key"]))
+		if tid == "achievements" and ready_ach > 0:
+			txt += " [◆%d]" % ready_ach
+		db.text = txt
 
 	# Populate Owned Module Palette
 	for ch in _palette_list.get_children():
 		ch.queue_free()
 
 	var total_hull_avail := ShipGrid.unplaced_expansion_cells + ShipGrid.free_unplaced_hull_cells
-	_add_palette_entry("hull_cell", "Structural Hull Cell", total_hull_avail)
+	_add_palette_entry("hull_cell", L.mod_name("hull_cell"), total_hull_avail)
 
 	for mid in GameData.modules.keys():
 		if mid in ["cockpit_mk1", "hull_cell"]:
 			continue
 		var arr: Array = ShipGrid.owned_equipment.get(mid, [])
 		if not arr.is_empty():
-			_add_palette_entry(mid, str(GameData.modules[mid]["name"]), arr.size())
+			_add_palette_entry(mid, L.mod_name(mid), arr.size())
 
-	# Update Telemetry Readout
+	# Populate Blueprint Load Dropdown
+	_blueprint_opt.clear()
+	for lname in ShipGrid.saved_layouts.keys():
+		_blueprint_opt.add_item(str(lname))
+	_bp_load_btn.disabled = (_blueprint_opt.item_count == 0)
+
+	# Populate Structured Telemetry Stat Rows
+	for ch in _telemetry_rows_vb.get_children():
+		ch.queue_free()
 	var st := ShipGrid.compute_ship_stats()
 	var com: Vector3 = st["center_of_mass"]
-	_stats_rtl.text = (
-		"[color=#7be8ff]MODULES:[/color] %d   [color=#ffd666]BALANCE:[/color] %.0f%%\n" % [int(st["module_count"]), float(st["balance_score"])]
-		+ "[color=#7be8ff]MASS:[/color] %.1f t (Cargo %.1f t)\n" % [float(st["total_mass"]), float(st["cargo_mass"])]
-		+ "[color=#ffd666]CENTER OF MASS:[/color] (%.1f, %.1f, %.1f)m\n" % [com.x, com.y, com.z]
-		+ "[color=#ff9d5c]THRUST:[/color] %.0f kN (%d Engines)\n" % [float(st["total_thrust"]), int(st["engine_count"])]
-		+ "[color=#ff9d5c]ACCEL / TURN:[/color] %.1f m/s² / %.1f rad/s²\n" % [float(st["acceleration"]), float(st["angular_accel"])]
-		+ "[color=#6aff9d]HULL / SHIELD:[/color] %.0f / %.0f\n" % [float(st["total_hp"]), float(st["shield_cap"])]
-		+ "[color=#ffe45e]POWER GEN / DRAW:[/color] +%.0f / -%.0f MW\n" % [float(st["energy_regen"]), float(st["energy_draw"])]
-		+ "[color=#5ceeff]MINING / WEAPON DPS:[/color] %.0f / %.0f\n" % [float(st["mining_dps"]), float(st["weapon_dps"])]
-		+ "[color=#c98bff]MAGNET / CARGO:[/color] %.0fm / %d/%d u" % [float(st["magnet_range"]), ShipGrid.get_current_cargo_units(), int(st["cargo_capacity"])]
-	)
+	_add_telemetry_row(L.tr_ui("stat_modules"), "%d" % int(st["module_count"]), ThemeHelper.COL_CYAN)
+	_add_telemetry_row(L.tr_ui("stat_balance"), "%.0f%%" % float(st["balance_score"]), ThemeHelper.COL_GOLD)
+	_add_telemetry_row(L.tr_ui("stat_mass"), "%.1ft (+%.1ft)" % [float(st["total_mass"]), float(st["cargo_mass"])], Color(0.75, 0.90, 1.0))
+	_add_telemetry_row(L.tr_ui("stat_com"), "(%.1f, %.1f, %.1f)m" % [com.x, com.y, com.z], ThemeHelper.COL_GOLD)
+	_add_telemetry_row(L.tr_ui("stat_thrust"), "%.0f kN (%d)" % [float(st["total_thrust"]), int(st["engine_count"])], Color(1.0, 0.64, 0.34))
+	_add_telemetry_row(L.tr_ui("stat_accel"), "%.1f m/s² • %.1f rad/s²" % [float(st["acceleration"]), float(st["angular_accel"])], Color(1.0, 0.72, 0.38))
+	_add_telemetry_row(L.tr_ui("stat_hull_shield"), "%.0f / %.0f" % [float(st["total_hp"]), float(st["shield_cap"])], ThemeHelper.COL_EMERALD)
+	_add_telemetry_row(L.tr_ui("stat_power"), "+%.0f / -%.0f MW" % [float(st["energy_regen"]), float(st["energy_draw"])], Color(1.0, 0.88, 0.35))
+	_add_telemetry_row(L.tr_ui("stat_dps"), "%.0f / %.0f" % [float(st["mining_dps"]), float(st["weapon_dps"])], ThemeHelper.COL_CYAN)
+	_add_telemetry_row(L.tr_ui("stat_magnet_cargo"), "%.0fm • %d/%d" % [float(st["magnet_range"]), ShipGrid.get_current_cargo_units(), int(st["cargo_capacity"])], Color(0.82, 0.58, 1.0))
+	var bmag := float(st.get("bullet_magnet_range", 0.0))
+	if bmag > 0.0:
+		_add_telemetry_row(L.mod_name("magnetic_radar"), "%.0fm" % bmag, Color(0.98, 0.44, 1.0))
+
+func _add_telemetry_row(lbl_txt: String, val_txt: String, val_col: Color) -> void:
+	var box := PanelContainer.new()
+	box.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(Color(0.04, 0.075, 0.155, 0.88), Color(0.16, 0.42, 0.70, 0.42), 7, 9, 4))
+	_telemetry_rows_vb.add_child(box)
+
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 6)
+	box.add_child(hb)
+
+	var k := Label.new()
+	k.text = lbl_txt
+	k.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	k.clip_text = true
+	k.add_theme_font_size_override("font_size", 12)
+	k.add_theme_color_override("font_color", ThemeHelper.COL_MUTED)
+	hb.add_child(k)
+
+	var v := Label.new()
+	v.text = val_txt
+	if ThemeHelper.font_mono:
+		v.add_theme_font_override("font", ThemeHelper.font_mono)
+	v.add_theme_font_size_override("font_size", 13)
+	v.add_theme_color_override("font_color", val_col)
+	hb.add_child(v)
 
 func _add_palette_entry(mid: String, label_str: String, qty: int) -> void:
 	var btn := Button.new()
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	btn.clip_text = true
+	btn.custom_minimum_size = Vector2(0, 34)
 	btn.text = "%s  (x%d)" % [label_str, qty]
 	if selected_mod_id == mid and editor_mode == "place":
 		ThemeHelper.style_accent_button(btn, Color(0.20, 0.78, 1.0))
@@ -682,12 +893,22 @@ func _add_palette_entry(mid: String, label_str: String, qty: int) -> void:
 	)
 	_palette_list.add_child(btn)
 
+func _is_screen_pos_over_hud(screen_pos: Vector2) -> bool:
+	if _station_panels.visible:
+		return true
+	for pnl in [_top_bar, _left_panel, _right_panel, _bottom_dock]:
+		if is_instance_valid(pnl) and pnl.visible and pnl.get_global_rect().has_point(screen_pos):
+			return true
+	var hovered_ctrl := get_viewport().gui_get_hovered_control()
+	if is_instance_valid(hovered_ctrl) and hovered_ctrl != _ui_root:
+		return true
+	return false
+
 # ==============================================================================
 # 3D RAYCAST INTERACTION, CAMERA ORBIT/PAN/ZOOM & ANIMATION LOOP
 # ==============================================================================
 func _process(delta: float) -> void:
 	_anim_time += delta
-	# Animate overhead gantry crane & robotic maintenance arms
 	if is_instance_valid(_gantry_node):
 		_gantry_node.position.z = -2.0 + sin(_anim_time * 0.45) * 6.5
 	for i in range(_robot_arms.size()):
@@ -697,20 +918,21 @@ func _process(delta: float) -> void:
 	if _station_panels.visible:
 		return
 
-	# Smooth WASD / Q-E Hangar Editor Camera Pan & Orbit
-	var pan := Vector3.ZERO
-	if Input.is_key_pressed(KEY_W): pan.z -= 1.0
-	if Input.is_key_pressed(KEY_S): pan.z += 1.0
-	if Input.is_key_pressed(KEY_A): pan.x -= 1.0
-	if Input.is_key_pressed(KEY_D): pan.x += 1.0
-	if pan.length_squared() > 0.01:
-		var yaw_basis := Basis(Vector3.UP, deg_to_rad(_goal_yaw))
-		_goal_target += (yaw_basis * pan.normalized()) * delta * 11.0
+	var typing_text := is_instance_valid(_blueprint_le) and _blueprint_le.has_focus()
+	if not typing_text:
+		var pan := Vector3.ZERO
+		if Input.is_key_pressed(KEY_W): pan.z -= 1.0
+		if Input.is_key_pressed(KEY_S): pan.z += 1.0
+		if Input.is_key_pressed(KEY_A): pan.x -= 1.0
+		if Input.is_key_pressed(KEY_D): pan.x += 1.0
+		if pan.length_squared() > 0.01:
+			var yaw_basis := Basis(Vector3.UP, deg_to_rad(_goal_yaw))
+			_goal_target += (yaw_basis * pan.normalized()) * delta * 11.0
 
-	if Input.is_key_pressed(KEY_Q):
-		_goal_yaw -= 75.0 * delta
-	if Input.is_key_pressed(KEY_E):
-		_goal_yaw += 75.0 * delta
+		if Input.is_key_pressed(KEY_Q):
+			_goal_yaw -= 75.0 * delta
+		if Input.is_key_pressed(KEY_E):
+			_goal_yaw += 75.0 * delta
 
 	var cam_alpha := 1.0 - exp(-18.0 * delta)
 	_cam_yaw = lerpf(_cam_yaw, _goal_yaw, cam_alpha)
@@ -720,35 +942,50 @@ func _process(delta: float) -> void:
 	_apply_camera_transform()
 
 func _unhandled_input(event: InputEvent) -> void:
+	var typing_text := is_instance_valid(_blueprint_le) and _blueprint_le.has_focus()
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_ESCAPE and _station_panels.visible:
 			_station_panels.close_panel()
 			return
-		if _station_panels.visible:
+		if _station_panels.visible or typing_text:
 			return
 		if event.keycode == KEY_R:
 			current_yaw = (current_yaw + 1) % 4
-			AudioManager.play_sfx("ui_hover", 0.06, 0.6)
+			AudioManager.play_sfx("ui_hover", 0.05, 0.45)
 			_update_hover_validation()
 			_refresh_ghost_visual()
 		elif event.keycode == KEY_X:
 			editor_mode = "remove" if editor_mode != "remove" else "place"
 			_refresh_ghost_visual()
-			_status_banner.text = "REMOVE MODE: Click an installed module to detach it." if editor_mode == "remove" else "PLACE MODE: Hover a module face to attach."
+			_refresh_ui()
+			_status_banner.text = L.tr_ui("status_remove_hint") if editor_mode == "remove" else L.tr_ui("status_place_hint")
 
 	if _station_panels.visible:
 		return
 
 	if event is InputEventMouseButton:
+		if not event.pressed:
+			if event.button_index == MOUSE_BUTTON_RIGHT:
+				_orbit_dragging = false
+			elif event.button_index == MOUSE_BUTTON_MIDDLE:
+				_pan_dragging = false
+			return
+
+		if _is_screen_pos_over_hud(event.position):
+			return
+
+		if typing_text:
+			_blueprint_le.release_focus()
+
 		if event.button_index == MOUSE_BUTTON_RIGHT:
-			_orbit_dragging = event.pressed
+			_orbit_dragging = true
 		elif event.button_index == MOUSE_BUTTON_MIDDLE:
-			_pan_dragging = event.pressed
-		elif event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
+			_pan_dragging = true
+		elif event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			_goal_dist = clampf(_goal_dist - 1.6, 5.5, 36.0)
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			_goal_dist = clampf(_goal_dist + 1.6, 5.5, 36.0)
-		elif event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		elif event.button_index == MOUSE_BUTTON_LEFT:
 			_handle_left_click(event.position)
 
 	elif event is InputEventMouseMotion:
@@ -759,7 +996,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			var right := _cam.global_transform.basis.x
 			var up := _cam.global_transform.basis.y
 			_goal_target -= (right * event.relative.x - up * event.relative.y) * 0.025
-		else:
+		elif not _is_screen_pos_over_hud(event.position):
 			_update_mouse_ray(event.position)
 
 func _update_mouse_ray(screen_pos: Vector2) -> void:
@@ -771,12 +1008,11 @@ func _update_mouse_ray(screen_pos: Vector2) -> void:
 	if not hit.is_empty():
 		var col: Object = hit["collider"]
 		if col is Node and col.has_meta("station_tab"):
-			var st_tab := str(col.get_meta("station_tab"))
-			_status_banner.text = "Click 3D Terminal to open %s" % st_tab.to_upper()
+			var lkey := str(col.get_meta("station_loc_key"))
+			_status_banner.text = L.tr_ui("status_click_station", [L.tr_ui(lkey)])
 			return
 		elif col is Node and col.has_meta("grid_uid"):
 			var nrm: Vector3 = hit["normal"]
-			# Snap normal to nearest cardinal grid face
 			var snap_n := Vector3i.ZERO
 			if absf(nrm.x) >= absf(nrm.y) and absf(nrm.x) >= absf(nrm.z):
 				snap_n = Vector3i(1 if nrm.x > 0 else -1, 0, 0)
@@ -800,13 +1036,21 @@ func _update_hover_validation() -> void:
 	if editor_mode == "remove":
 		var rchk := ShipGrid.can_remove_at(hovered_anchor)
 		hover_valid = bool(rchk["ok"])
-		hover_reason = str(rchk.get("reason", "Click to remove module."))
-		_status_banner.text = "REMOVE (%d,%d,%d): %s" % [hovered_anchor.x, hovered_anchor.y, hovered_anchor.z, ("Ready to detach" if hover_valid else hover_reason)]
+		hover_reason = L.localize_reason(str(rchk.get("reason", "")))
+		_status_banner.text = "%s (%d,%d,%d): %s" % [
+			L.tr_ui("mode_remove"),
+			hovered_anchor.x, hovered_anchor.y, hovered_anchor.z,
+			(L.tr_ui("status_remove_hint") if hover_valid else hover_reason)
+		]
 	else:
 		var chk := ShipGrid.validate_placement(selected_mod_id, hovered_anchor, current_yaw, false)
 		hover_valid = bool(chk["ok"])
-		hover_reason = str(chk["reason"])
-		_status_banner.text = "BUILD [%s] at (%d,%d,%d): %s" % [selected_mod_id, hovered_anchor.x, hovered_anchor.y, hovered_anchor.z, hover_reason]
+		hover_reason = L.localize_reason(str(chk["reason"]))
+		_status_banner.text = "[%s] (%d,%d,%d): %s" % [
+			L.mod_name(selected_mod_id),
+			hovered_anchor.x, hovered_anchor.y, hovered_anchor.z,
+			hover_reason
+		]
 
 func _handle_left_click(screen_pos: Vector2) -> void:
 	var origin := _cam.project_ray_origin(screen_pos)
@@ -818,7 +1062,8 @@ func _handle_left_click(screen_pos: Vector2) -> void:
 	var col: Object = hit["collider"]
 	if col is Node and col.has_meta("station_tab"):
 		var tab := str(col.get_meta("station_tab"))
-		AudioManager.play_sfx("ui_click", 0.03, 0.8)
+		AudioManager.play_sfx("ui_click", 0.03, 0.78)
+		_station_panels.standalone_settings_mode = false
 		_station_panels.open_tab(tab)
 		return
 
@@ -830,7 +1075,7 @@ func _handle_left_click(screen_pos: Vector2) -> void:
 			SaveManager.save_game()
 		else:
 			AudioManager.play_sfx("ui_error", 0.03, 0.7)
-			_status_banner.text = str(res["reason"])
+			_status_banner.text = L.localize_reason(str(res["reason"]))
 	else:
 		var res := ShipGrid.place_module(selected_mod_id, hovered_anchor, current_yaw)
 		if res["ok"]:
@@ -840,4 +1085,4 @@ func _handle_left_click(screen_pos: Vector2) -> void:
 			_refresh_ui()
 		else:
 			AudioManager.play_sfx("ui_error", 0.03, 0.7)
-			_status_banner.text = str(res["reason"])
+			_status_banner.text = L.localize_reason(str(res["reason"]))

@@ -1,7 +1,7 @@
-SPACE MINER: BUILD & CONQUER — THIRD-PARTY SOFTWARE & FONT NOTICES
-====================================================================
+SPACE MINER: BUILD & CONQUER — THIRD-PARTY SOFTWARE, FONT & ART NOTICES
+=======================================================================
 
-1. GODOT ENGINE
+1. GODOT ENGINE (MIT License)
 This game uses Godot Engine, available under the following license:
 
 Copyright (c) 2014-present Godot Engine contributors.
@@ -32,7 +32,13 @@ Portions of this software are copyright (c) 1996-2024 The FreeType Project
 3. MBED TLS
 Copyright The Mbed TLS Contributors. Licensed under the Apache License 2.0.
 
-4. FONTS (SIL OPEN FONT LICENSE 1.1)
-- Orbitron: Copyright (c) Matt McInerney, licensed under SIL Open Font License 1.1.
-- Rajdhani: Copyright (c) Indian Type Foundry, licensed under SIL Open Font License 1.1.
-- Share Tech Mono: Copyright (c) Carrois Corporate & Edenspiekermann AG, SIL OFL 1.1.
+4. BUNDLED MULTILINGUAL FONTS (SIL OPEN FONT LICENSE 1.1)
+- Exo 2: Copyright (c) Natanael Gama, licensed under SIL Open Font License 1.1.
+- JetBrains Mono: Copyright (c) JetBrains s.r.o., licensed under SIL Open Font License 1.1.
+- Noto Sans CJK (SC/KR): Copyright (c) Google LLC, licensed under SIL Open Font License 1.1.
+- M PLUS 1p: Copyright (c) M+ FONTS PROJECT, licensed under SIL Open Font License 1.1.
+
+5. 3D REFERENCE MODELS USED IN PRE-RENDERED CARD ILLUSTRATIONS
+- DamagedHelmet: Copyright (c) Leonardo Carrion, licensed under CC-BY-4.0 (Khronos glTF-Sample-Assets).
+- SciFiHelmet & FlightHelmet: Public Domain CC0-1.0 (Khronos glTF-Sample-Assets).
+- Vanguard Soldier Armor: Licensed under Apache License 2.0 (Google model-viewer shared-assets).
