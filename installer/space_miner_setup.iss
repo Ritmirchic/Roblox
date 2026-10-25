@@ -1,5 +1,6 @@
 ; Inno Setup 6 Script for SPACE MINER: BUILD & CONQUER (64-bit Windows)
 #define MyAppName "SPACE MINER: BUILD & CONQUER"
+#define MySafeFolderName "SPACE MINER - BUILD & CONQUER"
 #define MyAppExeName "SPACE_MINER.exe"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Orbital Forge Interactive"
@@ -11,7 +12,7 @@ AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} v{#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\SpaceMinerBuildAndConquer
-DefaultGroupName={#MyAppName}
+DefaultGroupName={#MySafeFolderName}
 DisableProgramGroupPage=yes
 DisableStartupPrompt=yes
 CloseApplications=no
@@ -43,10 +44,10 @@ Source: "..\README_CONTROLS.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\THIRDPARTY_LICENSES.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
-Name: "{group}\Controls & Quick Guide"; Filename: "{app}\README_CONTROLS.txt"
-Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\{#MySafeFolderName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
+Name: "{group}\Controls and Quick Guide"; Filename: "{app}\README_CONTROLS.txt"
+Name: "{group}\Uninstall {#MySafeFolderName}"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#MySafeFolderName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
