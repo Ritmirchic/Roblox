@@ -31,7 +31,7 @@ jobs:
       - name: Verify artifacts exist
         run: |
           ls -la release/
-          sha256sum -c release/SHA256SUMS.txt
+          cd release && sha256sum -c SHA256SUMS.txt
 
       - name: Upload artifacts to the release
         env:
