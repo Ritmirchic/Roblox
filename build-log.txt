@@ -1,0 +1,163 @@
+==============================================
+ SPACE MINER - RELEASE BUILD
+==============================================
+
+>> 1. automated tests
+
+============================================
+ SPACE MINER - AUTOMATED TEST SUITE
+============================================
+
+[suite] gameplay.test.ts
+[suite] progression.test.ts
+[suite] ship.test.ts
+
+  PASS  module catalogue covers every required category with complete data
+  PASS  module upgrades scale stats and cost more each level
+  PASS  mining throughput reflects modules, levels, damage and crew buffs
+  PASS  weapon DPS aggregates damage x fire rate across mounts
+  PASS  shield, cargo, energy and magnet aggregation behave as designed
+  PASS  magnet pull strengthens as chunks get closer
+  PASS  enemy roster is complete and scales with sector danger
+  PASS  all five sectors are distinct and reference valid resources
+  PASS  ore valuation and rare-mineral economics are consistent
+  PASS  progression tier grows with permanent power
+  PASS  buying and installing a module moves it through inventory correctly
+  PASS  module upgrade spends credits, raises level and restores integrity
+  PASS  deterministic RNG is reproducible and statistically sane
+  PASS  weighted selection honours its weights
+  PASS  crew database has 40+ unique cards with unique numbers and real bonuses
+  PASS  crew bonuses aggregate multiplicatively and ignore duplicates
+  PASS  crew capacity is clamped to unlocked slots
+  PASS  active upgrade effects merge with crew bonuses
+  PASS  every pack yields exactly 3 cards
+  PASS  pack odds are published accurately and sum to 1
+  PASS  pack rarity floors are respected
+  PASS  duplicates convert to crystals instead of vanishing
+  PASS  pity timer guarantees rare or better within 8 packs
+  PASS  observed pack rarity distribution matches the published table
+  PASS  upgrade slots: 3 default, 4 purchased, 5 with the rare card, never more
+  PASS  fifth slot drops at 1% and never unlocks twice
+  PASS  equipping active upgrades respects slots and blocks duplicates
+  PASS  exactly 5 minute / 3 hourly / 7 daily / 15 weekly achievements are active
+  PASS  period indices are UTC anchored and rotate on schedule
+  PASS  minute achievements reset after 60 seconds and clear progress
+  PASS  hourly, daily and weekly rotations behave independently
+  PASS  claiming requires completion and offline time is handled
+  PASS  achievement targets scale with progression tier but stay reachable
+  PASS  game state round-trips through the versioned save format
+  PASS  corrupt and tampered saves are rejected safely
+  PASS  equipping crew beyond unlocked slots is impossible
+  PASS  sector unlocking spends credits exactly once
+  PASS  starter ship has a cockpit, engine, laser and is structurally connected
+  PASS  rotated footprint swaps axes correctly
+  PASS  orientation direction vectors are unit axis vectors
+  PASS  placement is rejected outside owned cells
+  PASS  overlapping placement is rejected
+  PASS  a second cockpit is rejected
+  PASS  surface-mounted modules need a clear facing cell
+  PASS  disconnected placement is rejected
+  PASS  removal that would split the hull is refused, legal removal succeeds
+  PASS  expansion cells must touch the frame and are tracked separately
+  PASS  crew slot formula: floor(purchasedCells / 10)
+  PASS  cell prices increase progressively
+  PASS  mass and centre of mass react to module layout
+  PASS  thrusters report their mount point and push opposite to their facing
+  PASS  damaged modules lose efficiency and reduce aggregated stats
+  PASS  ship serialises and deserialises losslessly
+  PASS  corrupt ship data falls back to a working starter frame
+
+--------------------------------------------
+ PASSED: 54    FAILED: 0    TOTAL: 54
+--------------------------------------------
+
+
+>> 2. type check
+   no type errors
+
+>> 3. web build
+
+> space-miner-build-and-conquer@1.0.0 build
+> vite build
+
+vite v5.4.21 building for production...
+transforming...
+✓ 43 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.79 kB │ gzip:   0.51 kB
+dist/assets/index-XzZF7f46.css    8.73 kB │ gzip:   2.51 kB
+dist/assets/index-BRtycQMH.js   736.22 kB │ gzip: 203.00 kB
+✓ built in 2.23s
+
+>> 4. application icon
+icon written: /home/user/Roblox/build/spaceminer.ico (95420 bytes, 7 sizes)
+
+>> 5. native Windows binaries (x86_64-windows-gnu)
+   SpaceMiner.exe, setup_stub.exe, uninstall.exe built
+
+>> 6. launcher self-test (same C core, POSIX build)
+launcher self-test passed
+
+>> 7. live HTTP serving test against the real build output
+   ok   index.html (200)
+   ok   bundle (200)
+   ok   stylesheet (200)
+   ok   path traversal blocked (403)
+
+>> 8. packaging
+
+[1/6] staging the portable Windows build
+  staged 7 files
+[2/6] building SPACE_MINER_WINDOWS.zip
+  461.2 KB
+[3/6] packing SPACE_MINER_SETUP.exe
+  8 payload entries, 1.53 MB
+[4/6] verifying the installer payload with the native extractor
+  extracted and byte-compared 8 files - all match
+[5/6] building SPACE_MINER_SOURCE.zip
+  275.5 KB
+[6/6] checksums
+  SPACE_MINER_WINDOWS.zip      461.2 KB  sha256 642c9d29da2bb03489f960df7543723d6414eb18f39727282fb08721b6f98697
+  SPACE_MINER_SETUP.exe         1.53 MB  sha256 ccc01155d7dfd350b5eb3434bcc0be1e1a1045fe00562e40967e5b0feeec277c
+  SPACE_MINER_SOURCE.zip       275.5 KB  sha256 72451539ce430a689355e48f381d3397b86f41d088cc566eb6753479de445ad8
+
+Release artifacts ready in /home/user/Roblox/release
+
+
+>> 9. PE verification
+  release/SPACE_MINER_SETUP.exe
+    machine      : x86-64 PE32+
+    subsystem    : Windows GUI
+    sections     : .text, .rdata, .buildid, .data, .pdata, .tls, .rsrc, .reloc
+    resources    : 96760 bytes (icon + version info)
+    imports      : advapi32.dll, comctl32.dll, gdi32.dll, kernel32.dll, ole32.dll, shell32.dll, user32.dll, ws2_32.dll
+    size         : 1,607,044 bytes
+  build/SpaceMiner.exe
+    machine      : x86-64 PE32+
+    subsystem    : Windows GUI
+    sections     : .text, .rdata, .buildid, .data, .pdata, .tls, .rsrc, .reloc
+    resources    : 96760 bytes (icon + version info)
+    imports      : kernel32.dll, shell32.dll, user32.dll, ws2_32.dll
+    size         : 256,000 bytes
+  build/uninstall.exe
+    machine      : x86-64 PE32+
+    subsystem    : Windows GUI
+    sections     : .text, .rdata, .buildid, .data, .pdata, .tls, .rsrc, .reloc
+    resources    : 96760 bytes (icon + version info)
+    imports      : advapi32.dll, kernel32.dll, shell32.dll, user32.dll
+    size         : 249,344 bytes
+
+  PE verification passed
+
+==============================================
+ BUILD COMPLETE
+==============================================
+total 2324
+drwxr-xr-x  2 user user    4096 Oct 25 17:04 .
+drwxr-xr-x 12 user user    4096 Oct 25 17:04 ..
+-rw-r--r--  1 user user     267 Oct 25 17:04 SHA256SUMS.txt
+-rw-r--r--  1 user user 1607044 Oct 25 17:04 SPACE_MINER_SETUP.exe
+-rw-r--r--  1 user user  282143 Oct 25 17:04 SPACE_MINER_SOURCE.zip
+-rw-r--r--  1 user user  472227 Oct 25 17:04 SPACE_MINER_WINDOWS.zip
+EXIT=0

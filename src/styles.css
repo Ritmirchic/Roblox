@@ -1,0 +1,76 @@
+:root{
+  --bg:#020412; --panel:#0a1026; --panel2:#101a3a; --accent:#00e5ff; --accent2:#7b61ff; --gold:#ffb700; --green:#00ff9d;
+  --rare:#3b82f6; --epic:#a855f7; --legend:#f59e0b; --mythic:#ec4899; --secret:#00ffd0;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:radial-gradient(1200px 800px at 50% 0%, #0d1a4a 0%, #020412 60%);font-family:'Exo 2',system-ui,sans-serif;color:#e6eaff}
+#app{width:100vw;height:100vh;position:relative;overflow:hidden}
+canvas#gameCanvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.ui-layer{position:absolute;inset:0;pointer-events:none;z-index:10}
+.ui-layer > *{pointer-events:auto}
+.topbar{position:absolute;top:0;left:0;right:0;height:64px;background:linear-gradient(180deg,rgba(10,16,38,0.95),rgba(10,16,38,0.72));backdrop-filter:blur(12px);border-bottom:1px solid rgba(0,229,255,0.25);display:flex;align-items:center;gap:18px;padding:0 18px;z-index:20}
+.brand{font-family:'Orbitron',sans-serif;font-weight:900;letter-spacing:0.08em;font-size:15px;color:#fff;text-shadow:0 0 12px rgba(0,229,255,0.8)}
+.brand span{color:var(--accent)}
+.stats{display:flex;gap:12px;align-items:center;margin-left:auto}
+.pill{padding:8px 14px;border-radius:999px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);font-family:'JetBrains Mono',monospace;font-size:13px;display:flex;gap:8px;align-items:center}
+.pill b{color:var(--accent)}
+.pill.gold{border-color:rgba(255,183,0,0.4);background:rgba(255,183,0,0.08)}
+.pill.crystal{border-color:rgba(0,229,255,0.4);background:rgba(0,229,255,0.08)}
+.btn{appearance:none;border:0;cursor:pointer;padding:10px 16px;border-radius:10px;font-weight:700;font-family:'Orbitron',sans-serif;letter-spacing:0.06em;font-size:11px;transition:all .18s;background:linear-gradient(180deg,#00e5ff,#0097b2);color:#001018;box-shadow:0 6px 18px rgba(0,229,255,0.35)}
+.btn:hover{transform:translateY(-1px);box-shadow:0 10px 24px rgba(0,229,255,0.5)}
+.btn.ghost{background:rgba(255,255,255,0.06);color:#dbe6ff;border:1px solid rgba(255,255,255,0.14);box-shadow:none}
+.btn.ghost:hover{background:rgba(255,255,255,0.1)}
+.btn.gold{background:linear-gradient(180deg,#ffb700,#ff8a00);color:#1a0f00}
+.btn.small{padding:7px 10px;font-size:10px;border-radius:8px}
+.layout{position:absolute;inset:64px 0 0 0;display:flex}
+.sidebar{width:260px;background:linear-gradient(180deg,rgba(8,14,34,0.96),rgba(6,10,26,0.96));border-right:1px solid rgba(0,229,255,0.15);padding:16px;display:flex;flex-direction:column;gap:10px;overflow:auto}
+.navbtn{width:100%;text-align:left;padding:12px 14px;border-radius:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);color:#cfe0ff;cursor:pointer;font-weight:700;letter-spacing:0.05em;font-size:11px;display:flex;align-items:center;gap:10px;transition:all .15s}
+.navbtn.active{background:linear-gradient(90deg,rgba(0,229,255,0.18),rgba(123,97,255,0.18));border-color:rgba(0,229,255,0.45);color:#fff;box-shadow:0 0 18px rgba(0,229,255,0.25) inset}
+.navbtn:hover{transform:translateX(2px)}
+.navico{width:28px;height:28px;border-radius:8px;background:rgba(0,229,255,0.12);display:grid;place-items:center;font-size:14px;border:1px solid rgba(0,229,255,0.18)}
+.panel{flex:1;background:rgba(2,4,18,0.72);backdrop-filter:blur(10px);overflow:hidden;display:flex;flex-direction:column}
+.panelHead{padding:16px 18px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;gap:12px}
+.panelHead h2{font-family:'Orbitron',sans-serif;font-size:13px;letter-spacing:0.12em;color:#fff}
+.cardGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;padding:16px;overflow:auto}
+.shopGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;padding:16px;overflow:auto}
+.mini{font-size:11px;opacity:0.7;letter-spacing:0.06em}
+.kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:14px 16px}
+.kpiCard{background:linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02));border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px}
+.kpiCard b{font-family:'JetBrains Mono',monospace;color:var(--accent)}
+.builderBar{display:flex;gap:10px;align-items:center;padding:10px 16px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);flex-wrap:wrap}
+.builderCanvasWrap{flex:1;position:relative;overflow:hidden;background:radial-gradient(800px 600px at 50% 40%, #0b1433, #020412)}
+.hud{position:absolute;left:16px;bottom:16px;display:flex;gap:10px;flex-wrap:wrap}
+.hudCard{background:rgba(10,16,38,0.88);border:1px solid rgba(0,229,255,0.2);border-radius:12px;padding:10px 12px;min-width:160px;backdrop-filter:blur(8px)}
+.modalBackdrop{position:absolute;inset:0;background:rgba(2,5,18,0.72);backdrop-filter:blur(10px);display:grid;place-items:center;z-index:50;padding:20px}
+.modal{width:min(980px,96vw);max-height:92vh;overflow:auto;background:linear-gradient(180deg,#0b1430,#080e24);border:1px solid rgba(0,229,255,0.2);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,0.6)}
+.cardPackStage{position:relative;height:420px;background:radial-gradient(600px 400px at 50% 30%, rgba(123,97,255,0.35), transparent 70%), radial-gradient(700px 500px at 50% 80%, rgba(0,229,255,0.18), transparent 70%);overflow:hidden;display:grid;place-items:center}
+.pack{width:170px;height:230px;border-radius:14px;background:linear-gradient(180deg,#1a2550,#0c1230);border:1px solid rgba(255,255,255,0.18);box-shadow:0 20px 40px rgba(0,0,0,0.5), 0 0 30px rgba(0,229,255,0.25);display:grid;place-items:center;position:relative;transform-style:preserve-3d;animation:float 2.2s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0) rotateY(-6deg)}50%{transform:translateY(-10px) rotateY(6deg)}}
+.pack:after{content:"SPACE MINER";font-family:'Orbitron',sans-serif;letter-spacing:0.12em;font-size:10px;color:rgba(255,255,255,0.9);text-shadow:0 0 10px rgba(0,229,255,0.8)}
+.rarityGlow{position:absolute;inset:-8px;border-radius:18px;opacity:0.0;filter:blur(12px);transition:.4s}
+.card3d{width:170px;height:240px;border-radius:12px;overflow:hidden;position:relative;background:#0e1430;border:1px solid rgba(255,255,255,0.12);transform-style:preserve-3d;transition:transform .6s cubic-bezier(.2,.8,.2,1);box-shadow:0 12px 30px rgba(0,0,0,0.5)}
+.card3d:hover{transform:translateY(-6px) rotateX(6deg)}
+.cardArt{height:58%;position:relative;overflow:hidden;background:linear-gradient(180deg,#0f1b4a,#060a1e)}
+.cardArt canvas{width:100%;height:100%;display:block}
+.cardMeta{padding:8px 10px}
+.badge{font-size:9px;letter-spacing:0.14em;padding:4px 7px;border-radius:999px;border:1px solid rgba(255,255,255,0.14);background:rgba(255,255,255,0.06)}
+.badge.common{color:#cbd5e1;border-color:rgba(203,213,225,0.3)}
+.badge.uncommon{color:#4ade80;border-color:rgba(74,222,128,0.4);background:rgba(74,222,128,0.08)}
+.badge.rare{color:#60a5fa;border-color:rgba(96,165,250,0.45);background:rgba(96,165,250,0.1)}
+.badge.epic{color:#c084fc;border-color:rgba(192,132,252,0.5);background:rgba(192,132,252,0.12)}
+.badge.legendary{color:#fbbf24;border-color:rgba(251,191,36,0.55);background:rgba(251,191,36,0.12)}
+.badge.mythic{color:#f472b6;border-color:rgba(244,114,182,0.55);background:rgba(244,114,182,0.12)}
+.badge.secret{color:#00ffd0;border-color:rgba(0,255,208,0.6);background:rgba(0,255,208,0.1);box-shadow:0 0 12px rgba(0,255,208,0.4)}
+.achGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;padding:14px}
+.achCard{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:12px;display:flex;gap:12px;align-items:center}
+.progress{height:6px;background:rgba(255,255,255,0.08);border-radius:999px;overflow:hidden}
+.progress i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));width:50%}
+.shipStats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:12px}
+.stat{padding:10px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06)}
+.stat b{display:block;font-family:'JetBrains Mono',monospace;color:#fff}
+.tooltip{position:absolute;pointer-events:none;background:rgba(8,14,36,0.95);border:1px solid rgba(0,229,255,0.25);padding:8px 10px;border-radius:10px;font-size:11px;max-width:260px;z-index:40}
+.spaceHud{position:absolute;left:16px;top:80px;background:rgba(8,14,36,0.85);border:1px solid rgba(0,229,255,0.18);border-radius:14px;padding:12px;min-width:260px}
+.crosshair{position:absolute;left:50%;top:50%;width:20px;height:20px;transform:translate(-50%,-50%);border:1px solid rgba(0,229,255,0.9);border-radius:999px;box-shadow:0 0 12px rgba(0,229,255,0.8)}
+.crosshair:after{content:"";position:absolute;left:50%;top:50%;width:4px;height:4px;background:var(--accent);border-radius:999px;transform:translate(-50%,-50%)}
+.toastStack{position:absolute;right:14px;bottom:14px;display:flex;flex-direction:column;gap:8px;z-index:60;pointer-events:none}
+.toast{padding:10px 12px;border-radius:10px;background:rgba(10,16,38,0.9);border:1px solid rgba(0,229,255,0.2);font-size:12px;box-shadow:0 10px 30px rgba(0,0,0,0.4)}
