@@ -19,6 +19,10 @@ Open the Vite URL in a modern WebGL-enabled desktop browser. `npm run build` cre
 - Flight: **W/A/S/D** to thrust and turn, mouse-drag to steer, **Shift** to boost, click a mineral body to target it, hold **Space** to mine (or fire an installed cannon), **Esc** to return to the hangar.
 - The Ship Store installs modules; Structural Cells expand the mounting capacity. Crew berths unlock at exactly each tenth purchased expansion cell.
 
+## Download archives
+
+The current browser and source archives are in [`distribution/`](distribution/). This is a repository-hosted download fallback; the environment could create the GitHub preview release but could not upload release attachments. There is no Windows executable in this preview.
+
 ## Project checks
 
 ```sh
