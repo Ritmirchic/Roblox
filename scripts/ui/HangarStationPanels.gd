@@ -11,10 +11,11 @@ var standalone_settings_mode: bool = false
 var _modal_box: PanelContainer
 var _nav_strip: HBoxContainer
 var _title_lbl: Label
+var _toast_lbl: Label
 var _hdr_credits_lbl: Label
 var _hdr_crystals_lbl: Label
 var _close_btn: Button
-var _body_root: Control
+var _body_root: MarginContainer
 var _pack_modal: PackOpeningModal
 var _ach_timer_lbl: Label = null
 var _ach_subcat: String = "minute"
@@ -51,13 +52,13 @@ func _process(delta: float) -> void:
 		return
 	_anim_clock += delta
 	if current_tab == "achievements" and is_instance_valid(_ach_timer_lbl):
-		var rem := AchievementManager.get_seconds_until_reset(_ach_subcat)
+		var rem: int = AchievementManager.get_seconds_until_reset(_ach_subcat)
 		_ach_timer_lbl.text = L.tr_ui("ach_timer", [_format_duration(rem), AchievementManager.collected_album.size()])
 	if current_tab == "packs" and not ThemeHelper.reduced_motion:
 		for i in range(_floating_packs.size()):
-			var fp := _floating_packs[i]
+			var fp: Control = _floating_packs[i]
 			if is_instance_valid(fp):
-				fp.position.y = sin(_anim_clock * 2.3 + float(i) * 1.6) * 5.5
+				fp.position.y = 6.0 + sin(_anim_clock * 2.3 + float(i) * 1.6) * 5.0
 
 func _format_duration(sec: int) -> String:
 	var d := sec / 86400
@@ -70,6 +71,14 @@ func _format_duration(sec: int) -> String:
 		return "%02dh %02dm %02ds" % [h, m, s]
 	return "%02dm %02ds" % [m, s]
 
+func show_toast(msg: String, is_err: bool = false) -> void:
+	if not is_instance_valid(_toast_lbl):
+		return
+	_toast_lbl.text = msg
+	_toast_lbl.add_theme_color_override("font_color", ThemeHelper.COL_RED if is_err else ThemeHelper.COL_EMERALD)
+	if is_err:
+		AudioManager.play_sfx("ui_error", 0.03, 0.72)
+
 func _build_shell() -> void:
 	var dim := ColorRect.new()
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -81,25 +90,28 @@ func _build_shell() -> void:
 	add_child(dim)
 
 	_modal_box = PanelContainer.new()
+	_modal_box.name = "StationModalBox"
 	_modal_box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_modal_box.offset_left = 36
-	_modal_box.offset_right = -36
-	_modal_box.offset_top = 64
-	_modal_box.offset_bottom = -18
+	_modal_box.offset_left = 32
+	_modal_box.offset_right = -32
+	_modal_box.offset_top = 62
+	_modal_box.offset_bottom = -16
 	_modal_box.mouse_filter = Control.MOUSE_FILTER_STOP
 	_modal_box.add_theme_stylebox_override(
 		"panel",
-		ThemeHelper.make_panel_style(Color(0.024, 0.046, 0.105, 0.97), Color(0.22, 0.78, 1.0, 0.88), 16, 2, 18)
+		ThemeHelper.make_panel_style(Color(0.024, 0.046, 0.105, 0.97), Color(0.22, 0.78, 1.0, 0.88), 16, 2, 16)
 	)
 	add_child(_modal_box)
 
 	var main_vb := VBoxContainer.new()
-	main_vb.add_theme_constant_override("separation", 10)
+	main_vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	main_vb.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main_vb.add_theme_constant_override("separation", 8)
 	_modal_box.add_child(main_vb)
 
-	# Top Bar: Title + Live Balances + Close [ESC]
+	# Top Bar: Title + Toast + Live Balances + Close [ESC]
 	var hdr := HBoxContainer.new()
-	hdr.add_theme_constant_override("separation", 14)
+	hdr.add_theme_constant_override("separation", 12)
 	main_vb.add_child(hdr)
 
 	_title_lbl = Label.new()
@@ -107,9 +119,18 @@ func _build_shell() -> void:
 	_title_lbl.clip_text = true
 	if ThemeHelper.font_display:
 		_title_lbl.add_theme_font_override("font", ThemeHelper.font_display)
-	_title_lbl.add_theme_font_size_override("font_size", 22)
+	_title_lbl.add_theme_font_size_override("font_size", 21)
 	_title_lbl.add_theme_color_override("font_color", ThemeHelper.COL_CYAN)
 	hdr.add_child(_title_lbl)
+
+	_toast_lbl = Label.new()
+	_toast_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_toast_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_toast_lbl.clip_text = true
+	if ThemeHelper.font_bold:
+		_toast_lbl.add_theme_font_override("font", ThemeHelper.font_bold)
+	_toast_lbl.add_theme_font_size_override("font_size", 14)
+	hdr.add_child(_toast_lbl)
 
 	var cr_pill := PanelContainer.new()
 	cr_pill.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(Color(0.08, 0.12, 0.22, 0.92), Color(1.0, 0.78, 0.24, 0.65), 8, 10, 4))
@@ -130,7 +151,8 @@ func _build_shell() -> void:
 	cry_pill.add_child(_hdr_crystals_lbl)
 
 	_close_btn = Button.new()
-	_close_btn.custom_minimum_size = Vector2(148, 38)
+	_close_btn.custom_minimum_size = Vector2(142, 36)
+	_close_btn.clip_text = true
 	ThemeHelper.style_accent_button(_close_btn, Color(0.86, 0.26, 0.34))
 	_close_btn.pressed.connect(close_panel)
 	hdr.add_child(_close_btn)
@@ -144,7 +166,10 @@ func _build_shell() -> void:
 	sep.modulate = Color(0.22, 0.72, 1.0, 0.40)
 	main_vb.add_child(sep)
 
-	_body_root = Control.new()
+	# Pure Container body root — NEVER mixes anchors with Container children!
+	_body_root = MarginContainer.new()
+	_body_root.name = "StationBodyRoot"
+	_body_root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_body_root.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_body_root.clip_contents = true
 	main_vb.add_child(_body_root)
@@ -163,8 +188,7 @@ func _update_header_currencies() -> void:
 		_hdr_crystals_lbl.text = "%d CRY" % ShipGrid.crystals
 
 func _rebuild_nav_strip() -> void:
-	for c in _nav_strip.get_children():
-		c.queue_free()
+	ThemeHelper.clear_children(_nav_strip)
 	_nav_strip.visible = not standalone_settings_mode
 	if standalone_settings_mode:
 		return
@@ -190,12 +214,14 @@ func open_tab(tab_name: String) -> void:
 	current_tab = tab_name
 	visible = true
 	_floating_packs.clear()
+	_ach_timer_lbl = null
+	if is_instance_valid(_toast_lbl):
+		_toast_lbl.text = ""
 	_close_btn.text = L.tr_ui("close")
 	_update_header_currencies()
 	_rebuild_nav_strip()
 
-	for c in _body_root.get_children():
-		c.queue_free()
+	ThemeHelper.clear_children(_body_root)
 
 	match tab_name:
 		"shop":
@@ -221,9 +247,9 @@ func open_tab(tab_name: String) -> void:
 			_build_settings_tab()
 
 	if was_hidden:
-		ThemeHelper.animate_entry(_modal_box, 0.0, Vector2(0.96, 0.96))
+		ThemeHelper.animate_entry(_modal_box, 0.0)
 	else:
-		ThemeHelper.animate_entry(_body_root, 0.0, Vector2(0.985, 0.985))
+		ThemeHelper.animate_entry(_body_root, 0.0)
 
 func close_panel() -> void:
 	if _pack_modal.visible:
@@ -242,17 +268,20 @@ func _on_live_data_changed() -> void:
 # ==============================================================================
 func _build_shop_tab() -> void:
 	var row := HBoxContainer.new()
-	row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	row.add_theme_constant_override("separation", 16)
 	_body_root.add_child(row)
 
 	var left_vb := VBoxContainer.new()
 	left_vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left_vb.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	left_vb.size_flags_stretch_ratio = 2.05
 	left_vb.add_theme_constant_override("separation", 10)
 	row.add_child(left_vb)
 
 	var filter_flow := HFlowContainer.new()
+	filter_flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	filter_flow.add_theme_constant_override("h_separation", 8)
 	filter_flow.add_theme_constant_override("v_separation", 6)
 	left_vb.add_child(filter_flow)
@@ -272,11 +301,13 @@ func _build_shop_tab() -> void:
 		filter_flow.add_child(fb)
 
 	var sc := ScrollContainer.new()
+	sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	left_vb.add_child(sc)
 
 	var grid := GridContainer.new()
+	grid.name = "ShopModuleGrid"
 	grid.columns = 2
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.add_theme_constant_override("h_separation", 12)
@@ -292,15 +323,18 @@ func _build_shop_tab() -> void:
 
 		var card := PanelContainer.new()
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		card.custom_minimum_size = Vector2(310, 146)
 		var card_border := Color(0.24, 0.90, 1.0, 0.85) if m.has("bullet_magnet_range") else Color(0.18, 0.48, 0.78, 0.72)
 		card.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(ThemeHelper.COL_BG_CARD, card_border, 12, 2, 12))
 		grid.add_child(card)
 
 		var cv := VBoxContainer.new()
+		cv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		cv.add_theme_constant_override("separation", 6)
 		card.add_child(cv)
 
 		var top := HBoxContainer.new()
+		top.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		top.add_theme_constant_override("separation", 10)
 		cv.add_child(top)
 
@@ -309,29 +343,32 @@ func _build_shop_tab() -> void:
 		top.add_child(icon_box)
 
 		var icon := TextureRect.new()
-		icon.custom_minimum_size = Vector2(58, 58)
+		icon.custom_minimum_size = Vector2(54, 54)
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		if ResourceLoader.exists(m["icon_path"]):
-			icon.texture = load(m["icon_path"])
+		if ResourceLoader.exists(str(m["icon_path"])):
+			icon.texture = load(str(m["icon_path"]))
 		icon_box.add_child(icon)
 
 		var title_vb := VBoxContainer.new()
 		title_vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		title_vb.custom_minimum_size = Vector2(180, 0)
 		title_vb.add_theme_constant_override("separation", 2)
 		top.add_child(title_vb)
 
 		var nl := Label.new()
 		nl.text = L.mod_name(mid)
+		nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		if ThemeHelper.font_bold:
 			nl.add_theme_font_override("font", ThemeHelper.font_bold)
-		nl.add_theme_font_size_override("font_size", 16)
+		nl.add_theme_font_size_override("font_size", 15)
 		title_vb.add_child(nl)
 
-		var owned_cnt := ShipGrid.get_unplaced_count(mid)
+		var owned_cnt: int = ShipGrid.get_unplaced_count(mid)
 		var sub := Label.new()
 		sub.text = "%s • %.1ft • HP %.0f • %s" % [L.cat_name(str(m["category"])), float(m["mass"]), float(m["max_hp"]), L.tr_ui("owned_stock", [owned_cnt])]
+		sub.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		sub.add_theme_font_size_override("font_size", 12)
 		sub.add_theme_color_override("font_color", ThemeHelper.COL_MUTED)
@@ -339,8 +376,10 @@ func _build_shop_tab() -> void:
 
 		var dl := Label.new()
 		dl.text = L.mod_desc(mid)
-		dl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		dl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		dl.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		dl.custom_minimum_size = Vector2(240, 0)
+		dl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		dl.add_theme_font_size_override("font_size", 13)
 		dl.add_theme_color_override("font_color", Color(0.82, 0.91, 1.0))
 		cv.add_child(dl)
@@ -348,33 +387,44 @@ func _build_shop_tab() -> void:
 		var buy_btn := Button.new()
 		var price: int = int(m["price"])
 		buy_btn.text = L.tr_ui("buy_btn", [price])
+		buy_btn.custom_minimum_size = Vector2(0, 36)
 		buy_btn.disabled = ShipGrid.credits < price
 		ThemeHelper.style_accent_button(buy_btn, Color(0.18, 0.78, 0.50))
+		var mid_cap: String = mid
 		buy_btn.pressed.connect(func():
-			var res := ShipGrid.buy_equipment(mid)
-			if res["ok"]:
+			var res: Dictionary = ShipGrid.buy_equipment(mid_cap)
+			if bool(res.get("ok", false)):
 				AudioManager.play_sfx("buy_upgrade", 0.03, 0.85)
 				SaveManager.save_game()
-				select_module_for_editor.emit(mid)
+				select_module_for_editor.emit(mid_cap)
 				open_tab("shop")
+				show_toast(L.mod_name(mid_cap))
+			else:
+				show_toast(L.localize_reason(str(res.get("reason", ""))), true)
 		)
 		cv.add_child(buy_btn)
 
-	ThemeHelper.animate_grid_stagger(grid, 0.018, 12)
+	ThemeHelper.animate_grid_stagger(grid, 0.014, 14)
 
 	# Right Column: Installed Module Upgrader (Lv 1-5)
 	var right_panel := PanelContainer.new()
 	right_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	right_panel.size_flags_stretch_ratio = 1.0
+	right_panel.custom_minimum_size = Vector2(310, 0)
 	right_panel.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(Color(0.032, 0.06, 0.13, 0.95), Color(0.22, 0.65, 0.92, 0.65), 12, 1, 12))
 	row.add_child(right_panel)
 
 	var right_vb := VBoxContainer.new()
+	right_vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right_vb.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	right_vb.add_theme_constant_override("separation", 8)
 	right_panel.add_child(right_vb)
 
 	var rhdr := Label.new()
 	rhdr.text = L.tr_ui("shop_installed_hdr")
+	rhdr.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rhdr.custom_minimum_size = Vector2(260, 0)
 	rhdr.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	if ThemeHelper.font_bold:
 		rhdr.add_theme_font_override("font", ThemeHelper.font_bold)
@@ -383,87 +433,144 @@ func _build_shop_tab() -> void:
 	right_vb.add_child(rhdr)
 
 	var rsc := ScrollContainer.new()
+	rsc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rsc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	rsc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	right_vb.add_child(rsc)
 
 	var rlist := VBoxContainer.new()
+	rlist.name = "ShopInstalledList"
 	rlist.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rlist.add_theme_constant_override("separation", 8)
 	rsc.add_child(rlist)
 
+	_populate_installed_hardware_cards(rlist, "shop")
+
+func _populate_installed_hardware_cards(container: Control, reopen_tab_id: String) -> int:
+	var count := 0
 	for uid in ShipGrid.placed_modules.keys():
 		var entry: Dictionary = ShipGrid.placed_modules[uid]
-		var mid: String = entry["mod_id"]
+		var mid: String = str(entry["mod_id"])
 		if mid in ["cockpit_mk1", "hull_cell"]:
 			continue
+		if not GameData.modules.has(mid):
+			continue
 		var m: Dictionary = GameData.modules[mid]
-		var lvl: int = int(entry["level"])
+		var lvl: int = int(entry.get("level", 1))
+		count += 1
 
 		var row_card := PanelContainer.new()
-		row_card.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(Color(0.05, 0.095, 0.19, 0.94), Color(0.20, 0.56, 0.85, 0.55), 9, 10, 8))
-		rlist.add_child(row_card)
+		row_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row_card.custom_minimum_size = Vector2(260, 88)
+		var border_c := Color(0.24, 0.90, 0.62, 0.80) if lvl >= 5 else Color(0.22, 0.62, 0.92, 0.68)
+		row_card.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(Color(0.05, 0.095, 0.19, 0.94), border_c, 10, 1, 10))
+		container.add_child(row_card)
 
 		var rvb := VBoxContainer.new()
-		rvb.add_theme_constant_override("separation", 5)
+		rvb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		rvb.add_theme_constant_override("separation", 6)
 		row_card.add_child(rvb)
 
+		var top_hb := HBoxContainer.new()
+		top_hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		top_hb.add_theme_constant_override("separation", 8)
+		rvb.add_child(top_hb)
+
+		var ic := TextureRect.new()
+		ic.custom_minimum_size = Vector2(40, 40)
+		ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		if ResourceLoader.exists(str(m["icon_path"])):
+			ic.texture = load(str(m["icon_path"]))
+		top_hb.add_child(ic)
+
 		var il := Label.new()
-		il.text = "%s  [Lv.%d/5]" % [L.mod_name(mid), lvl]
+		var anc: Vector3i = entry["anchor"]
+		il.text = "%s  [Lv.%d/5]\n(%d, %d, %d)" % [L.mod_name(mid), lvl, anc.x, anc.y, anc.z]
+		il.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		il.custom_minimum_size = Vector2(160, 0)
 		il.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		if ThemeHelper.font_bold:
 			il.add_theme_font_override("font", ThemeHelper.font_bold)
-		il.add_theme_font_size_override("font_size", 14)
-		rvb.add_child(il)
+		il.add_theme_font_size_override("font_size", 13)
+		top_hb.add_child(il)
 
 		var up_btn := Button.new()
+		up_btn.custom_minimum_size = Vector2(0, 34)
 		if lvl >= 5:
 			up_btn.text = L.tr_ui("max_level")
 			up_btn.disabled = true
 		else:
-			var ucost := int(round(float(m["price"]) * 0.65 * float(lvl)))
+			var ucost: int = int(round(float(maxi(200, int(m["price"]))) * 0.75 * float(lvl)))
 			up_btn.text = L.tr_ui("upgrade_btn", [ucost])
 			up_btn.disabled = ShipGrid.credits < ucost
 			ThemeHelper.style_accent_button(up_btn, Color(0.22, 0.68, 0.98))
 			var uid_cap: int = int(uid)
+			var tab_cap: String = reopen_tab_id
 			up_btn.pressed.connect(func():
-				var ures := ShipGrid.upgrade_installed_module(uid_cap)
-				if ures["ok"]:
+				var ures: Dictionary = ShipGrid.upgrade_installed_module(uid_cap)
+				if bool(ures.get("ok", false)):
 					AudioManager.play_sfx("buy_upgrade", 0.04, 0.9)
 					SaveManager.save_game()
-					open_tab("shop")
+					open_tab(tab_cap)
+					show_toast("%s -> Lv.%d/5" % [L.mod_name(mid), int(ures.get("new_level", lvl + 1))])
+				else:
+					show_toast(L.localize_reason(str(ures.get("reason", ""))), true)
 			)
 		rvb.add_child(up_btn)
+
+	if count == 0:
+		var empty_box := PanelContainer.new()
+		empty_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		empty_box.custom_minimum_size = Vector2(260, 74)
+		empty_box.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(Color(0.04, 0.075, 0.15, 0.9), Color(0.24, 0.50, 0.78, 0.45), 10, 12, 10))
+		container.add_child(empty_box)
+		var el := Label.new()
+		el.text = L.tr_ui("upg_no_modules_hint")
+		el.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		el.custom_minimum_size = Vector2(230, 0)
+		el.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		el.add_theme_font_size_override("font_size", 13)
+		el.add_theme_color_override("font_color", ThemeHelper.COL_MUTED)
+		empty_box.add_child(el)
+	return count
 
 # ==============================================================================
 # 2. CREW CARDS COLLECTION & BRIDGE HERO DOSSIER (42 CARDS)
 # ==============================================================================
 func _build_crew_tab() -> void:
+	CrewManager.enforce_capacity()
 	var row := HBoxContainer.new()
-	row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	row.add_theme_constant_override("separation", 16)
 	_body_root.add_child(row)
 
 	var left_vb := VBoxContainer.new()
 	left_vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	left_vb.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	left_vb.size_flags_stretch_ratio = 2.25
 	left_vb.add_theme_constant_override("separation", 8)
 	row.add_child(left_vb)
 
 	var slot_info := Label.new()
-	var max_slots := ShipGrid.get_unlocked_crew_slots()
+	var max_slots: int = ShipGrid.get_unlocked_crew_slots()
 	slot_info.text = L.tr_ui("crew_active_bridge", [CrewManager.equipped_crew.size(), max_slots, CrewManager.get_unique_owned_count()])
+	slot_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slot_info.clip_text = true
 	if ThemeHelper.font_bold:
 		slot_info.add_theme_font_override("font", ThemeHelper.font_bold)
 	slot_info.add_theme_color_override("font_color", ThemeHelper.COL_GOLD)
 	left_vb.add_child(slot_info)
 
 	var sc := ScrollContainer.new()
+	sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	left_vb.add_child(sc)
 
 	var grid := HFlowContainer.new()
+	grid.name = "CrewFlowGrid"
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.add_theme_constant_override("h_separation", 14)
 	grid.add_theme_constant_override("v_separation", 14)
@@ -472,21 +579,30 @@ func _build_crew_tab() -> void:
 	# Right Hero Showcase Dossier Panel
 	var insp := PanelContainer.new()
 	insp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	insp.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	insp.size_flags_stretch_ratio = 1.0
+	insp.custom_minimum_size = Vector2(310, 0)
 	insp.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(Color(0.032, 0.058, 0.13, 0.96), Color(0.24, 0.72, 1.0, 0.75), 14, 2, 14))
 	row.add_child(insp)
 
+	var isc := ScrollContainer.new()
+	isc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	isc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	isc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	insp.add_child(isc)
+
 	var ivb := VBoxContainer.new()
 	ivb.name = "CrewInspector"
+	ivb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ivb.alignment = BoxContainer.ALIGNMENT_CENTER
 	ivb.add_theme_constant_override("separation", 10)
-	insp.add_child(ivb)
+	isc.add_child(ivb)
 
 	for c in GameData.crew_cards:
-		var cid: String = c["id"]
-		var owned := CrewManager.is_owned(cid)
-		var copies := CrewManager.get_copies(cid)
-		var eq := CrewManager.equipped_crew.has(cid)
+		var cid: String = str(c["id"])
+		var owned: bool = CrewManager.is_owned(cid)
+		var copies: int = CrewManager.get_copies(cid)
+		var eq: bool = CrewManager.equipped_crew.has(cid)
 		var cw := CardWidget.new()
 		cw.setup_card(c, owned, copies, eq, true)
 		cw.card_clicked.connect(func(clicked_id: String):
@@ -495,23 +611,22 @@ func _build_crew_tab() -> void:
 		)
 		grid.add_child(cw)
 
-	ThemeHelper.animate_grid_stagger(grid, 0.014, 15)
+	ThemeHelper.animate_grid_stagger(grid, 0.012, 15)
 	_populate_crew_inspector(ivb, _selected_crew_id)
 
 func _populate_crew_inspector(ivb: VBoxContainer, cid: String) -> void:
-	for ch in ivb.get_children():
-		ch.queue_free()
+	ThemeHelper.clear_children(ivb)
 	if not GameData.crew_by_id.has(cid):
 		return
 	var c: Dictionary = GameData.crew_by_id[cid]
-	var owned := CrewManager.is_owned(cid)
-	var eq := CrewManager.equipped_crew.has(cid)
+	var owned: bool = CrewManager.is_owned(cid)
+	var eq: bool = CrewManager.equipped_crew.has(cid)
 	var rarity: String = str(c["rarity"])
 	var rcol: Color = GameData.RARITY_COLORS.get(rarity, Color.WHITE)
 
 	# Large Hero Portrait Showcase Window
 	var hero_frame := PanelContainer.new()
-	hero_frame.custom_minimum_size = Vector2(216, 264)
+	hero_frame.custom_minimum_size = Vector2(210, 250)
 	hero_frame.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	hero_frame.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
 	var hf_sb := StyleBoxFlat.new()
@@ -525,7 +640,9 @@ func _populate_crew_inspector(ivb: VBoxContainer, cid: String) -> void:
 	ivb.add_child(hero_frame)
 
 	var p_img := TextureRect.new()
-	p_img.set_anchors_preset(Control.PRESET_FULL_RECT)
+	p_img.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	p_img.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	p_img.custom_minimum_size = Vector2(204, 244)
 	p_img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	p_img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	if ResourceLoader.exists(str(c["portrait"])):
@@ -537,48 +654,61 @@ func _populate_crew_inspector(ivb: VBoxContainer, cid: String) -> void:
 	var title := Label.new()
 	title.text = "#%02d  %s" % [int(c["number"]), str(c["name"])]
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.custom_minimum_size = Vector2(260, 0)
 	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	if ThemeHelper.font_display:
 		title.add_theme_font_override("font", ThemeHelper.font_display)
-	title.add_theme_font_size_override("font_size", 20)
+	title.add_theme_font_size_override("font_size", 19)
 	title.add_theme_color_override("font_color", rcol.lightened(0.22))
 	ivb.add_child(title)
 
 	var rtag := Label.new()
 	rtag.text = "%s  •  %s" % [L.rarity_name(rarity).to_upper(), L.role_name(str(c["role"]))]
 	rtag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rtag.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rtag.clip_text = true
 	rtag.add_theme_color_override("font_color", ThemeHelper.COL_CYAN)
 	ivb.add_child(rtag)
 
 	var bonus_box := PanelContainer.new()
+	bonus_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bonus_box.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(Color(0.06, 0.11, 0.22, 0.95), rcol, 9, 12, 8))
 	ivb.add_child(bonus_box)
+
 	var btext := Label.new()
 	btext.text = L.crew_bonus(c)
 	btext.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	btext.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btext.custom_minimum_size = Vector2(240, 0)
 	btext.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	if ThemeHelper.font_bold:
 		btext.add_theme_font_override("font", ThemeHelper.font_bold)
-	btext.add_theme_font_size_override("font_size", 16)
+	btext.add_theme_font_size_override("font_size", 15)
 	btext.add_theme_color_override("font_color", ThemeHelper.COL_GOLD)
 	bonus_box.add_child(btext)
 
 	var bio := Label.new()
 	bio.text = L.crew_desc(c)
 	bio.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bio.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bio.custom_minimum_size = Vector2(260, 0)
 	bio.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	bio.add_theme_font_size_override("font_size", 14)
+	bio.add_theme_font_size_override("font_size", 13)
 	bio.add_theme_color_override("font_color", Color(0.80, 0.90, 1.0))
 	ivb.add_child(bio)
 
 	var err_lbl := Label.new()
 	err_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	err_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	err_lbl.custom_minimum_size = Vector2(260, 0)
 	err_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	err_lbl.add_theme_color_override("font_color", ThemeHelper.COL_RED)
 	ivb.add_child(err_lbl)
 
 	var act_btn := Button.new()
-	act_btn.custom_minimum_size = Vector2(230, 46)
+	act_btn.custom_minimum_size = Vector2(240, 44)
+	act_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if not owned:
 		act_btn.text = L.tr_ui("locked_crew_hint")
 		act_btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -595,32 +725,34 @@ func _populate_crew_inspector(ivb: VBoxContainer, cid: String) -> void:
 		act_btn.text = L.tr_ui("equip_crew")
 		ThemeHelper.style_accent_button(act_btn, Color(0.18, 0.82, 0.52))
 		act_btn.pressed.connect(func():
-			var res := CrewManager.equip_card(cid)
-			if res["ok"]:
+			var res: Dictionary = CrewManager.equip_card(cid)
+			if bool(res.get("ok", false)):
 				AudioManager.play_sfx("buy_upgrade", 0.03, 0.8)
 				SaveManager.save_game()
 				open_tab("crew")
 			else:
 				AudioManager.play_sfx("ui_error", 0.02, 0.75)
-				err_lbl.text = L.localize_reason(str(res["reason"]))
+				err_lbl.text = L.localize_reason(str(res.get("reason", "")))
 		)
 	ivb.add_child(act_btn)
-	ThemeHelper.animate_entry(hero_frame, 0.0, Vector2(0.93, 0.93))
+	ThemeHelper.animate_entry(hero_frame, 0.0)
 
 # ==============================================================================
 # 3. CRYSTAL BOOSTER PACK SHOP (LEVITATING AI PACKS + TRANSPARENT ODDS)
 # ==============================================================================
 func _build_packs_tab() -> void:
 	var sc := ScrollContainer.new()
-	sc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_body_root.add_child(sc)
 
 	var center_wrap := HBoxContainer.new()
+	center_wrap.name = "PackCardsRow"
 	center_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	center_wrap.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	center_wrap.alignment = BoxContainer.ALIGNMENT_CENTER
-	center_wrap.add_theme_constant_override("separation", 36)
+	center_wrap.add_theme_constant_override("separation", 34)
 	sc.add_child(center_wrap)
 
 	var pack_ids: Array[String] = ["standard", "elite"]
@@ -631,34 +763,38 @@ func _build_packs_tab() -> void:
 		var accent := Color(1.0, 0.76, 0.24) if is_elite else Color(0.22, 0.82, 1.0)
 
 		var box := PanelContainer.new()
-		box.custom_minimum_size = Vector2(460, 0)
+		box.custom_minimum_size = Vector2(460, 500)
 		box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		box.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(Color(0.032, 0.058, 0.13, 0.96), accent, 16, 2, 18))
 		center_wrap.add_child(box)
 
 		var vb := VBoxContainer.new()
+		vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		vb.alignment = BoxContainer.ALIGNMENT_CENTER
 		vb.add_theme_constant_override("separation", 8)
 		box.add_child(vb)
 
 		var float_stage := Control.new()
-		float_stage.custom_minimum_size = Vector2(220, 270)
+		float_stage.custom_minimum_size = Vector2(220, 256)
+		float_stage.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		vb.add_child(float_stage)
 
 		var pimg := TextureRect.new()
-		pimg.custom_minimum_size = Vector2(196, 258)
-		pimg.size = Vector2(196, 258)
-		pimg.position = Vector2(12, 6)
+		pimg.custom_minimum_size = Vector2(192, 244)
+		pimg.size = Vector2(192, 244)
+		pimg.position = Vector2(14, 6)
 		pimg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		pimg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		if ResourceLoader.exists(pinfo["art"]):
-			pimg.texture = load(pinfo["art"])
+		if ResourceLoader.exists(str(pinfo["art"])):
+			pimg.texture = load(str(pinfo["art"]))
 		float_stage.add_child(pimg)
 		_floating_packs.append(pimg)
 
 		var nl := Label.new()
 		nl.text = L.pack_name(pid).to_upper()
 		nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		nl.custom_minimum_size = Vector2(400, 0)
 		nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		if ThemeHelper.font_display:
 			nl.add_theme_font_override("font", ThemeHelper.font_display)
@@ -669,6 +805,8 @@ func _build_packs_tab() -> void:
 		var sub := Label.new()
 		sub.text = L.tr_ui("pack_contains_3")
 		sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sub.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		sub.custom_minimum_size = Vector2(400, 0)
 		sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		sub.add_theme_font_size_override("font_size", 13)
 		sub.add_theme_color_override("font_color", ThemeHelper.COL_MUTED)
@@ -677,11 +815,14 @@ func _build_packs_tab() -> void:
 		var odds_hdr := Label.new()
 		odds_hdr.text = L.tr_ui("pack_drop_rates")
 		odds_hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		odds_hdr.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		odds_hdr.add_theme_font_size_override("font_size", 12)
 		odds_hdr.add_theme_color_override("font_color", ThemeHelper.COL_CYAN)
 		vb.add_child(odds_hdr)
 
 		var odds_flow := HFlowContainer.new()
+		odds_flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		odds_flow.custom_minimum_size = Vector2(400, 0)
 		odds_flow.alignment = FlowContainer.ALIGNMENT_CENTER
 		odds_flow.add_theme_constant_override("h_separation", 6)
 		odds_flow.add_theme_constant_override("v_separation", 5)
@@ -704,6 +845,8 @@ func _build_packs_tab() -> void:
 		var slot_bonus := Label.new()
 		slot_bonus.text = L.tr_ui("pack_fifth_slot_bonus", [float(probs["fifth_upgrade_slot_any_pct"])])
 		slot_bonus.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		slot_bonus.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		slot_bonus.custom_minimum_size = Vector2(400, 0)
 		slot_bonus.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		slot_bonus.add_theme_font_size_override("font_size", 12)
 		slot_bonus.add_theme_color_override("font_color", Color(0.32, 1.0, 0.88))
@@ -711,7 +854,7 @@ func _build_packs_tab() -> void:
 
 		var cost := int(pinfo["crystal_cost"])
 		var buy_btn := Button.new()
-		buy_btn.custom_minimum_size = Vector2(280, 48)
+		buy_btn.custom_minimum_size = Vector2(280, 46)
 		buy_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		buy_btn.text = L.tr_ui("open_pack_btn", [cost])
 		buy_btn.disabled = ShipGrid.crystals < cost
@@ -725,35 +868,44 @@ func _build_packs_tab() -> void:
 				for item in res["cards"]:
 					cards_typed.append(item)
 				_pack_modal.play_ceremony(pid_cap, cards_typed, bool(res.get("fifth_slot_unlocked", false)))
+			else:
+				show_toast(L.localize_reason(str(res.get("reason", ""))), true)
 		)
 		vb.add_child(buy_btn)
 
-	ThemeHelper.animate_grid_stagger(center_wrap, 0.06, 4)
+	ThemeHelper.animate_grid_stagger(center_wrap, 0.05, 4)
 
 # ==============================================================================
-# 4. ACTIVE UPGRADE PROTOCOL CORE (3 DEFAULT + 4TH PURCHASE + 5TH PACK DROP)
+# 4. UPGRADE CORE: 5 PROTOCOL SLOTS + 18 PROTOCOLS + INSTALLED SHIP HARDWARE
 # ==============================================================================
 func _build_upgrades_tab() -> void:
 	var vb := VBoxContainer.new()
-	vb.set_anchors_preset(Control.PRESET_FULL_RECT)
-	vb.add_theme_constant_override("separation", 12)
+	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vb.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vb.add_theme_constant_override("separation", 10)
 	_body_root.add_child(vb)
 
-	var slots_hb := HBoxContainer.new()
-	slots_hb.add_theme_constant_override("separation", 10)
-	vb.add_child(slots_hb)
+	# Top Row: 5 Active Protocol Slots (3 Open + 4th Purchase + 5th Pack Relic)
+	var slots_grid := GridContainer.new()
+	slots_grid.name = "UpgradeSlotsGrid"
+	slots_grid.columns = 5
+	slots_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slots_grid.add_theme_constant_override("h_separation", 10)
+	slots_grid.add_theme_constant_override("v_separation", 8)
+	vb.add_child(slots_grid)
 
-	var unlocked := UpgradeManager.get_unlocked_slots()
+	var unlocked: int = UpgradeManager.get_unlocked_slots()
 	for i in range(5):
 		var sbox := PanelContainer.new()
 		sbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		sbox.custom_minimum_size = Vector2(0, 92)
-		var is_open := (i < 3) or (i == 3 and UpgradeManager.fourth_slot_unlocked) or (i == 4 and UpgradeManager.fifth_slot_unlocked)
+		sbox.custom_minimum_size = Vector2(180, 90)
+		var is_open: bool = (i < 3) or (i == 3 and UpgradeManager.fourth_slot_unlocked) or (i == 4 and UpgradeManager.fifth_slot_unlocked)
 		var bcol := Color(0.22, 0.86, 0.58) if is_open else Color(0.36, 0.40, 0.50, 0.65)
-		sbox.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(ThemeHelper.COL_BG_CARD, bcol, 10, 2, 10))
-		slots_hb.add_child(sbox)
+		sbox.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(ThemeHelper.COL_BG_CARD, bcol, 10, 2, 8))
+		slots_grid.add_child(sbox)
 
 		var sv := VBoxContainer.new()
+		sv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		sv.alignment = BoxContainer.ALIGNMENT_CENTER
 		sv.add_theme_constant_override("separation", 4)
 		sbox.add_child(sv)
@@ -761,10 +913,11 @@ func _build_upgrades_tab() -> void:
 		var stitle := Label.new()
 		stitle.text = L.tr_ui("upg_slot_title", [i + 1])
 		stitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		stitle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		stitle.clip_text = true
 		if ThemeHelper.font_bold:
 			stitle.add_theme_font_override("font", ThemeHelper.font_bold)
-		stitle.add_theme_font_size_override("font_size", 13)
+		stitle.add_theme_font_size_override("font_size", 12)
 		stitle.add_theme_color_override("font_color", bcol.lightened(0.2))
 		sv.add_child(stitle)
 
@@ -772,8 +925,10 @@ func _build_upgrades_tab() -> void:
 			var eq_id: String = UpgradeManager.active_equipped[i] if i < UpgradeManager.active_equipped.size() else ""
 			var sl := Label.new()
 			sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			sl.custom_minimum_size = Vector2(150, 0)
 			sl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			sl.add_theme_font_size_override("font_size", 13)
+			sl.add_theme_font_size_override("font_size", 12)
 			if eq_id != "" and GameData.upgrades_by_id.has(eq_id):
 				sl.text = L.upg_name(GameData.upgrades_by_id[eq_id])
 				sl.add_theme_color_override("font_color", ThemeHelper.COL_GOLD)
@@ -783,100 +938,145 @@ func _build_upgrades_tab() -> void:
 			sv.add_child(sl)
 		elif i == 3:
 			var ub := Button.new()
-			ub.text = L.tr_ui("unlock_4th_slot", [UpgradeManager.FOURTH_SLOT_CREDIT_COST])
+			ub.text = L.tr_ui("unlock_4th_slot_both", [UpgradeManager.FOURTH_SLOT_CREDIT_COST, UpgradeManager.FOURTH_SLOT_CRYSTAL_COST])
 			ub.clip_text = true
-			ub.disabled = ShipGrid.credits < UpgradeManager.FOURTH_SLOT_CREDIT_COST
+			ub.custom_minimum_size = Vector2(0, 32)
+			ub.add_theme_font_size_override("font_size", 11)
+			ub.disabled = (ShipGrid.credits < UpgradeManager.FOURTH_SLOT_CREDIT_COST) or (ShipGrid.crystals < UpgradeManager.FOURTH_SLOT_CRYSTAL_COST)
 			ThemeHelper.style_accent_button(ub, Color(0.95, 0.72, 0.20))
 			ub.pressed.connect(func():
-				if UpgradeManager.purchase_fourth_slot()["ok"]:
+				var r4: Dictionary = UpgradeManager.purchase_fourth_slot()
+				if bool(r4.get("ok", false)):
 					AudioManager.play_sfx("buy_upgrade", 0.03, 0.9)
 					SaveManager.save_game()
 					open_tab("upgrades")
+				else:
+					show_toast(L.localize_reason(str(r4.get("reason", ""))), true)
 			)
 			sv.add_child(ub)
 		else:
 			var l5 := Label.new()
 			l5.text = L.tr_ui("slot_5_hint")
 			l5.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			l5.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			l5.custom_minimum_size = Vector2(150, 0)
 			l5.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			l5.add_theme_font_size_override("font_size", 12)
+			l5.add_theme_font_size_override("font_size", 11)
 			l5.add_theme_color_override("font_color", Color(0.24, 0.96, 0.90))
 			sv.add_child(l5)
 
+	# Unified Scrollable Body containing BOTH 18 Upgrade Protocols AND Installed Ship Hardware Upgrades!
 	var sc := ScrollContainer.new()
+	sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	vb.add_child(sc)
 
+	var scroll_vb := VBoxContainer.new()
+	scroll_vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll_vb.add_theme_constant_override("separation", 14)
+	sc.add_child(scroll_vb)
+
+	# Section I: 18 Global Upgrade Protocols
+	var proto_hdr := Label.new()
+	proto_hdr.text = L.tr_ui("upg_protocols_hdr", [UpgradeManager.active_equipped.size(), unlocked])
+	proto_hdr.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	proto_hdr.clip_text = true
+	if ThemeHelper.font_display:
+		proto_hdr.add_theme_font_override("font", ThemeHelper.font_display)
+	proto_hdr.add_theme_font_size_override("font_size", 16)
+	proto_hdr.add_theme_color_override("font_color", ThemeHelper.COL_CYAN)
+	scroll_vb.add_child(proto_hdr)
+
 	var grid := GridContainer.new()
+	grid.name = "UpgradeProtocolGrid"
 	grid.columns = 3
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.add_theme_constant_override("h_separation", 12)
 	grid.add_theme_constant_override("v_separation", 12)
-	sc.add_child(grid)
+	scroll_vb.add_child(grid)
 
 	for u in GameData.active_upgrades:
-		var uid: String = u["id"]
-		var owned := UpgradeManager.is_owned(uid)
-		var eq := UpgradeManager.is_equipped(uid)
+		var uid: String = str(u["id"])
+		var owned: bool = UpgradeManager.is_owned(uid)
+		var eq: bool = UpgradeManager.is_equipped(uid)
 
 		var ucard := PanelContainer.new()
 		ucard.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var uborder := Color(0.24, 0.94, 0.62) if eq else Color(0.20, 0.56, 0.88, 0.72)
-		ucard.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(ThemeHelper.COL_BG_CARD, uborder, 12, 2, 12))
+		ucard.custom_minimum_size = Vector2(280, 124)
+		var uborder := Color(0.24, 0.94, 0.62) if eq else (Color(0.26, 0.72, 1.0, 0.85) if owned else Color(0.20, 0.50, 0.80, 0.68))
+		ucard.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(ThemeHelper.COL_BG_CARD, uborder, 12, 2, 11))
 		grid.add_child(ucard)
 
 		var uvb := VBoxContainer.new()
+		uvb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		uvb.add_theme_constant_override("separation", 6)
 		ucard.add_child(uvb)
 
 		var top := HBoxContainer.new()
+		top.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		top.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		top.add_theme_constant_override("separation", 10)
 		uvb.add_child(top)
+
+		var ic_box := PanelContainer.new()
+		ic_box.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(Color(0.03, 0.055, 0.12, 0.95), uborder * Color(1, 1, 1, 0.55), 8, 4, 4))
+		top.add_child(ic_box)
 
 		var ic := TextureRect.new()
 		ic.custom_minimum_size = Vector2(46, 46)
 		ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		if ResourceLoader.exists(u["icon_path"]):
-			ic.texture = load(u["icon_path"])
-		top.add_child(ic)
+		if ResourceLoader.exists(str(u["icon_path"])):
+			ic.texture = load(str(u["icon_path"]))
+		ic_box.add_child(ic)
 
 		var tv := VBoxContainer.new()
 		tv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tv.custom_minimum_size = Vector2(180, 0)
+		tv.add_theme_constant_override("separation", 3)
 		top.add_child(tv)
 
 		var un := Label.new()
 		un.text = L.upg_name(u)
+		un.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		un.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		if ThemeHelper.font_bold:
 			un.add_theme_font_override("font", ThemeHelper.font_bold)
+		un.add_theme_font_size_override("font_size", 15)
 		tv.add_child(un)
 
 		var ue := Label.new()
 		ue.text = L.upg_effect(u)
+		ue.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		ue.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		ue.add_theme_font_size_override("font_size", 13)
 		ue.add_theme_color_override("font_color", ThemeHelper.COL_GOLD)
 		tv.add_child(ue)
 
 		var btn := Button.new()
+		btn.custom_minimum_size = Vector2(0, 36)
+		var uid_cap: String = uid
 		if not owned:
 			var cost := int(u["price"])
 			btn.text = L.tr_ui("buy_btn", [cost])
 			btn.disabled = ShipGrid.credits < cost
 			ThemeHelper.style_accent_button(btn, Color(0.20, 0.72, 0.96))
 			btn.pressed.connect(func():
-				if UpgradeManager.buy_upgrade(uid)["ok"]:
+				var rbuy: Dictionary = UpgradeManager.buy_upgrade(uid_cap)
+				if bool(rbuy.get("ok", false)):
 					AudioManager.play_sfx("buy_upgrade", 0.03, 0.85)
 					SaveManager.save_game()
 					open_tab("upgrades")
+					show_toast(L.upg_name(u))
+				else:
+					show_toast(L.localize_reason(str(rbuy.get("reason", ""))), true)
 			)
 		elif eq:
 			btn.text = L.tr_ui("unequip_btn")
 			ThemeHelper.style_accent_button(btn, Color(0.85, 0.42, 0.24))
 			btn.pressed.connect(func():
-				UpgradeManager.toggle_equip_upgrade(uid)
+				UpgradeManager.toggle_equip_upgrade(uid_cap)
 				SaveManager.save_game()
 				open_tab("upgrades")
 			)
@@ -885,13 +1085,41 @@ func _build_upgrades_tab() -> void:
 			btn.disabled = UpgradeManager.active_equipped.size() >= unlocked
 			ThemeHelper.style_accent_button(btn, Color(0.18, 0.82, 0.52))
 			btn.pressed.connect(func():
-				if UpgradeManager.toggle_equip_upgrade(uid)["ok"]:
+				var req: Dictionary = UpgradeManager.toggle_equip_upgrade(uid_cap)
+				if bool(req.get("ok", false)):
 					SaveManager.save_game()
 					open_tab("upgrades")
+				else:
+					show_toast(L.localize_reason(str(req.get("reason", ""))), true)
 			)
 		uvb.add_child(btn)
 
-	ThemeHelper.animate_grid_stagger(grid, 0.016, 12)
+	ThemeHelper.animate_grid_stagger(grid, 0.012, 18)
+
+	# Section II: Installed Ship Hardware Upgrades (Levels 1-5) right inside Upgrades Tab too!
+	var sep_hw := HSeparator.new()
+	sep_hw.modulate = Color(0.24, 0.72, 1.0, 0.36)
+	scroll_vb.add_child(sep_hw)
+
+	var hw_hdr := Label.new()
+	hw_hdr.text = L.tr_ui("upg_modules_hdr")
+	hw_hdr.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hw_hdr.clip_text = true
+	if ThemeHelper.font_display:
+		hw_hdr.add_theme_font_override("font", ThemeHelper.font_display)
+	hw_hdr.add_theme_font_size_override("font_size", 16)
+	hw_hdr.add_theme_color_override("font_color", ThemeHelper.COL_GOLD)
+	scroll_vb.add_child(hw_hdr)
+
+	var hw_grid := GridContainer.new()
+	hw_grid.name = "UpgradeHardwareGrid"
+	hw_grid.columns = 3
+	hw_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hw_grid.add_theme_constant_override("h_separation", 12)
+	hw_grid.add_theme_constant_override("v_separation", 12)
+	scroll_vb.add_child(hw_grid)
+
+	_populate_installed_hardware_cards(hw_grid, "upgrades")
 
 # ==============================================================================
 # 5. COLLECTIBLE ACHIEVEMENT CARDS ALBUM (30 TIMED UTC CARDS)
@@ -899,11 +1127,13 @@ func _build_upgrades_tab() -> void:
 func _build_achievements_tab() -> void:
 	AchievementManager.ensure_buckets_current()
 	var vb := VBoxContainer.new()
-	vb.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vb.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vb.add_theme_constant_override("separation", 10)
 	_body_root.add_child(vb)
 
 	var nav := HBoxContainer.new()
+	nav.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	nav.add_theme_constant_override("separation", 10)
 	vb.add_child(nav)
 
@@ -915,7 +1145,8 @@ func _build_achievements_tab() -> void:
 				ready_cnt += 1
 		var b := Button.new()
 		b.text = L.tr_ui(cat_pair[1]) + ("  [◆ %d]" % ready_cnt if ready_cnt > 0 else "")
-		b.custom_minimum_size = Vector2(165, 38)
+		b.custom_minimum_size = Vector2(158, 38)
+		b.clip_text = true
 		if _ach_subcat == cid:
 			ThemeHelper.style_accent_button(b, Color(0.22, 0.78, 1.0))
 		elif ready_cnt > 0:
@@ -934,36 +1165,41 @@ func _build_achievements_tab() -> void:
 	_ach_timer_lbl.clip_text = true
 	if ThemeHelper.font_mono:
 		_ach_timer_lbl.add_theme_font_override("font", ThemeHelper.font_mono)
-	_ach_timer_lbl.add_theme_font_size_override("font_size", 14)
+	_ach_timer_lbl.add_theme_font_size_override("font_size", 13)
 	_ach_timer_lbl.add_theme_color_override("font_color", ThemeHelper.COL_GOLD)
 	nav.add_child(_ach_timer_lbl)
 
 	var sc := ScrollContainer.new()
+	sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	vb.add_child(sc)
 
 	var grid := GridContainer.new()
+	grid.name = "AchievementGrid"
 	grid.columns = 3
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.add_theme_constant_override("h_separation", 14)
 	grid.add_theme_constant_override("v_separation", 14)
 	sc.add_child(grid)
 
-	var tasks: Array = AchievementManager.active_tasks[_ach_subcat]
+	var tasks: Array = AchievementManager.active_tasks.get(_ach_subcat, [])
 	for t in tasks:
-		var rcol: Color = GameData.RARITY_COLORS.get(t["rarity"], Color(0.3, 0.7, 1.0))
+		var rcol: Color = GameData.RARITY_COLORS.get(str(t["rarity"]), Color(0.3, 0.7, 1.0))
 		var acard := PanelContainer.new()
 		acard.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		acard.custom_minimum_size = Vector2(280, 250)
 		acard.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(ThemeHelper.COL_BG_CARD, rcol, 13, 2, 11))
 		grid.add_child(acard)
 
 		var avb := VBoxContainer.new()
+		avb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		avb.add_theme_constant_override("separation", 6)
 		acard.add_child(avb)
 
 		var art_wrap := PanelContainer.new()
-		art_wrap.custom_minimum_size = Vector2(0, 128)
+		art_wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		art_wrap.custom_minimum_size = Vector2(240, 124)
 		art_wrap.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
 		var aw_sb := StyleBoxFlat.new()
 		aw_sb.bg_color = Color(0.02, 0.03, 0.07, 1.0)
@@ -972,15 +1208,18 @@ func _build_achievements_tab() -> void:
 		avb.add_child(art_wrap)
 
 		var art := TextureRect.new()
-		art.set_anchors_preset(Control.PRESET_FULL_RECT)
+		art.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		art.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		art.custom_minimum_size = Vector2(240, 124)
 		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-		if ResourceLoader.exists(t["art"]):
-			art.texture = load(t["art"])
+		if ResourceLoader.exists(str(t["art"])):
+			art.texture = load(str(t["art"]))
 		art_wrap.add_child(art)
 
 		var aname := Label.new()
 		aname.text = "%s  •  %s" % [L.ach_name(t), L.rarity_name(str(t["rarity"]))]
+		aname.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		aname.clip_text = true
 		if ThemeHelper.font_bold:
 			aname.add_theme_font_override("font", ThemeHelper.font_bold)
@@ -989,27 +1228,33 @@ func _build_achievements_tab() -> void:
 
 		var aobj := Label.new()
 		aobj.text = L.ach_objective(t)
+		aobj.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		aobj.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		aobj.custom_minimum_size = Vector2(240, 0)
 		aobj.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		aobj.add_theme_font_size_override("font_size", 14)
 		avb.add_child(aobj)
 
 		var pbar := ProgressBar.new()
+		pbar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		pbar.max_value = float(t["target"])
 		pbar.value = float(t["progress"])
 		pbar.show_percentage = false
-		pbar.custom_minimum_size = Vector2(0, 16)
+		pbar.custom_minimum_size = Vector2(0, 14)
 		avb.add_child(pbar)
 
 		var plbl := Label.new()
 		plbl.text = "%d / %d" % [int(floor(float(t["progress"]))), int(t["target"])]
 		plbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		plbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		plbl.add_theme_font_size_override("font_size", 12)
 		plbl.add_theme_color_override("font_color", ThemeHelper.COL_MUTED)
 		avb.add_child(plbl)
 
 		var cbtn := Button.new()
+		cbtn.custom_minimum_size = Vector2(0, 36)
 		var reward := int(t["crystal_reward"])
-		var tid: String = t["id"]
+		var tid: String = str(t["id"])
 		if bool(t["claimed"]):
 			cbtn.text = L.tr_ui("claimed_check")
 			cbtn.disabled = true
@@ -1018,7 +1263,7 @@ func _build_achievements_tab() -> void:
 			ThemeHelper.style_accent_button(cbtn, Color(0.20, 0.88, 0.56))
 			var cat_cap := _ach_subcat
 			cbtn.pressed.connect(func():
-				if AchievementManager.claim_reward(cat_cap, tid)["ok"]:
+				if bool(AchievementManager.claim_reward(cat_cap, tid).get("ok", false)):
 					AudioManager.play_sfx("card_legendary", 0.02, 0.85)
 					open_tab("achievements")
 			)
@@ -1027,26 +1272,30 @@ func _build_achievements_tab() -> void:
 			cbtn.disabled = true
 		avb.add_child(cbtn)
 
-	ThemeHelper.animate_grid_stagger(grid, 0.018, 12)
+	ThemeHelper.animate_grid_stagger(grid, 0.015, 12)
 
 # ==============================================================================
 # 6. SECTOR SELECTOR & MINERAL REFINERY
 # ==============================================================================
 func _build_launch_tab() -> void:
 	var vb := VBoxContainer.new()
-	vb.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vb.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vb.add_theme_constant_override("separation", 12)
 	_body_root.add_child(vb)
 
 	var ref_box := PanelContainer.new()
+	ref_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ref_box.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(Color(0.055, 0.105, 0.19, 0.96), ThemeHelper.COL_GOLD, 12, 2, 14))
 	vb.add_child(ref_box)
 
 	var ref_vb := VBoxContainer.new()
+	ref_vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ref_vb.add_theme_constant_override("separation", 8)
 	ref_box.add_child(ref_vb)
 
 	var ref_hb := HBoxContainer.new()
+	ref_hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ref_hb.add_theme_constant_override("separation", 16)
 	ref_vb.add_child(ref_hb)
 
@@ -1056,6 +1305,7 @@ func _build_launch_tab() -> void:
 
 	var clbl := Label.new()
 	clbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	clbl.custom_minimum_size = Vector2(360, 0)
 	clbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	clbl.text = L.tr_ui("cargo_refinery_status", [cargo_units, int(stats["cargo_capacity"]), preview_val])
 	if ThemeHelper.font_bold:
@@ -1069,16 +1319,20 @@ func _build_launch_tab() -> void:
 	sell_btn.disabled = cargo_units <= 0
 	ThemeHelper.style_accent_button(sell_btn, Color(0.95, 0.72, 0.18))
 	sell_btn.pressed.connect(func():
-		if ShipGrid.sell_all_cargo() > 0:
+		var gained: int = ShipGrid.sell_all_cargo()
+		if gained > 0:
 			AudioManager.play_sfx("buy_upgrade", 0.03, 0.9)
 			SaveManager.save_game()
 			open_tab("launch")
+			show_toast("+%d CR" % gained)
 	)
 	ref_hb.add_child(sell_btn)
 
 	# Mineral Breakdown Chips
 	var min_flow := HFlowContainer.new()
+	min_flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	min_flow.add_theme_constant_override("h_separation", 8)
+	min_flow.add_theme_constant_override("v_separation", 6)
 	ref_vb.add_child(min_flow)
 	for rk in GameData.RESOURCES.keys():
 		var qty := int(ShipGrid.cargo.get(rk, 0))
@@ -1093,11 +1347,13 @@ func _build_launch_tab() -> void:
 		min_flow.add_child(chip)
 
 	var sc := ScrollContainer.new()
+	sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	vb.add_child(sc)
 
 	var sgrid := GridContainer.new()
+	sgrid.name = "SectorGrid"
 	sgrid.columns = 2
 	sgrid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sgrid.add_theme_constant_override("h_separation", 14)
@@ -1106,19 +1362,23 @@ func _build_launch_tab() -> void:
 
 	for s in GameData.sectors:
 		var sidx: int = int(s["index"])
-		var unlocked := ShipGrid.unlocked_sectors.has(sidx)
+		var unlocked: bool = ShipGrid.unlocked_sectors.has(sidx)
 		var scard := PanelContainer.new()
 		scard.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scard.custom_minimum_size = Vector2(360, 156)
 		var bcol: Color = s["sun_color"] if unlocked else Color(0.32, 0.38, 0.48)
 		scard.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(ThemeHelper.COL_BG_CARD, bcol, 13, 2, 14))
 		sgrid.add_child(scard)
 
 		var svb := VBoxContainer.new()
+		svb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		svb.add_theme_constant_override("separation", 6)
 		scard.add_child(svb)
 
 		var sn := Label.new()
 		sn.text = L.sector_name(s)
+		sn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		sn.clip_text = true
 		if ThemeHelper.font_display:
 			sn.add_theme_font_override("font", ThemeHelper.font_display)
 		sn.add_theme_font_size_override("font_size", 19)
@@ -1127,6 +1387,8 @@ func _build_launch_tab() -> void:
 
 		var ssub := Label.new()
 		ssub.text = L.sector_sub(s)
+		ssub.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		ssub.custom_minimum_size = Vector2(320, 0)
 		ssub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		ssub.add_theme_color_override("font_color", ThemeHelper.COL_CYAN)
 		ssub.add_theme_font_size_override("font_size", 13)
@@ -1134,20 +1396,23 @@ func _build_launch_tab() -> void:
 
 		var sdesc := Label.new()
 		sdesc.text = L.sector_desc(s)
-		sdesc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		sdesc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		sdesc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		sdesc.custom_minimum_size = Vector2(320, 0)
+		sdesc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		sdesc.add_theme_font_size_override("font_size", 13)
 		sdesc.add_theme_color_override("font_color", Color(0.82, 0.90, 1.0))
 		svb.add_child(sdesc)
 
 		var lbtn := Button.new()
 		lbtn.custom_minimum_size = Vector2(0, 44)
+		var sidx_cap: int = sidx
 		if unlocked:
 			lbtn.text = L.tr_ui("launch_expedition_btn")
 			ThemeHelper.style_accent_button(lbtn, Color(0.18, 0.85, 0.52))
 			lbtn.pressed.connect(func():
 				close_panel()
-				launch_sector_requested.emit(sidx)
+				launch_sector_requested.emit(sidx_cap)
 			)
 		else:
 			var ucost := int(s["unlock_cost"])
@@ -1156,21 +1421,25 @@ func _build_launch_tab() -> void:
 			lbtn.disabled = (ShipGrid.credits < ucost) or (ShipGrid.purchased_expansion_cells < req_c)
 			ThemeHelper.style_accent_button(lbtn, Color(0.22, 0.68, 0.95))
 			lbtn.pressed.connect(func():
-				if ShipGrid.unlock_sector(sidx)["ok"]:
+				var ures: Dictionary = ShipGrid.unlock_sector(sidx_cap)
+				if bool(ures.get("ok", false)):
 					AudioManager.play_sfx("card_legendary", 0.02, 0.9)
 					SaveManager.save_game()
 					open_tab("launch")
+				else:
+					show_toast(L.localize_reason(str(ures.get("reason", ""))), true)
 			)
 		svb.add_child(lbtn)
 
-	ThemeHelper.animate_grid_stagger(sgrid, 0.03, 6)
+	ThemeHelper.animate_grid_stagger(sgrid, 0.025, 6)
 
 # ==============================================================================
 # 7. MULTILINGUAL SETTINGS (LANGUAGE, AUDIO, GRAPHICS, SENSITIVITY)
 # ==============================================================================
 func _build_settings_tab() -> void:
 	var sc := ScrollContainer.new()
-	sc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_body_root.add_child(sc)
 
@@ -1180,16 +1449,19 @@ func _build_settings_tab() -> void:
 	sc.add_child(center)
 
 	var card := PanelContainer.new()
+	card.name = "SettingsCard"
 	card.custom_minimum_size = Vector2(680, 0)
 	card.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(ThemeHelper.COL_BG_CARD, Color(0.22, 0.72, 1.0, 0.72), 14, 2, 20))
 	center.add_child(card)
 
 	var vb := VBoxContainer.new()
+	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vb.add_theme_constant_override("separation", 14)
 	card.add_child(vb)
 
 	# 1. Prominent Language Selector Row
 	var lang_hb := HBoxContainer.new()
+	lang_hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lang_hb.add_theme_constant_override("separation", 12)
 	vb.add_child(lang_hb)
 	var lang_lbl := Label.new()
@@ -1236,6 +1508,7 @@ func _build_settings_tab() -> void:
 	vb.add_child(mute_cb)
 
 	var gfx_hb := HBoxContainer.new()
+	gfx_hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	gfx_hb.add_theme_constant_override("separation", 10)
 	vb.add_child(gfx_hb)
 	var gl := Label.new()
@@ -1276,11 +1549,13 @@ func _build_settings_tab() -> void:
 
 func _add_slider_row(parent: VBoxContainer, label_text: String, cur: float, min_v: float, max_v: float, cb: Callable) -> void:
 	var hb := HBoxContainer.new()
+	hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hb.add_theme_constant_override("separation", 12)
 	parent.add_child(hb)
 	var l := Label.new()
 	l.text = label_text
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l.custom_minimum_size = Vector2(260, 0)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hb.add_child(l)
 	var sl := HSlider.new()

@@ -145,6 +145,13 @@ func _build_theme() -> void:
 	main_theme.set_stylebox("background", "ProgressBar", pb_bg)
 	main_theme.set_stylebox("fill", "ProgressBar", pb_fg)
 
+func clear_children(parent: Node) -> void:
+	if not is_instance_valid(parent):
+		return
+	for ch in parent.get_children():
+		parent.remove_child(ch)
+		ch.queue_free()
+
 func style_accent_button(btn: Button, accent: Color) -> void:
 	var n := make_panel_style(accent.darkened(0.64), accent.lightened(0.12), 9, 2, 12)
 	var h := make_panel_style(accent.darkened(0.42), accent.lightened(0.36), 9, 2, 12)
@@ -159,54 +166,75 @@ func wire_button_fx(btn: BaseButton) -> void:
 	if btn.has_meta("fx_wired"):
 		return
 	btn.set_meta("fx_wired", true)
+	btn.scale = Vector2.ONE
 	btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	btn.mouse_entered.connect(func():
 		if btn.disabled:
 			return
 		AudioManager.play_sfx("ui_hover", 0.03, 0.45)
 		if not reduced_motion and btn.is_inside_tree():
-			btn.pivot_offset = btn.size * 0.5
+			if btn.has_meta("_btn_tw"):
+				var old_tw: Variant = btn.get_meta("_btn_tw")
+				if old_tw is Tween and (old_tw as Tween).is_running():
+					(old_tw as Tween).kill()
 			var tw := btn.create_tween()
-			tw.tween_property(btn, "scale", Vector2(1.03, 1.03), 0.11).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			btn.set_meta("_btn_tw", tw)
+			tw.tween_property(btn, "self_modulate", Color(1.16, 1.20, 1.28, 1.0), 0.11).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	)
 	btn.mouse_exited.connect(func():
 		if not reduced_motion and btn.is_inside_tree():
-			btn.pivot_offset = btn.size * 0.5
+			if btn.has_meta("_btn_tw"):
+				var old_tw: Variant = btn.get_meta("_btn_tw")
+				if old_tw is Tween and (old_tw as Tween).is_running():
+					(old_tw as Tween).kill()
 			var tw := btn.create_tween()
-			tw.tween_property(btn, "scale", Vector2.ONE, 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+			btn.set_meta("_btn_tw", tw)
+			tw.tween_property(btn, "self_modulate", Color.WHITE, 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	)
 	btn.pressed.connect(func():
 		AudioManager.play_sfx("ui_click", 0.03, 0.72)
 		if not reduced_motion and btn.is_inside_tree():
-			btn.pivot_offset = btn.size * 0.5
+			if btn.has_meta("_btn_tw"):
+				var old_tw: Variant = btn.get_meta("_btn_tw")
+				if old_tw is Tween and (old_tw as Tween).is_running():
+					(old_tw as Tween).kill()
 			var tw := btn.create_tween()
-			tw.tween_property(btn, "scale", Vector2(0.96, 0.96), 0.05)
-			tw.tween_property(btn, "scale", Vector2(1.02, 1.02), 0.09).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			btn.set_meta("_btn_tw", tw)
+			tw.tween_property(btn, "self_modulate", Color(0.84, 0.94, 1.0, 1.0), 0.045)
+			tw.tween_property(btn, "self_modulate", Color(1.12, 1.16, 1.24, 1.0), 0.09).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	)
 
-func animate_entry(ctrl: Control, delay: float = 0.0, start_scale: Vector2 = Vector2(0.95, 0.95)) -> void:
-	if reduced_motion or not is_instance_valid(ctrl) or not ctrl.is_inside_tree():
-		ctrl.modulate.a = 1.0
-		ctrl.scale = Vector2.ONE
+func animate_entry(ctrl: Control, delay: float = 0.0, _start_scale: Vector2 = Vector2.ONE) -> void:
+	if not is_instance_valid(ctrl):
 		return
-	ctrl.modulate.a = 0.0
-	ctrl.scale = start_scale
-	ctrl.pivot_offset = ctrl.size * 0.5
+	ctrl.scale = Vector2.ONE
+	ctrl.rotation = 0.0
+	if ctrl.has_meta("_entry_tw"):
+		var prev_tw: Variant = ctrl.get_meta("_entry_tw")
+		if prev_tw is Tween and (prev_tw as Tween).is_running():
+			(prev_tw as Tween).kill()
+	if reduced_motion or not ctrl.is_inside_tree():
+		ctrl.modulate.a = 1.0
+		return
+	ctrl.modulate.a = 0.24
 	var tw := ctrl.create_tween()
+	ctrl.set_meta("_entry_tw", tw)
 	if delay > 0.0:
 		tw.tween_interval(delay)
-	tw.set_parallel(true)
-	tw.tween_property(ctrl, "modulate:a", 1.0, 0.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	tw.tween_property(ctrl, "scale", Vector2.ONE, 0.24).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(ctrl, "modulate:a", 1.0, 0.16).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
-func animate_grid_stagger(container: Control, step_delay: float = 0.022, max_animated: int = 16) -> void:
-	if reduced_motion or not is_instance_valid(container):
+func animate_grid_stagger(container: Control, step_delay: float = 0.015, max_animated: int = 18) -> void:
+	if not is_instance_valid(container):
 		return
 	var idx := 0
 	for ch in container.get_children():
-		if ch is Control and ch.visible:
-			if idx < max_animated:
-				animate_entry(ch as Control, float(idx) * step_delay, Vector2(0.92, 0.92))
+		if ch is Control and (ch as Control).visible:
+			var ctrl_ch := ch as Control
+			ctrl_ch.scale = Vector2.ONE
+			if not reduced_motion and idx < max_animated:
+				animate_entry(ctrl_ch, float(idx) * step_delay)
+			else:
+				ctrl_ch.modulate.a = 1.0
 			idx += 1
 
 func make_language_dropdown(compact: bool = false) -> OptionButton:

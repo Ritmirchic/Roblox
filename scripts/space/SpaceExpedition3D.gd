@@ -403,7 +403,11 @@ func _build_expedition_hud() -> void:
 	_pause_panel.set_anchors_preset(Control.PRESET_CENTER)
 	_pause_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_pause_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_pause_panel.custom_minimum_size = Vector2(460, 290)
+	_pause_panel.offset_left = -235
+	_pause_panel.offset_right = 235
+	_pause_panel.offset_top = -150
+	_pause_panel.offset_bottom = 150
+	_pause_panel.custom_minimum_size = Vector2(470, 300)
 	_pause_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	_pause_panel.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(Color(0.025, 0.048, 0.115, 0.97), Color(0.24, 0.80, 1.0, 0.90), 16, 2, 22))
 	_hud_root.add_child(_pause_panel)

@@ -224,18 +224,23 @@ func _show_main_menu() -> void:
 	_tagline_lbl = Label.new()
 	_tagline_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_tagline_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tagline_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_tagline_lbl.custom_minimum_size = Vector2(400, 0)
 	_tagline_lbl.add_theme_font_size_override("font_size", 13)
 	_tagline_lbl.add_theme_color_override("font_color", Color(0.66, 0.86, 1.0))
 	vb.add_child(_tagline_lbl)
 
 	var stat_pill := PanelContainer.new()
-	stat_pill.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	stat_pill.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stat_pill.custom_minimum_size = Vector2(400, 0)
 	stat_pill.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(Color(0.05, 0.095, 0.19, 0.92), Color(1.0, 0.78, 0.25, 0.55), 10, 14, 6))
 	vb.add_child(stat_pill)
 
 	_summary_lbl = Label.new()
 	_summary_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_summary_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_summary_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_summary_lbl.custom_minimum_size = Vector2(372, 0)
 	if ThemeHelper.font_bold:
 		_summary_lbl.add_theme_font_override("font", ThemeHelper.font_bold)
 	_summary_lbl.add_theme_font_size_override("font_size", 14)
@@ -298,7 +303,11 @@ func _show_main_menu() -> void:
 	_new_game_confirm.set_anchors_preset(Control.PRESET_CENTER)
 	_new_game_confirm.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_new_game_confirm.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_new_game_confirm.custom_minimum_size = Vector2(460, 210)
+	_new_game_confirm.offset_left = -240
+	_new_game_confirm.offset_right = 240
+	_new_game_confirm.offset_top = -110
+	_new_game_confirm.offset_bottom = 110
+	_new_game_confirm.custom_minimum_size = Vector2(480, 220)
 	_new_game_confirm.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(Color(0.03, 0.055, 0.125, 0.98), ThemeHelper.COL_RED, 16, 2, 20))
 	root.add_child(_new_game_confirm)
 
@@ -310,6 +319,8 @@ func _show_main_menu() -> void:
 	_confirm_lbl = Label.new()
 	_confirm_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_confirm_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_confirm_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_confirm_lbl.custom_minimum_size = Vector2(420, 0)
 	nvb.add_child(_confirm_lbl)
 
 	var nhb := HBoxContainer.new()
@@ -376,7 +387,7 @@ func _launch_space_sector(sector_idx: int) -> void:
 	_active_world = exp_scene
 
 func _run_packaged_exe_self_test() -> void:
-	print("=== RUNNING PACKAGED RUNTIME VERIFICATION (v2.0.0) ===")
+	print("=== RUNNING PACKAGED RUNTIME VERIFICATION (v2.0.1) ===")
 	_show_main_menu()
 	await get_tree().process_frame
 	await get_tree().process_frame
@@ -396,6 +407,11 @@ func _run_packaged_exe_self_test() -> void:
 		for tab in ["shop", "crew", "packs", "upgrades", "achievements", "launch", "settings"]:
 			hw._station_panels.open_tab(tab)
 			await get_tree().process_frame
+			await get_tree().process_frame
+			if hw._station_panels._body_root.size.x < 600.0 or hw._station_panels._body_root.size.y < 300.0:
+				push_error("Station tab body_root collapsed on tab: " + tab)
+				get_tree().quit(1)
+				return
 		hw._station_panels.close_panel()
 
 	var sectors_verified := 0

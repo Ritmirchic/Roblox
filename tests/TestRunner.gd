@@ -596,9 +596,46 @@ func _test_multilingual_localization_and_gui_non_overlap() -> void:
 	_check(SaveManager.load_game(lang_save) and L.current_lang == "ja", "Restored persisted language from save file")
 	L.set_language("ru")
 
+	# Verify Main Menu layout, wrapped label widths, and button non-overlap
+	var main_script: GDScript = load("res://scripts/ui/Main.gd")
+	var main_inst: Node = main_script.new()
+	add_child(main_inst)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var menu_tagline: Label = main_inst.get("_tagline_lbl") as Label
+	var menu_summary: Label = main_inst.get("_summary_lbl") as Label
+	_check(is_instance_valid(menu_tagline) and menu_tagline.size.x >= 350.0, "Main Menu tagline has full readable width (not narrow column)")
+	_check(is_instance_valid(menu_summary) and menu_summary.size.x >= 350.0, "Main Menu commander summary pill has full readable width")
+
+	var menu_btns: Array[Control] = [
+		main_inst.get("_play_btn") as Control,
+		main_inst.get("_quick_btn") as Control,
+		main_inst.get("_set_btn") as Control,
+		main_inst.get("_new_btn") as Control,
+		main_inst.get("_quit_btn") as Control,
+	]
+	for i in range(menu_btns.size()):
+		_check(menu_btns[i].size.x >= 350.0 and menu_btns[i].size.y >= 38.0, "Main Menu button #%d properly sized" % i)
+		for j in range(i + 1, menu_btns.size()):
+			_check(not menu_btns[i].get_global_rect().grow(-0.5).intersects(menu_btns[j].get_global_rect().grow(-0.5)), "Main Menu buttons #%d and #%d do not overlap" % [i, j])
+
+	var menu_bad_scales: Array[String] = []
+	var menu_narrow_lbls: Array[String] = []
+	_scan_ui_subtree_invariants(main_inst, menu_bad_scales, menu_narrow_lbls)
+	_check(menu_bad_scales.is_empty(), "Main Menu has zero scaled Controls inside Containers: " + ", ".join(menu_bad_scales))
+	_check(menu_narrow_lbls.is_empty(), "Main Menu has zero narrow vertical-column wrapped Labels: " + ", ".join(menu_narrow_lbls))
+
+	main_inst.queue_free()
+	await get_tree().process_frame
+	await get_tree().process_frame
+
 	# Instantiate Hangar3D and verify ZERO pairwise rectangle overlap across all 5 HUD docks + mouse guard
+	ShipGrid.reset_to_starter_ship()
 	var hangar := Hangar3D.new()
 	add_child(hangar)
+	await get_tree().process_frame
 	await get_tree().process_frame
 	await get_tree().process_frame
 
@@ -620,9 +657,50 @@ func _test_multilingual_localization_and_gui_non_overlap() -> void:
 	_check(hangar._is_screen_pos_over_hud(hangar._bottom_dock.get_global_rect().get_center()), "Mouse guard blocks clicks over HangarBottomDock")
 	_check(not hangar._is_screen_pos_over_hud(vp_rect.get_center()), "Center 3D Shipbay viewport remains open for 3D raycast")
 
-	for tab in ["shop", "crew", "packs", "upgrades", "achievements", "launch", "settings"]:
+	# Deep post-layout verification across ALL 7 Station Tabs + Tab-to-Tab transitions!
+	for tab in ["shop", "upgrades", "crew", "packs", "achievements", "launch", "settings"]:
 		hangar._station_panels.open_tab(tab)
 		await get_tree().process_frame
+		await get_tree().process_frame
+		await get_tree().process_frame
+
+		var body_root: Control = hangar._station_panels._body_root
+		_check(body_root.size.x >= 1100.0 and body_root.size.y >= 480.0, "Station tab '%s' body_root fills modal (%s)" % [tab, str(body_root.size)])
+
+		var bad_scales: Array[String] = []
+		var narrow_lbls: Array[String] = []
+		_scan_ui_subtree_invariants(hangar._station_panels, bad_scales, narrow_lbls)
+		_check(bad_scales.is_empty(), "Tab '%s' has zero scaled Controls inside Containers: %s" % [tab, ", ".join(bad_scales)])
+		_check(narrow_lbls.is_empty(), "Tab '%s' has zero narrow wrapped Labels: %s" % [tab, ", ".join(narrow_lbls)])
+
+		if tab == "shop":
+			var shop_grid: Control = body_root.find_child("ShopModuleGrid", true, false) as Control
+			var shop_inst: Control = body_root.find_child("ShopInstalledList", true, false) as Control
+			_assert_grid_children_laid_out(shop_grid, 14, 280.0, 130.0, "ShopModuleGrid")
+			_assert_grid_children_laid_out(shop_inst, 2, 250.0, 80.0, "ShopInstalledList")
+		elif tab == "upgrades":
+			var upg_slots: Control = body_root.find_child("UpgradeSlotsGrid", true, false) as Control
+			var upg_proto: Control = body_root.find_child("UpgradeProtocolGrid", true, false) as Control
+			var upg_hw: Control = body_root.find_child("UpgradeHardwareGrid", true, false) as Control
+			_assert_grid_children_laid_out(upg_slots, 5, 170.0, 80.0, "UpgradeSlotsGrid (5 slots)")
+			_assert_grid_children_laid_out(upg_proto, 18, 270.0, 110.0, "UpgradeProtocolGrid (all 18 protocols)")
+			_assert_grid_children_laid_out(upg_hw, 2, 250.0, 80.0, "UpgradeHardwareGrid (installed ship modules)")
+		elif tab == "crew":
+			var crew_grid: Control = body_root.find_child("CrewFlowGrid", true, false) as Control
+			_assert_grid_children_laid_out(crew_grid, 42, 195.0, 290.0, "CrewFlowGrid (all 42 cards)")
+		elif tab == "packs":
+			var pack_row: Control = body_root.find_child("PackCardsRow", true, false) as Control
+			_assert_grid_children_laid_out(pack_row, 2, 440.0, 460.0, "PackCardsRow (Standard & Elite packs)")
+		elif tab == "achievements":
+			var ach_grid: Control = body_root.find_child("AchievementGrid", true, false) as Control
+			_assert_grid_children_laid_out(ach_grid, 5, 260.0, 220.0, "AchievementGrid (5 minute tasks)")
+		elif tab == "launch":
+			var sec_grid: Control = body_root.find_child("SectorGrid", true, false) as Control
+			_assert_grid_children_laid_out(sec_grid, 5, 340.0, 140.0, "SectorGrid (5 space sectors)")
+		elif tab == "settings":
+			var set_card: Control = body_root.find_child("SettingsCard", true, false) as Control
+			_check(is_instance_valid(set_card) and set_card.size.x >= 650.0 and set_card.size.y >= 320.0, "SettingsCard properly laid out")
+
 	hangar._station_panels.close_panel()
 	hangar.queue_free()
 	await get_tree().process_frame
@@ -631,6 +709,7 @@ func _test_multilingual_localization_and_gui_non_overlap() -> void:
 	var exp_hud := SpaceExpedition3D.new()
 	exp_hud.setup_sector(0)
 	add_child(exp_hud)
+	await get_tree().process_frame
 	await get_tree().process_frame
 	await get_tree().process_frame
 
@@ -646,6 +725,64 @@ func _test_multilingual_localization_and_gui_non_overlap() -> void:
 			var fb: Rect2 = f_panels[j].get_global_rect()
 			_check(not fa.intersects(fb), "Zero Flight HUD overlap between %s and %s" % [f_panels[i].name, f_panels[j].name])
 
+	var hud_bad_scales: Array[String] = []
+	var hud_narrow_lbls: Array[String] = []
+	_scan_ui_subtree_invariants(exp_hud._hud_root, hud_bad_scales, hud_narrow_lbls)
+	_check(hud_bad_scales.is_empty(), "Flight HUD has zero scaled Controls inside Containers")
+	_check(hud_narrow_lbls.is_empty(), "Flight HUD has zero narrow wrapped Labels")
+
 	exp_hud.queue_free()
 	await get_tree().process_frame
+
+func _assert_grid_children_laid_out(grid: Control, expected_min_count: int, min_w: float, min_h: float, label: String) -> void:
+	_check(is_instance_valid(grid), "%s exists in Station UI" % label)
+	if not is_instance_valid(grid):
+		return
+	var vis_children: Array[Control] = []
+	for ch in grid.get_children():
+		if ch is Control and (ch as Control).visible:
+			vis_children.append(ch as Control)
+	_check(vis_children.size() >= expected_min_count, "%s populated (%d >= %d items)" % [label, vis_children.size(), expected_min_count])
+
+	var all_sized := true
+	var size_fail_detail := ""
+	for idx in range(vis_children.size()):
+		var c: Control = vis_children[idx]
+		if c.size.x < min_w or c.size.y < min_h or c.modulate.a < 0.20:
+			all_sized = false
+			size_fail_detail = "child #%d size=%s alpha=%.2f" % [idx, str(c.size), c.modulate.a]
+			break
+	_check(all_sized, "%s cards all visibly sized >= (%d x %d) %s" % [label, int(min_w), int(min_h), size_fail_detail])
+
+	var overlap_found := false
+	var overlap_detail := ""
+	for i in range(vis_children.size()):
+		var ri: Rect2 = vis_children[i].get_rect().grow(-0.5)
+		for j in range(i + 1, vis_children.size()):
+			var rj: Rect2 = vis_children[j].get_rect().grow(-0.5)
+			if ri.intersects(rj):
+				overlap_found = true
+				overlap_detail = "item #%d %s overlaps #%d %s" % [i, str(ri), j, str(rj)]
+				break
+		if overlap_found:
+			break
+	_check(not overlap_found, "%s cards have ZERO pairwise overlap %s" % [label, overlap_detail])
+
+func _scan_ui_subtree_invariants(node: Node, bad_scales: Array[String], narrow_labels: Array[String]) -> void:
+	if not is_instance_valid(node):
+		return
+	if node is Container and (node as Control).is_visible_in_tree():
+		for ch in node.get_children():
+			if ch is Control and (ch as Control).visible:
+				var ctrl := ch as Control
+				if not ctrl.scale.is_equal_approx(Vector2.ONE) or not is_zero_approx(ctrl.rotation):
+					bad_scales.append("%s->%s(scale=%s)" % [node.name, ctrl.name, str(ctrl.scale)])
+	if node is Label and (node as Label).is_visible_in_tree():
+		var lbl := node as Label
+		if lbl.autowrap_mode != TextServer.AUTOWRAP_OFF and lbl.text.strip_edges().length() >= 6:
+			if lbl.size.x < 50.0:
+				narrow_labels.append("%s(w=%.1f, txt='%s')" % [lbl.name, lbl.size.x, lbl.text.left(18)])
+	for child in node.get_children():
+		_scan_ui_subtree_invariants(child, bad_scales, narrow_labels)
+
 

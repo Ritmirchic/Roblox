@@ -166,8 +166,7 @@ func play_ceremony(pack_id: String, results: Array[Dictionary], unlocked_fifth: 
 	if ResourceLoader.exists(art_path):
 		_center_pack.texture = load(art_path)
 
-	for c in _cards_row.get_children():
-		c.queue_free()
+	ThemeHelper.clear_children(_cards_row)
 	_card_slots.clear()
 
 	stage = Stage.PACK_APPEAR
@@ -175,10 +174,17 @@ func play_ceremony(pack_id: String, results: Array[Dictionary], unlocked_fifth: 
 	AudioManager.play_sfx("pack_open", 0.02, 0.92)
 
 	var fast := 0.25 if ThemeHelper.reduced_motion else 1.0
+	_center_pack.set_anchors_preset(Control.PRESET_CENTER)
+	_center_pack.offset_left = -140
+	_center_pack.offset_top = -199
+	_center_pack.offset_right = 140
+	_center_pack.offset_bottom = 199
+	_center_pack.rotation = 0.0
 	_center_pack.scale = Vector2(0.25, 0.25)
 	_center_pack.modulate = Color(1, 1, 1, 1)
 	_pack_aura.scale = Vector2(0.3, 0.3)
 
+	var base_pack_x := _center_pack.position.x
 	var tw := create_tween()
 	tw.tween_property(_center_pack, "scale", Vector2(1.06, 1.06), 0.36 * fast).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(_pack_aura, "scale", Vector2(1.05, 1.05), 0.40 * fast).set_trans(Tween.TRANS_CUBIC)
@@ -186,7 +192,8 @@ func play_ceremony(pack_id: String, results: Array[Dictionary], unlocked_fifth: 
 
 	for i in range(6):
 		var off := 10.0 * (1.0 if i % 2 == 0 else -1.0)
-		tw.tween_property(_center_pack, "position:x", _center_pack.position.x + off, 0.045 * fast)
+		tw.tween_property(_center_pack, "position:x", base_pack_x + off, 0.045 * fast)
+	tw.tween_property(_center_pack, "position:x", base_pack_x, 0.03 * fast)
 	tw.tween_property(_center_pack, "scale", Vector2(1.32, 1.32), 0.16 * fast)
 
 	tw.tween_callback(func(): stage = Stage.PACK_BURST)
@@ -223,12 +230,14 @@ func _spawn_three_facedown_cards() -> void:
 
 		var slot_root := Control.new()
 		slot_root.custom_minimum_size = Vector2(226, 336)
-		slot_root.pivot_offset = Vector2(113, 168)
+		slot_root.size = Vector2(226, 336)
 		holder.add_child(slot_root)
 
 		var back_panel := PanelContainer.new()
 		back_panel.name = "BackBtn"
-		back_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+		back_panel.position = Vector2.ZERO
+		back_panel.custom_minimum_size = Vector2(226, 336)
+		back_panel.size = Vector2(226, 336)
 		back_panel.pivot_offset = Vector2(113, 168)
 		back_panel.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		back_panel.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
@@ -242,7 +251,9 @@ func _spawn_three_facedown_cards() -> void:
 		back_panel.add_theme_stylebox_override("panel", bp_sb)
 
 		var back_img := TextureRect.new()
-		back_img.set_anchors_preset(Control.PRESET_FULL_RECT)
+		back_img.custom_minimum_size = Vector2(222, 332)
+		back_img.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		back_img.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		back_img.texture = back_tex
 		back_img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		back_img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
@@ -258,7 +269,7 @@ func _spawn_three_facedown_cards() -> void:
 			AudioManager.play_sfx("ui_hover", 0.03, 0.42)
 			if not ThemeHelper.reduced_motion:
 				var tw_h := back_panel.create_tween()
-				tw_h.tween_property(back_panel, "scale", Vector2(1.05, 1.05), 0.12).set_trans(Tween.TRANS_BACK)
+				tw_h.tween_property(back_panel, "scale", Vector2(1.045, 1.045), 0.12).set_trans(Tween.TRANS_BACK)
 		)
 		back_panel.mouse_exited.connect(func():
 			if not ThemeHelper.reduced_motion:
@@ -271,6 +282,7 @@ func _spawn_three_facedown_cards() -> void:
 		cw.name = "FaceCard"
 		cw.visible = false
 		cw.position = Vector2(5, 5)
+		cw.size = Vector2(216, 326)
 		cw.pivot_offset = Vector2(108, 163)
 		var cdata: Dictionary = _results[i]["card"]
 		cw.setup_card(cdata, true, CrewManager.get_copies(cdata["id"]), false)
@@ -287,12 +299,12 @@ func _spawn_three_facedown_cards() -> void:
 
 		if not ThemeHelper.reduced_motion:
 			holder.modulate.a = 0.0
-			slot_root.scale = Vector2(0.72, 0.72)
+			back_panel.scale = Vector2(0.76, 0.76)
 			var tw_in := holder.create_tween()
-			tw_in.tween_interval(0.08 * float(i))
-			tw_in.set_parallel(true)
-			tw_in.tween_property(holder, "modulate:a", 1.0, 0.22)
-			tw_in.tween_property(slot_root, "scale", Vector2.ONE, 0.26).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			if i > 0:
+				tw_in.tween_interval(0.08 * float(i))
+			tw_in.tween_property(holder, "modulate:a", 1.0, 0.20)
+			tw_in.parallel().tween_property(back_panel, "scale", Vector2.ONE, 0.24).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 		_card_slots.append(holder)
 

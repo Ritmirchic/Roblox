@@ -23,11 +23,11 @@ func setup_card(data: Dictionary, owned: bool, copies: int = 1, equipped: bool =
 	is_equipped = equipped
 
 	custom_minimum_size = Vector2(198, 296) if compact else Vector2(216, 326)
+	scale = Vector2.ONE
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
-	for c in get_children():
-		c.queue_free()
+	ThemeHelper.clear_children(self)
 
 	var rarity: String = str(data.get("rarity", "Common"))
 	var rcol: Color = GameData.RARITY_COLORS.get(rarity, Color(0.6, 0.68, 0.78))
@@ -184,7 +184,8 @@ func setup_card(data: Dictionary, owned: bool, copies: int = 1, equipped: bool =
 	bonus_lbl.text = L.crew_bonus(data)
 	bonus_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bonus_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	bonus_lbl.custom_minimum_size = Vector2(0, 32)
+	bonus_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bonus_lbl.custom_minimum_size = Vector2(168 if compact else 184, 34)
 	bonus_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	bonus_lbl.add_theme_font_size_override("font_size", 12 if compact else 13)
 	bonus_lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.36) if owned else Color(0.55, 0.62, 0.72))
@@ -208,24 +209,30 @@ func _on_hover_enter() -> void:
 	_is_hovered = true
 	z_index = 12
 	AudioManager.play_sfx("ui_hover", 0.03, 0.42)
+	if _outer_sb != null:
+		_outer_sb.shadow_size = 18
+		if not is_equipped:
+			_outer_sb.border_color = _base_border_col.lightened(0.30)
 	if not ThemeHelper.reduced_motion:
-		pivot_offset = size * 0.5
 		if _hover_tween and _hover_tween.is_running():
 			_hover_tween.kill()
 		_hover_tween = create_tween().set_parallel(true)
-		_hover_tween.tween_property(self, "scale", Vector2(1.055, 1.055), 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		_hover_tween.tween_property(self, "self_modulate", Color(1.12, 1.15, 1.22, 1.0), 0.14).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 		if _foil_mat != null:
 			_hover_tween.tween_method(func(v: float): _foil_mat.set_shader_parameter("hover_amount", v), 0.0, 1.0, 0.16)
 
 func _on_hover_exit() -> void:
 	_is_hovered = false
 	z_index = 0
+	if _outer_sb != null:
+		_outer_sb.shadow_size = 12 if _rarity_tier >= 3 else 7
+		if not is_equipped:
+			_outer_sb.border_color = _base_border_col
 	if not ThemeHelper.reduced_motion:
-		pivot_offset = size * 0.5
 		if _hover_tween and _hover_tween.is_running():
 			_hover_tween.kill()
 		_hover_tween = create_tween().set_parallel(true)
-		_hover_tween.tween_property(self, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		_hover_tween.tween_property(self, "self_modulate", Color.WHITE, 0.15).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 		if _foil_mat != null:
 			_hover_tween.tween_method(func(v: float): _foil_mat.set_shader_parameter("hover_amount", v), 1.0, 0.0, 0.18)
 
@@ -236,9 +243,8 @@ func _gui_input(event: InputEvent) -> void:
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		AudioManager.play_sfx("ui_click", 0.03, 0.78)
 		if not ThemeHelper.reduced_motion:
-			pivot_offset = size * 0.5
 			var tw := create_tween()
-			tw.tween_property(self, "scale", Vector2(0.96, 0.96), 0.05)
-			tw.tween_property(self, "scale", Vector2(1.04, 1.04), 0.11).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.tween_property(self, "self_modulate", Color(0.86, 0.94, 1.0, 1.0), 0.05)
+			tw.tween_property(self, "self_modulate", Color(1.10, 1.14, 1.20, 1.0), 0.10).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 		card_clicked.emit(str(card_data.get("id", "")))
 		accept_event()

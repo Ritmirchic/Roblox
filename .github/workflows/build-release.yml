@@ -106,7 +106,7 @@ jobs:
           $exitCode = $LASTEXITCODE
           foreach ($line in $testOut) {
             Write-Host $line
-            if ($line -match "SCRIPT ERROR|Parse Error|Failed to load script|TEST FAILED|FAILURE:") {
+            if ($line -match "SCRIPT ERROR|Parse Error|Failed to load script|Can't set_rect|TEST FAILED|FAILURE:") {
               Write-Host "::error::$line"
               $hasScriptErr = $true
             }
@@ -220,15 +220,16 @@ jobs:
 
           $tag = "space-miner-v1.0.0"
           $notes = @"
-          # SPACE MINER: BUILD & CONQUER — v2.0.0 (64-Bit Windows Multilingual & Audio/Art Overhaul)
+          # SPACE MINER: BUILD & CONQUER — v2.0.1 (64-Bit Windows Multilingual, GUI Layout Fix & Audio/Art Overhaul)
 
           Complete standalone 64-bit Windows 3D space mining, modular ship construction, orbital combat, and collectible card progression game built on **Godot Engine 4.3**.
 
-          ### v2.0.0 Major Overhaul Highlights
-          - **Complete GUI Rebuild & Non-Overlapping Responsive Layout**: Rebuilt Main Menu, 3D Hangar HUD (relocated Bottom Station Dock, collapsible side docks, integrated station switcher strip, strict mouse-hit isolation over HUD panels), Flight HUD, and Pack Opening Ceremony — zero overlaps or clipping from `1280x720` up to `4K`.
+          ### v2.0.1 Fixes & Major Overhaul Highlights
+          - **Critical GUI Container Layout & Upgrade Core Fix (`v2.0.1`)**: Eliminated all `Container` child `Control.scale` conflicts (`Control::set_rect`), replaced anchor-inside-0x0-Control station containers with pure `MarginContainer` layout, enforced explicit minimum widths on all wrapped labels across Main Menu / Hangar / Modals (preventing narrow vertical text columns or card pile-ups), and populated **Ядро улучшений (`Upgrade Core`)** with **5 Protocol Slots**, **all 18 Upgrade Protocols**, and **Installed Ship Hardware Upgrades (Lv. 1–5)** in one unified screen.
+          - **Complete GUI Rebuild & Non-Overlapping Responsive Layout**: Rebuilt Main Menu, 3D Hangar HUD (relocated Bottom Station Dock, collapsible side docks, integrated station switcher strip, strict mouse-hit isolation over HUD panels), Flight HUD, and Pack Opening Ceremony — verified zero overlaps or clipping from `1280x720` up to `4K`.
           - **10 World Languages (Russian Primary Default)**: Full live localization across **Русский (primary default)**, English, Español, Deutsch, Français, Português, 简体中文, 日本語, 한국어, and Türkçe with bundled SIL OFL `Exo 2`, `JetBrains Mono`, and CJK font fallbacks (`0` missing glyphs).
           - **Studio 44.1 kHz Sci-Fi Audio Overhaul**: All 23 ambient loops and sound effects completely re-synthesized at `44.1 kHz` 16-bit PCM with warm filtered stereo-grade harmonics, musical chord cadences, and smooth fade-ins.
-          - **High-Detail Sci-Fi Fighter & Achievement Card Artwork + Rich Animations**: All 42 Crew Fighter portraits (`400x500`), 30 Widescreen 3D PBR Achievement Dioramas (`360x204`), Holographic Card Back, and Booster Packs redesigned with interactive mouse-tracked foil sheen, Hero Bridge Dossier showcase, levitating packs, and spring UI animations.
+          - **High-Detail Sci-Fi Fighter & Achievement Card Artwork + Rich Animations**: All 42 Crew Fighter portraits (`400x500`), 30 Widescreen 3D PBR Achievement Dioramas (`360x204`), Holographic Card Back, and Booster Packs redesigned with interactive mouse-tracked foil sheen, Hero Bridge Dossier showcase, and levitating packs.
 
           ## Downloads
           - **Windows Standalone Portable (`SPACE_MINER_WINDOWS.zip`)**: Extract and launch `SPACE_MINER.exe`. No external runtimes required.
@@ -253,9 +254,9 @@ jobs:
 
           if ($exists) {
             gh release upload $tag "dist\SPACE_MINER_WINDOWS.zip" "dist\SPACE_MINER_SETUP.exe" "dist\SPACE_MINER_SOURCE.zip" "dist\SHA256SUMS.txt" --clobber --repo "${{ github.repository }}"
-            gh release edit $tag --title "SPACE MINER: BUILD & CONQUER v2.0.0" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
+            gh release edit $tag --title "SPACE MINER: BUILD & CONQUER v2.0.1" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
           } else {
-            gh release create $tag "dist\SPACE_MINER_WINDOWS.zip" "dist\SPACE_MINER_SETUP.exe" "dist\SPACE_MINER_SOURCE.zip" "dist\SHA256SUMS.txt" --target "${{ github.sha }}" --title "SPACE MINER: BUILD & CONQUER v2.0.0" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
+            gh release create $tag "dist\SPACE_MINER_WINDOWS.zip" "dist\SPACE_MINER_SETUP.exe" "dist\SPACE_MINER_SOURCE.zip" "dist\SHA256SUMS.txt" --target "${{ github.sha }}" --title "SPACE MINER: BUILD & CONQUER v2.0.1" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
           }
 
           Write-Host "::notice title=ReleasePublished::https://github.com/${{ github.repository }}/releases/tag/$tag"

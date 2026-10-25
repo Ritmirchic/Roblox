@@ -489,6 +489,8 @@ func _build_hangar_ui() -> void:
 
 	_crew_prog_lbl = Label.new()
 	_crew_prog_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_crew_prog_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_crew_prog_lbl.custom_minimum_size = Vector2(280, 0)
 	_crew_prog_lbl.add_theme_font_size_override("font_size", 12)
 	_crew_prog_lbl.add_theme_color_override("font_color", Color(0.82, 0.92, 1.0))
 	lvb.add_child(_crew_prog_lbl)
@@ -642,6 +644,8 @@ func _build_hangar_ui() -> void:
 
 	_cam_help_lbl = Label.new()
 	_cam_help_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_cam_help_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_cam_help_lbl.custom_minimum_size = Vector2(280, 0)
 	_cam_help_lbl.add_theme_font_size_override("font_size", 12)
 	_cam_help_lbl.add_theme_color_override("font_color", ThemeHelper.COL_MUTED)
 	rvb.add_child(_cam_help_lbl)
@@ -813,8 +817,7 @@ func _refresh_ui() -> void:
 		db.text = txt
 
 	# Populate Owned Module Palette
-	for ch in _palette_list.get_children():
-		ch.queue_free()
+	ThemeHelper.clear_children(_palette_list)
 
 	var total_hull_avail := ShipGrid.unplaced_expansion_cells + ShipGrid.free_unplaced_hull_cells
 	_add_palette_entry("hull_cell", L.mod_name("hull_cell"), total_hull_avail)
@@ -833,8 +836,7 @@ func _refresh_ui() -> void:
 	_bp_load_btn.disabled = (_blueprint_opt.item_count == 0)
 
 	# Populate Structured Telemetry Stat Rows
-	for ch in _telemetry_rows_vb.get_children():
-		ch.queue_free()
+	ThemeHelper.clear_children(_telemetry_rows_vb)
 	var st := ShipGrid.compute_ship_stats()
 	var com: Vector3 = st["center_of_mass"]
 	_add_telemetry_row(L.tr_ui("stat_modules"), "%d" % int(st["module_count"]), ThemeHelper.COL_CYAN)
