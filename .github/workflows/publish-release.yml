@@ -5,11 +5,17 @@ name: Publish Windows release assets
 # https://github.com/.../releases/download/... URLs.
 
 on:
+  push:
+    branches:
+      - arena/d94c8bb2-roblox
+    paths:
+      - 'release/**'
+      - '.github/workflows/publish-release.yml'
   workflow_dispatch:
     inputs:
       tag:
         description: Release tag to attach the artifacts to
-        required: true
+        required: false
         default: space-miner-v1.1.0
 
 permissions:
@@ -31,7 +37,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload "${{ inputs.tag }}" \
+          gh release upload "${{ inputs.tag || 'space-miner-v1.1.0' }}" \
             release/SPACE_MINER_WINDOWS.zip \
             release/SPACE_MINER_SETUP.exe \
             release/SPACE_MINER_SOURCE.zip \
@@ -41,4 +47,4 @@ jobs:
       - name: Show the published assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release view "${{ inputs.tag }}" --repo "${{ github.repository }}" --json assets
+        run: gh release view "${{ inputs.tag || 'space-miner-v1.1.0' }}" --repo "${{ github.repository }}" --json assets
