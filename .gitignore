@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+build/
+dist/
+savegame.json
+settings.json
+release/*.exe
+release/*.zip
