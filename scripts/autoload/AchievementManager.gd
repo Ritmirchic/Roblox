@@ -56,6 +56,15 @@ func get_seconds_until_reset(category: String) -> int:
 	var interval := _get_interval(category)
 	return maxi(0, interval - (now % interval))
 
+func get_claimable_count() -> int:
+	var n := 0
+	for cat in ["minute", "hourly", "daily", "weekly"]:
+		var arr: Array = active_tasks.get(cat, [])
+		for t in arr:
+			if bool(t.get("completed", false)) and not bool(t.get("claimed", false)):
+				n += 1
+	return n
+
 func _get_interval(category: String) -> int:
 	match category:
 		"minute": return INTERVAL_MINUTE

@@ -28,6 +28,12 @@ func get_unique_owned_count() -> int:
 			n += 1
 	return n
 
+func is_owned(card_id: String) -> bool:
+	return int(owned_cards.get(card_id, 0)) > 0
+
+func get_copies(card_id: String) -> int:
+	return int(owned_cards.get(card_id, 0))
+
 func enforce_capacity() -> void:
 	var max_slots := ShipGrid.get_unlocked_crew_slots()
 	var clean: Array[String] = []

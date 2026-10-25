@@ -88,21 +88,33 @@ jobs:
 
           Write-Host "Importing project resources..."
           $impOut = & $godotConsole --headless --path "$PWD" --import 2>&1
-          $impOut | ForEach-Object { Write-Host $_ }
+          $hasScriptErr = $false
+          foreach ($line in $impOut) {
+            Write-Host $line
+            if ($line -match "SCRIPT ERROR|Parse Error|Failed to load script") {
+              Write-Host "::error::$line"
+              $hasScriptErr = $true
+            }
+          }
+          if ($hasScriptErr) {
+            Write-Host "::error::GDScript parse/load error detected during --import!"
+            exit 1
+          }
 
           Write-Host "Running automated Godot 4.3 TestScene.tscn suite..."
           $testOut = & $godotConsole --headless --path "$PWD" "res://tests/TestScene.tscn" 2>&1
           $exitCode = $LASTEXITCODE
           foreach ($line in $testOut) {
             Write-Host $line
-            if ($line -match "SCRIPT ERROR|Parse Error|TEST FAILED|FAILURE:") {
+            if ($line -match "SCRIPT ERROR|Parse Error|Failed to load script|TEST FAILED|FAILURE:") {
               Write-Host "::error::$line"
+              $hasScriptErr = $true
             }
             if ($line -match "TEST SUMMARY:") {
               Write-Host "::notice title=EngineUnitTests::$line"
             }
           }
-          if ($exitCode -ne 0 -or -not (($testOut -join "`n") -match "ALL_AUTOMATED_TESTS_PASSED_OK")) {
+          if ($hasScriptErr -or $exitCode -ne 0 -or -not (($testOut -join "`n") -match "ALL_AUTOMATED_TESTS_PASSED_OK")) {
             Write-Host "::error::Godot automated unit test suite failed (exit=$exitCode)"
             exit 1
           }

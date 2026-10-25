@@ -623,10 +623,11 @@ func _build_packs_tab() -> void:
 	center_wrap.add_theme_constant_override("separation", 36)
 	sc.add_child(center_wrap)
 
-	for pid in ["standard", "elite"]:
+	var pack_ids: Array[String] = ["standard", "elite"]
+	for pid in pack_ids:
 		var pinfo: Dictionary = PackManager.PACK_TYPES[pid]
-		var probs := PackManager.get_probability_table(pid)
-		var is_elite := (pid == "elite")
+		var probs: Dictionary = PackManager.get_probability_table(pid)
+		var is_elite: bool = (pid == "elite")
 		var accent := Color(1.0, 0.76, 0.24) if is_elite else Color(0.22, 0.82, 1.0)
 
 		var box := PanelContainer.new()
@@ -715,14 +716,15 @@ func _build_packs_tab() -> void:
 		buy_btn.text = L.tr_ui("open_pack_btn", [cost])
 		buy_btn.disabled = ShipGrid.crystals < cost
 		ThemeHelper.style_accent_button(buy_btn, accent)
-		var pid_cap := pid
+		var pid_cap: String = pid
 		buy_btn.pressed.connect(func():
-			var res := PackManager.open_pack(pid_cap)
-			if res["ok"]:
+			var res: Dictionary = PackManager.purchase_and_open_pack(pid_cap)
+			if bool(res.get("ok", false)):
+				ShipGrid.crystals_changed.emit(ShipGrid.crystals)
 				var cards_typed: Array[Dictionary] = []
 				for item in res["cards"]:
 					cards_typed.append(item)
-				_pack_modal.play_ceremony(pid_cap, cards_typed, bool(res["unlocked_fifth_slot"]))
+				_pack_modal.play_ceremony(pid_cap, cards_typed, bool(res.get("fifth_slot_unlocked", false)))
 		)
 		vb.add_child(buy_btn)
 

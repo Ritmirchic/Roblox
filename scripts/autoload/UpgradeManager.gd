@@ -14,6 +14,12 @@ var fifth_slot_unlocked: bool = false
 var owned_upgrades: Array[String] = ["upg_01"]
 var active_equipped: Array[String] = ["upg_01"]
 
+func is_owned(upg_id: String) -> bool:
+	return owned_upgrades.has(upg_id)
+
+func is_equipped(upg_id: String) -> bool:
+	return active_equipped.has(upg_id)
+
 func get_unlocked_slots() -> int:
 	var slots := DEFAULT_SLOTS
 	if fourth_slot_unlocked:

@@ -64,8 +64,13 @@ func get_probability_table(pack_id: String) -> Dictionary:
 	var probs: Dictionary = {}
 	for k in GameData.RARITY_ORDER:
 		probs[k] = (float(w.get(k, 0.0)) / maxf(0.0001, total)) * 100.0
-	probs["fifth_upgrade_slot_per_roll_pct"] = 0.0 if UpgradeManager.fifth_slot_unlocked else (UpgradeManager.FIFTH_SLOT_DROP_PROBABILITY * 100.0)
+	var p_single := 0.0 if UpgradeManager.fifth_slot_unlocked else UpgradeManager.FIFTH_SLOT_DROP_PROBABILITY
+	probs["fifth_upgrade_slot_per_roll_pct"] = p_single * 100.0
+	probs["fifth_upgrade_slot_any_pct"] = (1.0 - pow(1.0 - p_single, float(CARDS_PER_PACK))) * 100.0
 	return probs
+
+func open_pack(pack_id: String) -> Dictionary:
+	return purchase_and_open_pack(pack_id)
 
 func _roll_rarity(weights: Dictionary) -> String:
 	var total := 0.0

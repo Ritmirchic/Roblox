@@ -2,6 +2,7 @@ extends Node
 
 signal ship_changed
 signal credits_changed(new_credits: int)
+signal crystals_changed(new_crystals: int)
 signal cargo_changed
 
 const CELL_SIZE: float = 2.0
@@ -110,7 +111,14 @@ func add_credits(amount: int) -> void:
 
 func add_crystals(amount: int) -> void:
 	crystals = maxi(0, crystals + amount)
+	crystals_changed.emit(crystals)
 	credits_changed.emit(credits)
+
+func get_unplaced_count(mod_id: String) -> int:
+	if mod_id == "hull_cell":
+		return unplaced_expansion_cells + free_unplaced_hull_cells
+	var arr: Array = owned_equipment.get(mod_id, [])
+	return arr.size()
 
 func get_footprint_cells(mod_id: String, anchor: Vector3i, yaw: int) -> Array[Vector3i]:
 	var out: Array[Vector3i] = []
@@ -703,4 +711,55 @@ func save_named_layout(layout_name: String) -> bool:
 	if clean.is_empty():
 		return false
 	saved_layouts[clean] = serialize_ship()
+	return true
+
+func load_named_layout(layout_name: String) -> bool:
+	if not saved_layouts.has(layout_name):
+		return false
+	var target_arr: Array = saved_layouts[layout_name]
+	if not validate_serialized_layout(target_arr):
+		return false
+	# Return all currently installed non-cockpit modules back into Hangar storage first
+	for uid in placed_modules.keys():
+		var e: Dictionary = placed_modules[uid]
+		var mid: String = str(e["mod_id"])
+		if mid == "cockpit_mk1":
+			continue
+		if mid == "hull_cell":
+			if bool(e.get("is_free_starting", false)):
+				free_unplaced_hull_cells += 1
+			else:
+				unplaced_expansion_cells += 1
+		else:
+			var stock: Array = owned_equipment.get(mid, [])
+			stock.append(maxi(1, int(e.get("level", 1))))
+			owned_equipment[mid] = stock
+
+	placed_modules.clear()
+	cell_to_uid.clear()
+	_next_uid = 1
+	_force_place("cockpit_mk1", Vector3i.ZERO, 0, 1, true)
+
+	for item in target_arr:
+		var mid := str(item["mod_id"])
+		if mid == "cockpit_mk1":
+			continue
+		var anc := Vector3i(int(item["ax"]), int(item["ay"]), int(item["az"]))
+		var yaw := int(item["yaw"])
+		if mid == "hull_cell":
+			if free_unplaced_hull_cells > 0:
+				free_unplaced_hull_cells -= 1
+				_force_place(mid, anc, yaw, 1, true)
+			elif unplaced_expansion_cells > 0:
+				unplaced_expansion_cells -= 1
+				_force_place(mid, anc, yaw, 1, false)
+		else:
+			var stock: Array = owned_equipment.get(mid, [])
+			if not stock.is_empty():
+				var lv := int(stock.pop_back())
+				owned_equipment[mid] = stock
+				_force_place(mid, anc, yaw, lv, false)
+
+	repair_all_modules()
+	ship_changed.emit()
 	return true

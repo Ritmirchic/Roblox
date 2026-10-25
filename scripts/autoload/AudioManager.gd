@@ -161,6 +161,9 @@ func set_thruster_intensity(intensity: float) -> void:
 	_thruster_player.volume_db = lerpf(-22.0, -5.0, clamped)
 	_thruster_player.pitch_scale = lerpf(0.84, 1.16, clamped)
 
+func set_thruster_active(active: bool, intensity: float = 1.0) -> void:
+	set_thruster_intensity(intensity if active else 0.0)
+
 func set_mining_beam_active(active: bool) -> void:
 	if not active or muted:
 		if _mining_player.playing:
@@ -169,3 +172,12 @@ func set_mining_beam_active(active: bool) -> void:
 	if not _mining_player.playing and _mining_player.stream != null:
 		_mining_player.play()
 	_mining_player.volume_db = -7.0
+
+func set_mining_active(active: bool) -> void:
+	set_mining_beam_active(active)
+
+func stop_loops() -> void:
+	if _thruster_player and _thruster_player.playing:
+		_thruster_player.stop()
+	if _mining_player and _mining_player.playing:
+		_mining_player.stop()
