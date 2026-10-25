@@ -439,8 +439,8 @@ func _on_ship_telemetry(tel: Dictionary) -> void:
 		]
 
 func _draw_hud_world_overlays() -> void:
-	var vp := get_viewport_rect().size
-	var center := vp * 0.5
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	var center: Vector2 = vp * 0.5
 	# Center Flight & Mining Crosshair
 	_overlay_canvas.draw_arc(center, 16.0, 0.0, TAU, 28, Color(0.32, 0.90, 1.0, 0.78), 1.8)
 	_overlay_canvas.draw_circle(center, 2.5, Color(1.0, 0.88, 0.35, 0.95))
@@ -452,26 +452,29 @@ func _draw_hud_world_overlays() -> void:
 	var scan_range := float(player_ship.stats.get("scanner_range", 0.0))
 	if scan_range > 1.0:
 		for ast in asteroids_root.get_children():
-			if ast is Asteroid3D and ast.dominant_resource != "iron":
-				var d := ast.global_position.distance_to(player_ship.global_position)
-				if d <= scan_range and not _cam.is_position_behind(ast.global_position):
-					var sp := _cam.unproject_position(ast.global_position)
-					var rcol: Color = GameData.RESOURCES[ast.dominant_resource]["color"]
-					_overlay_canvas.draw_rect(Rect2(sp - Vector2(14, 14), Vector2(28, 28)), rcol, false, 1.8)
+			if ast is Asteroid3D:
+				var ast3d := ast as Asteroid3D
+				if ast3d.dominant_resource != "iron":
+					var d: float = ast3d.global_position.distance_to(player_ship.global_position)
+					if d <= scan_range and not _cam.is_position_behind(ast3d.global_position):
+						var sp: Vector2 = _cam.unproject_position(ast3d.global_position)
+						var rcol: Color = GameData.RESOURCES[ast3d.dominant_resource]["color"]
+						_overlay_canvas.draw_rect(Rect2(sp - Vector2(14, 14), Vector2(28, 28)), rcol, false, 1.8)
 
 	# Enemy HUD Target Boxes
 	var radar_r := float(player_ship.stats.get("radar_range", 140.0))
 	for en in enemies_root.get_children():
 		if en is EnemyShip3D:
-			var de := en.global_position.distance_to(player_ship.global_position)
-			if de <= radar_r and not _cam.is_position_behind(en.global_position):
-				var ep := _cam.unproject_position(en.global_position)
-				var is_locked := (en == player_ship.locked_enemy)
+			var en3d := en as EnemyShip3D
+			var de: float = en3d.global_position.distance_to(player_ship.global_position)
+			if de <= radar_r and not _cam.is_position_behind(en3d.global_position):
+				var ep: Vector2 = _cam.unproject_position(en3d.global_position)
+				var is_locked := (en3d == player_ship.locked_enemy)
 				var col := Color(1.0, 0.25, 0.28, 0.95) if is_locked else Color(1.0, 0.55, 0.22, 0.78)
 				var sz := 22.0 if is_locked else 15.0
 				_overlay_canvas.draw_rect(Rect2(ep - Vector2(sz, sz), Vector2(sz * 2.0, sz * 2.0)), col, false, 2.2 if is_locked else 1.4)
 				# Enemy mini HP bar
-				var hp_pct := clampf(en.hp / maxf(1.0, en.max_hp), 0.0, 1.0)
+				var hp_pct := clampf(en3d.hp / maxf(1.0, en3d.max_hp), 0.0, 1.0)
 				_overlay_canvas.draw_rect(Rect2(ep + Vector2(-20, -sz - 8), Vector2(40.0 * hp_pct, 4)), Color(1.0, 0.32, 0.28), true)
 
 func _draw_radar_minimap() -> void:
@@ -498,7 +501,8 @@ func _draw_radar_minimap() -> void:
 	# Asteroids (Cyan dots)
 	for ast in asteroids_root.get_children():
 		if ast is Node3D:
-			var rel_a := inv_basis * (ast.global_position - player_ship.global_position)
+			var ast_n := ast as Node3D
+			var rel_a: Vector3 = inv_basis * (ast_n.global_position - player_ship.global_position)
 			var a2 := Vector2(rel_a.x, rel_a.z) / max_r * r
 			if a2.length() <= r - 3.0:
 				_radar_canvas.draw_circle(c + a2, 2.0, Color(0.32, 0.82, 1.0, 0.65))
@@ -506,7 +510,8 @@ func _draw_radar_minimap() -> void:
 	# Enemies (Red blips)
 	for en in enemies_root.get_children():
 		if en is Node3D:
-			var rel_e := inv_basis * (en.global_position - player_ship.global_position)
+			var en_n := en as Node3D
+			var rel_e: Vector3 = inv_basis * (en_n.global_position - player_ship.global_position)
 			var e2 := Vector2(rel_e.x, rel_e.z) / max_r * r
 			if e2.length() > r - 4.0:
 				e2 = e2.normalized() * (r - 4.0)
@@ -584,11 +589,12 @@ func _handle_flight_inputs(_delta: float) -> void:
 	var best_dot := 0.88
 	for en in enemies_root.get_children():
 		if en is Node3D:
-			var dir_e := (en.global_position - _cam.global_position).normalized()
+			var en_n := en as Node3D
+			var dir_e: Vector3 = (en_n.global_position - _cam.global_position).normalized()
 			var d_dot := cam_fwd.dot(dir_e)
-			if d_dot > best_dot and en.global_position.distance_to(player_ship.global_position) < 250.0:
+			if d_dot > best_dot and en_n.global_position.distance_to(player_ship.global_position) < 250.0:
 				best_dot = d_dot
-				best_en = en
+				best_en = en_n
 	if is_instance_valid(best_en):
 		player_ship.locked_enemy = best_en
 

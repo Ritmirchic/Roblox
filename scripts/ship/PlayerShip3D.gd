@@ -454,17 +454,19 @@ func _process_magnets_and_collection(delta: float) -> void:
 	for ch in chunks_root.get_children():
 		if not (ch is ResourceChunk3D):
 			continue
-		var d_ship := ch.global_position.distance_to(global_position)
+		var chunk := ch as ResourceChunk3D
+		var d_ship: float = chunk.global_position.distance_to(global_position)
 		if d_ship <= pickup_radius:
-			ch.try_collect()
+			chunk.try_collect()
 			continue
 		for col in collectors:
-			var d_col := ch.global_position.distance_to(col["pos"])
+			var col_pos: Vector3 = col["pos"]
+			var d_col: float = chunk.global_position.distance_to(col_pos)
 			if d_col <= pickup_radius:
-				ch.try_collect()
+				chunk.try_collect()
 				break
 			elif d_col <= float(col["range"]):
-				ch.apply_magnet_pull(col["pos"], float(col["force"]), delta)
+				chunk.apply_magnet_pull(col_pos, float(col["force"]), delta)
 
 func _process_orbiting_drones(delta: float) -> void:
 	if _orbit_drones.is_empty():
@@ -481,10 +483,11 @@ func _process_orbiting_drones(delta: float) -> void:
 		var best_d := 95.0
 		for e in get_tree().get_nodes_in_group("enemies"):
 			if e is Node3D:
-				var d := e.global_position.distance_to(global_position)
+				var e_n := e as Node3D
+				var d: float = e_n.global_position.distance_to(global_position)
 				if d < best_d:
 					best_d = d
-					nearest = e
+					nearest = e_n
 		if is_instance_valid(nearest):
 			for dn in _orbit_drones:
 				var dir := (nearest.global_position - dn.global_position).normalized()

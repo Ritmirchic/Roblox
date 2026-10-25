@@ -264,10 +264,11 @@ func _run_packaged_exe_self_test() -> void:
 
 	# Open each Hangar UI tab to verify zero UI/shader/icon errors
 	if _active_world is Hangar3D:
+		var hw := _active_world as Hangar3D
 		for tab in ["shop", "crew", "packs", "upgrades", "achievements", "launch", "settings"]:
-			_active_world._station_panels.open_tab(tab)
+			hw._station_panels.open_tab(tab)
 			await get_tree().process_frame
-		_active_world._station_panels.close_panel()
+		hw._station_panels.close_panel()
 
 	# Launch all 5 Space Sectors sequentially to verify 3D models, lighting, physics, AI, and HUD
 	var sectors_verified := 0
@@ -275,13 +276,15 @@ func _run_packaged_exe_self_test() -> void:
 		_launch_space_sector(sec_i)
 		await get_tree().process_frame
 		await get_tree().physics_frame
-		if _active_world is SpaceExpedition3D and is_instance_valid(_active_world.player_ship):
-			_active_world.player_ship.thrust_input = Vector3(0, 0, 1)
-			_active_world.player_ship.firing_mining = true
-			_active_world.player_ship.firing_weapons = true
-			await get_tree().physics_frame
-			await get_tree().physics_frame
-			sectors_verified += 1
+		if _active_world is SpaceExpedition3D:
+			var sw := _active_world as SpaceExpedition3D
+			if is_instance_valid(sw.player_ship):
+				sw.player_ship.thrust_input = Vector3(0, 0, 1)
+				sw.player_ship.firing_mining = true
+				sw.player_ship.firing_weapons = true
+				await get_tree().physics_frame
+				await get_tree().physics_frame
+				sectors_verified += 1
 
 	var save_ok := SaveManager.save_game("user://runtime_verify_save.json")
 	var load_ok := SaveManager.load_game("user://runtime_verify_save.json")

@@ -100,10 +100,13 @@ func _on_impact(hit_pos: Vector3, collider: Object) -> void:
 		VFXFactory.spawn_explosion(parent_scene, hit_pos, Color(1.0, 0.55, 0.18), 1.35)
 		AudioManager.play_sfx("explosion", 0.08, 0.7)
 		for e in get_tree().get_nodes_in_group("enemies"):
-			if e is Node3D and e.global_position.distance_to(hit_pos) <= splash_radius:
-				var falloff := 1.0 - 0.5 * (e.global_position.distance_to(hit_pos) / splash_radius)
-				if e.has_method("take_weapon_damage"):
-					e.take_weapon_damage(damage * falloff)
+			if e is Node3D:
+				var e_n := e as Node3D
+				var dist_e: float = e_n.global_position.distance_to(hit_pos)
+				if dist_e <= splash_radius:
+					var falloff: float = 1.0 - 0.5 * (dist_e / splash_radius)
+					if e_n.has_method("take_weapon_damage"):
+						e_n.take_weapon_damage(damage * falloff)
 	else:
 		if from_player:
 			if collider and collider.has_method("take_weapon_damage"):
