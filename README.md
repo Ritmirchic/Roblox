@@ -17,8 +17,12 @@ deeper into the Void Frontier.
 | **SPACE_MINER_SETUP.exe** | Installer with Start Menu + desktop shortcuts and an uninstaller. |
 | **SPACE_MINER_SOURCE.zip** | Full engine project source. |
 
-Grab them from the [latest release](https://github.com/Ritmirchic/Roblox/releases/tag/v1.0.0).
-Checksums are published in `SHA256SUMS.txt` with every release.
+**Direct downloads (v1.1.0):**
+
+- [SPACE_MINER_WINDOWS.zip](https://github.com/Ritmirchic/Roblox/releases/download/space-miner-v1.1.0/SPACE_MINER_WINDOWS.zip) — portable build
+- [SPACE_MINER_SETUP.exe](https://github.com/Ritmirchic/Roblox/releases/download/space-miner-v1.1.0/SPACE_MINER_SETUP.exe) — installer
+- [SPACE_MINER_SOURCE.zip](https://github.com/Ritmirchic/Roblox/releases/download/space-miner-v1.1.0/SPACE_MINER_SOURCE.zip) — source archive
+- [Release page](https://github.com/Ritmirchic/Roblox/releases/tag/space-miner-v1.1.0) · checksums in `SHA256SUMS.txt`
 
 ---
 
@@ -160,7 +164,11 @@ slot maths, mass and centre of mass, thruster physics, crew bonus aggregation, p
 achievement period rotation and duplicate-claim prevention, save/load round-trips, corrupt
 and tampered save recovery, and economy/progression rules.
 
-`node --experimental-strip-types scripts/render-preview.mjs` renders the art pipeline
+`npm run smoke` boots the real scene code headlessly and simulates a full expedition —
+thrust, mining, chunk spawning, magnet collection, turret fire, enemy AI, HUD telemetry,
+payout and save round-trip — so gameplay claims are verified, not assumed.
+
+`npm run preview:art` renders the art pipeline
 headlessly (cards, textures, achievements) and software-rasterises the real 3D geometry so
 models can be inspected without a GPU — the images in this README come from it.
 
