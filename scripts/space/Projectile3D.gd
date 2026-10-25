@@ -10,6 +10,8 @@ var speed: float = 160.0
 var splash_radius: float = 0.0
 var turn_rate: float = 0.0
 var target_node: Node3D = null
+var magnetic_homing: bool = false
+var magnetic_range: float = 0.0
 var ignore_rid: RID = RID()
 var _lifetime: float = 4.0
 var _velocity: Vector3 = Vector3.FORWARD
@@ -34,7 +36,9 @@ func setup(
 	splash: float = 0.0,
 	homing_turn: float = 0.0,
 	tgt: Node3D = null,
-	inherited_velocity: Vector3 = Vector3.ZERO
+	inherited_velocity: Vector3 = Vector3.ZERO,
+	is_magnetic: bool = false,
+	mag_range: float = 0.0
 ) -> void:
 	from_player = is_player
 	weapon_type = wtype
@@ -43,6 +47,8 @@ func setup(
 	splash_radius = splash
 	turn_rate = homing_turn
 	target_node = tgt
+	magnetic_homing = is_magnetic
+	magnetic_range = mag_range
 	_start_xform = start_xform
 	_has_start_xform = true
 
@@ -56,7 +62,7 @@ func setup(
 		global_transform = start_xform
 
 	_velocity = fwd_dir * speed + inherited_velocity
-	_lifetime = 5.5 if wtype in ["rocket", "missile"] else 2.8
+	_lifetime = 5.5 if (wtype in ["rocket", "missile"] or is_magnetic) else 2.8
 
 	_build_visual(wtype, is_player)
 
@@ -99,20 +105,86 @@ func _build_visual(wtype: String, is_player: bool) -> void:
 		mi.material_override = mat
 		add_child(mi)
 
+	# Glowing electromagnetic induction ring & trail on magnetized bullets
+	if magnetic_homing and is_player:
+		var ring_mi := MeshInstance3D.new()
+		var torus := TorusMesh.new()
+		torus.inner_radius = 0.20
+		torus.outer_radius = 0.31
+		torus.rings = 14
+		torus.ring_segments = 8
+		ring_mi.mesh = torus
+		ring_mi.rotation_degrees = Vector3(90, 0, 0)
+		var rmat := StandardMaterial3D.new()
+		rmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		rmat.albedo_color = Color(0.95, 0.36, 1.0, 0.92)
+		rmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		ring_mi.material_override = rmat
+		add_child(ring_mi)
+
+func _acquire_magnetic_enemy() -> Node3D:
+	if not is_inside_tree():
+		return null
+	var cur_dir := _velocity.normalized()
+	if cur_dir.length_squared() < 0.01:
+		cur_dir = (-global_transform.basis.z).normalized()
+	var best: Node3D = null
+	var best_score := 1e9
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e is Node3D and is_instance_valid(e):
+			var en_n := e as Node3D
+			var d := global_position.distance_to(en_n.global_position)
+			if d <= magnetic_range:
+				var dir_e := (en_n.global_position - global_position).normalized()
+				var align := maxf(-0.45, cur_dir.dot(dir_e))
+				var score := d / (1.45 + align)
+				if score < best_score:
+					best_score = score
+					best = en_n
+	return best
+
 func _physics_process(delta: float) -> void:
 	_lifetime -= delta
 	if _lifetime <= 0.0:
 		queue_free()
 		return
 
-	# Homing missile guidance
+	# Dynamic enemy acquisition for Magnetic Homing Radar bullets (even if fired without manual lock!)
+	if magnetic_homing and from_player and magnetic_range > 0.0:
+		if not is_instance_valid(target_node) or global_position.distance_to(target_node.global_position) > magnetic_range * 1.35:
+			target_node = _acquire_magnetic_enemy()
+
+	# Homing missile & Magnetic Bullet guidance
 	if turn_rate > 0.0 and is_instance_valid(target_node):
-		var desired := (target_node.global_position - global_position).normalized()
+		var tgt_pos := target_node.global_position
+		var dist_t := global_position.distance_to(tgt_pos)
+		if magnetic_homing and target_node is CharacterBody3D:
+			var tof := clampf(dist_t / maxf(40.0, speed), 0.0, 0.65)
+			tgt_pos += (target_node as CharacterBody3D).velocity * (tof * 0.65)
+		var to_tgt := tgt_pos - global_position
+		var rem_d := to_tgt.length()
 		var cur_dir := _velocity.normalized()
-		if desired.length_squared() > 0.5 and cur_dir.length_squared() > 0.5:
-			var new_dir := cur_dir.slerp(desired, clampf(turn_rate * delta, 0.0, 1.0)).normalized()
-			_velocity = new_dir * speed
-			global_transform = Projectile3D.make_aim_transform(global_position, new_dir, global_transform.basis.y)
+		if rem_d > 0.05 and cur_dir.length_squared() > 0.5:
+			var desired := to_tgt / rem_d
+			var eff_turn := turn_rate
+			if magnetic_homing:
+				# Speed-matched magnetic curvature + strong inverse-distance terminal attraction near hull
+				eff_turn = maxf(turn_rate, (speed / 20.0) * (turn_rate / 7.8))
+				eff_turn *= lerpf(2.6, 1.0, clampf(rem_d / 36.0, 0.0, 1.0))
+			var ang := cur_dir.angle_to(desired)
+			if ang > 0.0001:
+				var max_step := eff_turn * delta
+				var new_dir: Vector3
+				if ang <= max_step:
+					new_dir = desired
+				else:
+					var axis := cur_dir.cross(desired)
+					if axis.length_squared() < 0.0001:
+						var fallback_up := Vector3.UP if absf(cur_dir.dot(Vector3.UP)) < 0.9 else Vector3.RIGHT
+						axis = cur_dir.cross(fallback_up)
+					new_dir = cur_dir.rotated(axis.normalized(), max_step).normalized()
+				_velocity = new_dir * speed
+				global_transform = Projectile3D.make_aim_transform(global_position, new_dir, global_transform.basis.y)
 
 	var prev_pos := global_position
 	var next_pos := prev_pos + _velocity * delta

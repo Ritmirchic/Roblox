@@ -450,6 +450,70 @@ func _test_live_3d_gameplay_mining_combat_magnets() -> void:
 	_check(went_upside_down, "Ship smoothly pitches past 180 deg upside-down without gimbal lock")
 	ship.rot_input = Vector3.ZERO
 
+	# Magnetic Homing Radar purchase, installation & self-homing bullet test!
+	for old_p2 in exp_world.projectiles_root.get_children():
+		old_p2.queue_free()
+	await get_tree().process_frame
+
+	ShipGrid.credits = 1200 # Affordable even on starter career budget!
+	var buy_mag := ShipGrid.buy_equipment("magnetic_radar")
+	_check(bool(buy_mag["ok"]), "Purchase Magnetic Homing Radar in Equipment Shop")
+	var place_mag := ShipGrid.place_module("magnetic_radar", Vector3i(0, 1, 1), 0)
+	_check(bool(place_mag["ok"]), "Install Magnetic Homing Radar onto 3D ship grid")
+	ship.rebuild_from_grid()
+	await get_tree().process_frame
+	await get_tree().physics_frame
+	_check(float(ship.stats.get("bullet_magnet_range", 0.0)) >= 235.0 and float(ship.stats.get("bullet_magnet_turn", 0.0)) >= 7.5, "Magnetic Homing Radar activates bullet_magnet_range & bullet_magnet_turn")
+
+	PhysicsServer3D.body_set_state(ship.get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM, drift_xf)
+	PhysicsServer3D.body_set_state(ship.get_rid(), PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, Vector3.ZERO)
+	PhysicsServer3D.body_set_state(ship.get_rid(), PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY, Vector3.ZERO)
+	ship.global_transform = drift_xf
+	ship.linear_velocity = Vector3.ZERO
+	ship.angular_velocity = Vector3.ZERO
+	ship.locked_enemy = null # NO manual target lock! Bullets must find and fly into the enemy by themselves!
+	ship.aimed_world_point = test_ship_origin + Vector3(0.0, 0.0, -220.0) # Aiming straight ahead (-Z)
+	for _s2 in range(15):
+		await get_tree().physics_frame
+
+	# Spawn hostile ship ~36 deg off to the side (+X/+Y) so a straight shot along -Z would completely miss!
+	var mag_enemy := EnemyShip3D.new()
+	mag_enemy.setup("scout_drone", test_ship_origin + Vector3(36.0, 8.0, -52.0), ship, exp_world.projectiles_root, exp_world.chunks_root)
+	mag_enemy.max_hp = 500.0
+	mag_enemy.hp = 500.0
+	mag_enemy._fire_cd = 99.0
+	exp_world.enemies_root.add_child(mag_enemy)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+
+	var mag_sight := ship.get_ballistic_sight_info()
+	_check(str(mag_sight["hit_kind"]) == "magnetic_enemy", "Crosshair #2 snaps onto off-bore enemy when Magnetic Homing Radar is installed")
+
+	var mag_hit := {"hit_enemy": false}
+	ship.current_energy = 120.0
+	ship._weapon_cooldowns.clear()
+	ship.firing_weapons = true
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	ship.firing_weapons = false
+
+	if exp_world.projectiles_root.get_child_count() >= 1:
+		var pr_mag := exp_world.projectiles_root.get_child(0) as Projectile3D
+		_check(pr_mag.magnetic_homing, "Fired bullet has magnetic_homing enabled")
+		pr_mag.impacted.connect(func(_hp_v: Vector3, col_obj: Object) -> void:
+			if col_obj == mag_enemy:
+				mag_hit["hit_enemy"] = true
+		)
+		for _step_m in range(90):
+			await get_tree().physics_frame
+			if bool(mag_hit["hit_enemy"]) or mag_enemy.hp < 500.0:
+				mag_hit["hit_enemy"] = true
+				break
+	_check(bool(mag_hit["hit_enemy"]) and mag_enemy.hp < 500.0, "Magnetized bullet curves in 3D flight by itself and hits off-bore EnemyShip3D")
+	if is_instance_valid(mag_enemy):
+		mag_enemy.queue_free()
+	await get_tree().process_frame
+
 	# Enemy AI & Combat test
 	var enemy := EnemyShip3D.new()
 	enemy.setup("scout_drone", ship.global_position + Vector3(0, 0, -45), ship, exp_world.projectiles_root, exp_world.chunks_root)

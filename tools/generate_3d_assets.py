@@ -771,7 +771,7 @@ def build_ship_and_equipment_models() -> List[Tuple[str, PartBuilder, Dict[str, 
     pb.add_mesh(cyl(0.08, 0.45, 8, pos=(0, -0.08, -0.32)), Q_EMISS)
     export_glb(MODELS_DIR / "equipment" / "drone_orbiter.glb", pb, pbr_defense)
 
-    # ---- UTILITY CATEGORY (5) ----
+    # ---- UTILITY CATEGORY (6) ----
     # 23. Deep-Space Radar
     pb = PartBuilder()
     add_docking_base(pb)
@@ -779,6 +779,23 @@ def build_ship_and_equipment_models() -> List[Tuple[str, PartBuilder, Dict[str, 
     pb.add_mesh(cone_frustum(0.18, 0.84, 0.36, 16, pos=(0, 0.26, -0.10), rot_xyz=(-55, 180, 0)), Q_PRIMARY)
     pb.add_mesh(cyl(0.05, 0.52, 8, pos=(0, 0.44, -0.28), rot_xyz=(-55, 0, 0)), Q_EMISS)
     export_glb(MODELS_DIR / "equipment" / "eq_radar.glb", pb, pbr_utility)
+
+    # 23b. Magnetic Homing Radar (makes fired bullets magnetic & self-homing into enemies!)
+    pbr_mag_radar = make_scifi_trim_pbr((88, 104, 142), (232, 68, 162), (72, 242, 255), seed=66)
+    pb = PartBuilder()
+    add_docking_base(pb)
+    pb.add_mesh(cyl(0.30, 0.58, 12, pos=(0, -0.38, 0), rot_xyz=(90, 0, 0)), Q_DARK)
+    pb.add_mesh(cone_frustum(0.22, 0.88, 0.38, 18, pos=(0, 0.20, -0.06), rot_xyz=(-50, 180, 0)), Q_PRIMARY)
+    pb.add_mesh(torus_ring(0.64, 0.055, 18, 8, pos=(0, 0.30, -0.16), rot_xyz=(40, 0, 0)), Q_TRIM)
+    pb.add_mesh(torus_ring(0.40, 0.048, 16, 8, pos=(0, 0.42, -0.28), rot_xyz=(40, 0, 0)), Q_EMISS)
+    pb.add_mesh(cyl(0.06, 0.62, 10, pos=(0, 0.46, -0.32), rot_xyz=(-50, 0, 0)), Q_EMISS)
+    for ang in (0, 120, 240):
+        rad = math.radians(ang)
+        pb.add_mesh(
+            chamfer_box((0.14, 0.38, 0.18), 0.03, pos=(0.56 * math.cos(rad), -0.18, 0.56 * math.sin(rad)), rot_xyz=(0, -ang, 0)),
+            Q_TRIM,
+        )
+    export_glb(MODELS_DIR / "equipment" / "eq_magnetic_radar.glb", pb, pbr_mag_radar)
 
     # 24. Spectrographic Resource Scanner
     pb = PartBuilder()

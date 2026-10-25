@@ -18,6 +18,7 @@ var beams_root: Node = null
 
 var _visuals_by_uid: Dictionary = {}     # uid -> Node3D
 var _turrets_by_uid: Dictionary = {}     # uid -> Node3D
+var _radars_by_uid: Dictionary = {}      # uid -> Node3D
 var _muzzles_by_uid: Dictionary = {}     # uid -> Marker3D
 var _plumes_by_uid: Dictionary = {}      # uid -> MeshInstance3D
 var _sparks_by_uid: Dictionary = {}      # uid -> CPUParticles3D
@@ -82,6 +83,7 @@ func rebuild_from_grid() -> void:
 		ch.queue_free()
 	_visuals_by_uid.clear()
 	_turrets_by_uid.clear()
+	_radars_by_uid.clear()
 	_muzzles_by_uid.clear()
 	_plumes_by_uid.clear()
 	_sparks_by_uid.clear()
@@ -146,6 +148,8 @@ func rebuild_from_grid() -> void:
 		mod_root.add_child(pivot)
 		if bool(def.get("is_turret", false)):
 			_turrets_by_uid[uid] = pivot
+		elif mod_id in ["radar", "magnetic_radar"]:
+			_radars_by_uid[uid] = pivot
 
 		var mpath: String = def["model_path"]
 		if ResourceLoader.exists(mpath):
@@ -354,6 +358,15 @@ func _get_reticle_assisted_point(from_pos: Vector3) -> Vector3:
 	return aimed_world_point if (aimed_world_point - from_pos).length_squared() > 1.0 else (from_pos + base_dir * 160.0)
 
 func _update_turrets(delta: float) -> void:
+	# Spin active Tactical & Magnetic Homing Radar dishes on hull
+	for r_uid in _radars_by_uid.keys():
+		var rpiv: Node3D = _radars_by_uid[r_uid]
+		if is_instance_valid(rpiv) and ShipGrid.placed_modules.has(r_uid):
+			var r_entry: Dictionary = ShipGrid.placed_modules[r_uid]
+			if ShipGrid.get_module_efficiency(r_entry) > 0.0:
+				var spin_spd := 2.8 if str(r_entry["mod_id"]) == "magnetic_radar" else 1.4
+				rpiv.rotate_y(spin_spd * delta)
+
 	var max_slew_rad := 2.4 * delta # ~138 deg/sec smooth mechanical turret tracking
 	for uid in _turrets_by_uid.keys():
 		var tur: Node3D = _turrets_by_uid[uid]
@@ -373,6 +386,31 @@ func _update_turrets(delta: float) -> void:
 			else:
 				tur.global_transform.basis = aim_xform.basis.orthonormalized()
 
+func find_magnetic_target(from_pos: Vector3, prefer_dir: Vector3) -> Node3D:
+	var mag_turn := float(stats.get("bullet_magnet_turn", 0.0))
+	var mag_range := float(stats.get("bullet_magnet_range", 0.0))
+	if mag_turn <= 0.0 or mag_range <= 0.0 or not is_inside_tree():
+		return null
+	if is_instance_valid(locked_enemy) and from_pos.distance_to(locked_enemy.global_position) <= mag_range:
+		return locked_enemy
+	var aim_dir := (aimed_world_point - from_pos).normalized()
+	if aim_dir.length_squared() < 0.1:
+		aim_dir = prefer_dir
+	var best_en: Node3D = null
+	var best_score := 1e9
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e is Node3D and is_instance_valid(e):
+			var en_n := e as Node3D
+			var d := from_pos.distance_to(en_n.global_position)
+			if d <= mag_range:
+				var dir_e := (en_n.global_position - from_pos).normalized()
+				var align := maxf(-0.45, aim_dir.dot(dir_e))
+				var score := d / (1.45 + align)
+				if score < best_score:
+					best_score = score
+					best_en = en_n
+	return best_en
+
 func get_weapon_fire_solution(uid: int) -> Dictionary:
 	var entry: Dictionary = ShipGrid.placed_modules[uid]
 	var mod_id: String = entry["mod_id"]
@@ -381,7 +419,8 @@ func get_weapon_fire_solution(uid: int) -> Dictionary:
 	var m_pos := muzzle.global_position
 	var p_spd := float(def.get("proj_speed", 210.0))
 	var wtype := str(def.get("weapon_type", "kinetic"))
-	var lifetime_sec := 5.5 if wtype in ["rocket", "missile"] else 2.8
+	var is_mag := float(stats.get("bullet_magnet_turn", 0.0)) > 0.0 and float(stats.get("bullet_magnet_range", 0.0)) > 0.0
+	var lifetime_sec := 5.5 if (wtype in ["rocket", "missile"] or is_mag) else 2.8
 	var max_travel := p_spd * lifetime_sec
 
 	var barrel_dir: Vector3
@@ -400,6 +439,7 @@ func get_weapon_fire_solution(uid: int) -> Dictionary:
 	# Raycast exact straight-line bullet trajectory in world space to find where the bullet WILL arrive/impact!
 	var impact_pos: Vector3 = m_pos + barrel_dir * max_travel
 	var hit_kind := "none"
+	var hit_dist := max_travel
 	var space_state := get_world_3d().direct_space_state
 	if space_state != null:
 		var q := PhysicsRayQueryParameters3D.create(m_pos, impact_pos)
@@ -407,6 +447,7 @@ func get_weapon_fire_solution(uid: int) -> Dictionary:
 		var hit := space_state.intersect_ray(q)
 		if not hit.is_empty():
 			impact_pos = hit["position"]
+			hit_dist = m_pos.distance_to(impact_pos)
 			var col: Object = hit["collider"]
 			if col is EnemyShip3D or (col is Node and col.is_in_group("enemies")):
 				hit_kind = "enemy"
@@ -414,6 +455,16 @@ func get_weapon_fire_solution(uid: int) -> Dictionary:
 				hit_kind = "asteroid"
 			else:
 				hit_kind = "prop"
+
+	# When Magnetic Homing Radar is active and an enemy is within magnetic lock range (without immediate muzzle obstruction),
+	# the magnetized bullet curves onto the enemy — show that exact enemy impact point on Crosshair #2!
+	var mag_tgt: Node3D = find_magnetic_target(m_pos, barrel_dir) if is_mag else null
+	if is_instance_valid(mag_tgt):
+		var d_mag := m_pos.distance_to(mag_tgt.global_position)
+		var blocked_at_muzzle := (hit_kind in ["asteroid", "prop"] and hit_dist < minf(16.0, d_mag * 0.45))
+		if not blocked_at_muzzle:
+			impact_pos = mag_tgt.global_position
+			hit_kind = "magnetic_enemy"
 
 	return {
 		"muzzle_pos": m_pos,
@@ -423,6 +474,7 @@ func get_weapon_fire_solution(uid: int) -> Dictionary:
 		"max_travel": max_travel,
 		"impact_pos": impact_pos,
 		"hit_kind": hit_kind,
+		"magnetic_target": mag_tgt,
 	}
 
 func get_ballistic_sight_info() -> Dictionary:
@@ -594,6 +646,12 @@ func _process_weapons(delta: float) -> void:
 		var wtype: String = def["weapon_type"]
 
 		var dmg := GameData.get_module_scaled_stat(mod_id, "weapon_damage", int(entry["level"])) * eff * dmg_mult
+		var mag_turn := float(stats.get("bullet_magnet_turn", 0.0))
+		var mag_range := float(stats.get("bullet_magnet_range", 0.0))
+		var is_mag := mag_turn > 0.0 and mag_range > 0.0
+		var eff_turn := maxf(float(def.get("turn_rate", 0.0)), mag_turn) if is_mag else float(def.get("turn_rate", 0.0))
+		var tgt_node: Node3D = (sol["magnetic_target"] as Node3D) if is_mag else (locked_enemy if wtype == "missile" else null)
+
 		var p := Projectile3D.new()
 		p.ignore_rid = get_rid()
 		projectiles_root.add_child(p)
@@ -605,9 +663,11 @@ func _process_weapons(delta: float) -> void:
 			p_spd,
 			xform,
 			float(def.get("splash_radius", 0.0)),
-			float(def.get("turn_rate", 0.0)),
-			locked_enemy if wtype == "missile" else null,
-			Vector3.ZERO
+			eff_turn,
+			tgt_node,
+			Vector3.ZERO,
+			is_mag,
+			mag_range
 		)
 
 		match wtype:
@@ -674,12 +734,15 @@ func _process_orbiting_drones(delta: float) -> void:
 					best_d = d
 					nearest = e_n
 		if is_instance_valid(nearest):
+			var d_mag_turn := float(stats.get("bullet_magnet_turn", 0.0))
+			var d_mag_range := float(stats.get("bullet_magnet_range", 0.0))
+			var d_is_mag := d_mag_turn > 0.0 and d_mag_range > 0.0
 			for dn in _orbit_drones:
 				var dir := (nearest.global_position - dn.global_position).normalized()
 				var p := Projectile3D.new()
 				p.ignore_rid = get_rid()
 				projectiles_root.add_child(p)
-				p.setup(true, "laser", 20.0 * float(stats.get("damage_mult", 1.0)), 220.0, Projectile3D.make_aim_transform(dn.global_position, dir), 0.0, 0.0, null, Vector3.ZERO)
+				p.setup(true, "laser", 20.0 * float(stats.get("damage_mult", 1.0)), 220.0, Projectile3D.make_aim_transform(dn.global_position, dir), 0.0, d_mag_turn if d_is_mag else 0.0, nearest if d_is_mag else null, Vector3.ZERO, d_is_mag, d_mag_range)
 
 func receive_enemy_hit(raw_damage: float, hit_world_pos: Vector3, shape_idx: int = 0) -> void:
 	if raw_damage <= 0.0:

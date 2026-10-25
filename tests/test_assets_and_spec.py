@@ -45,9 +45,9 @@ def test_no_emojis_in_game_scripts():
         assert not emoji_re.search(txt), f"Forbidden emoji character found in {f}"
 
 
-def test_53_glb_3d_models_have_pbr_textures_and_normals():
+def test_54_glb_3d_models_have_pbr_textures_and_normals():
     glbs = sorted((ROOT / "assets" / "models").rglob("*.glb"))
-    assert len(glbs) == 53
+    assert len(glbs) == 54
     for p in glbs:
         g = pygltflib.GLTF2().load_binary(str(p))
         assert len(g.meshes) == 1

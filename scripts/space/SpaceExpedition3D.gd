@@ -425,8 +425,10 @@ func _on_ship_telemetry(tel: Dictionary) -> void:
 	_cargo_bar.max_value = float(cap)
 	_cargo_bar.value = float(used)
 
-	_telemetry_lbl.text = "SPD %3.0f m/s  •  CR %d  •  CRY %d  •  ASTB %s" % [
-		float(tel["speed"]), ShipGrid.credits, ShipGrid.crystals, ("ON" if bool(tel["stabilizer"]) else "OFF")
+	var mag_r := int(round(float(player_ship.stats.get("bullet_magnet_range", 0.0))))
+	var mag_txt := ("  •  MAG-RADAR %dm" % mag_r) if mag_r > 0 else ""
+	_telemetry_lbl.text = "SPD %3.0f m/s  •  CR %d  •  CRY %d  •  ASTB %s%s" % [
+		float(tel["speed"]), ShipGrid.credits, ShipGrid.crystals, ("ON" if bool(tel["stabilizer"]) else "OFF"), mag_txt
 	]
 
 	# Live Minute Achievement ticker
@@ -489,7 +491,9 @@ func _draw_hud_world_overlays() -> void:
 
 		var hit_kind := str(ballistics["hit_kind"])
 		var pip_col := Color(1.0, 0.78, 0.22, 0.96) # Default Amber-Gold terminal sight
-		if hit_kind == "enemy":
+		if hit_kind == "magnetic_enemy":
+			pip_col = Color(0.96, 0.38, 1.0, 0.98)   # Electric Magnet-Magenta when Magnetic Homing Radar locks bullet onto enemy!
+		elif hit_kind == "enemy":
 			pip_col = Color(0.24, 1.0, 0.54, 0.98)   # Bright Green when barrel ray hits enemy!
 		elif hit_kind == "asteroid":
 			pip_col = Color(0.52, 0.98, 0.82, 0.95)  # Aqua-Gold exact rock impact point
@@ -499,8 +503,10 @@ func _draw_hud_world_overlays() -> void:
 			_overlay_canvas.draw_line(aim_screen_pos, pipper_pos, Color(pip_col.r, pip_col.g, pip_col.b, 0.36), 1.5)
 
 		# Distinct Impact Sight ring + 4 angled X-ticks + exact bullet arrival dot
-		var p_rad := 10.5 if hit_kind == "enemy" else 9.0
+		var p_rad := 11.5 if hit_kind in ["enemy", "magnetic_enemy"] else 9.0
 		var draw_col := pip_col if on_screen else Color(pip_col.r, pip_col.g, pip_col.b, 0.55)
+		if hit_kind == "magnetic_enemy":
+			_overlay_canvas.draw_arc(pipper_pos, p_rad + 4.8, 0.0, TAU, 32, Color(0.32, 0.95, 1.0, 0.78), 1.6)
 		_overlay_canvas.draw_arc(pipper_pos, p_rad, 0.0, TAU, 28, draw_col, 2.2)
 		var d_in := p_rad * 0.72
 		var d_out := p_rad + 5.5
@@ -510,9 +516,10 @@ func _draw_hud_world_overlays() -> void:
 				_overlay_canvas.draw_line(pipper_pos + diag * d_in, pipper_pos + diag * d_out, draw_col, 2.0)
 		_overlay_canvas.draw_circle(pipper_pos, 2.8, draw_col.lightened(0.25))
 
-		if hit_kind in ["enemy", "asteroid"] and on_screen and ThemeHelper.font_mono:
-			var dist_txt := "%dm" % int(round(float(ballistics["distance"])))
-			_overlay_canvas.draw_string(ThemeHelper.font_mono, pipper_pos + Vector2(14, 5), dist_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, draw_col)
+		if hit_kind in ["enemy", "magnetic_enemy", "asteroid"] and on_screen and ThemeHelper.font_mono:
+			var prefix := "MAG " if hit_kind == "magnetic_enemy" else ""
+			var dist_txt := "%s%dm" % [prefix, int(round(float(ballistics["distance"])))]
+			_overlay_canvas.draw_string(ThemeHelper.font_mono, pipper_pos + Vector2(16, 5), dist_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, draw_col)
 
 		# Secondary weapon impact dots if ship carries mixed turrets + fixed barrels aiming at distinct 3D points
 		var sec_impacts: Array = ballistics.get("secondary_impacts", [])

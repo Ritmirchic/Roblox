@@ -208,19 +208,19 @@ jobs:
 
           $tag = "space-miner-v1.0.0"
           $notes = @"
-          # SPACE MINER: BUILD & CONQUER — v1.0.3 (64-Bit Windows Release)
+          # SPACE MINER: BUILD & CONQUER — v1.0.4 (64-Bit Windows Release)
 
           Complete standalone 64-bit Windows 3D space mining, modular ship construction, orbital combat, and collectible card progression game built on **Godot Engine 4.3**.
 
-          ### v1.0.3 Highlights
-          - **Exact Terminal Bullet Impact Crosshair (#2)**: Crosshair #2 now shows the exact 3D point where a fired bullet actually arrives/impacts (on asteroid/enemy surfaces or max flight range), with deterministic world-space barrel ballistics, turret muzzle-offset parallax compensation, and zero 2D screen-space lag.
-          - **Calm, Controllable 360° Flight Turning**: Reduced ship rotation rates to smooth, comfortable ~85–105°/s max with a non-linear fine-aim center curve for effortless precision aiming alongside smooth 360° loops and barrel rolls.
-          - **120 Hz Smooth Simulation**: 120 Hz physics, sub-frame Quaternion ship/camera interpolation, and full 360° multi-directional `Projectile3D` firing.
+          ### v1.0.4 Highlights
+          - **New Purchasable Module — Magnetic Homing Radar (`950 CR`)**: Buy in the Equipment Shop (`Utility` / `Weapons` / `All`) and mount on your 3D ship to magnetize all fired bullets and projectiles so they automatically acquire, curve toward, and strike hostile ships by themselves (upgradable Lvl 1–5 from `240m` to `451m` lock range, with rotating electromagnetic 3D dish, magnetic bullet rings, and live `MAG` Crosshair #2 lock telemetry).
+          - **Exact Terminal Bullet Impact Crosshair (#2)**: Shows the exact 3D point where a fired bullet arrives/impacts with zero 2D screen-space lag.
+          - **Calm, Controllable 360° Flight Turning & 120 Hz Simulation**: Smooth ~85–105°/s max turns, precision center aiming curve, and sub-frame Quaternion camera interpolation.
 
           ## Downloads
           - **Windows Standalone Portable (`SPACE_MINER_WINDOWS.zip`)**: Extract and launch `SPACE_MINER.exe`. No external runtimes required.
           - **Windows Installer (`SPACE_MINER_SETUP.exe`)**: Full Inno Setup 64-bit Windows installer with Start Menu & optional Desktop shortcuts and uninstaller.
-          - **Complete Source Code (`SPACE_MINER_SOURCE.zip`)**: Clean Godot 4.3 project, shaders, 53 PBR `.glb` 3D assets, 72 original card illustrations, audio, automated test suites, and installer script.
+          - **Complete Source Code (`SPACE_MINER_SOURCE.zip`)**: Clean Godot 4.3 project, shaders, 54 PBR `.glb` 3D assets, 72 original card illustrations, audio, automated test suites, and installer script.
 
           ## SHA-256 Checksums
           ```text
@@ -240,9 +240,9 @@ jobs:
 
           if ($exists) {
             gh release upload $tag "dist\SPACE_MINER_WINDOWS.zip" "dist\SPACE_MINER_SETUP.exe" "dist\SPACE_MINER_SOURCE.zip" "dist\SHA256SUMS.txt" --clobber --repo "${{ github.repository }}"
-            gh release edit $tag --title "SPACE MINER: BUILD & CONQUER v1.0.3" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
+            gh release edit $tag --title "SPACE MINER: BUILD & CONQUER v1.0.4" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
           } else {
-            gh release create $tag "dist\SPACE_MINER_WINDOWS.zip" "dist\SPACE_MINER_SETUP.exe" "dist\SPACE_MINER_SOURCE.zip" "dist\SHA256SUMS.txt" --target "${{ github.sha }}" --title "SPACE MINER: BUILD & CONQUER v1.0.3" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
+            gh release create $tag "dist\SPACE_MINER_WINDOWS.zip" "dist\SPACE_MINER_SETUP.exe" "dist\SPACE_MINER_SOURCE.zip" "dist\SHA256SUMS.txt" --target "${{ github.sha }}" --title "SPACE MINER: BUILD & CONQUER v1.0.4" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
           }
 
           Write-Host "::notice title=ReleasePublished::https://github.com/${{ github.repository }}/releases/tag/$tag"

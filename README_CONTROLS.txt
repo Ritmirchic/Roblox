@@ -1,5 +1,5 @@
 ================================================================================
-SPACE MINER: BUILD & CONQUER — v1.0.3 (Windows 64-bit Edition)
+SPACE MINER: BUILD & CONQUER — v1.0.4 (Windows 64-bit Edition)
 ================================================================================
 
 LAUNCHING THE GAME

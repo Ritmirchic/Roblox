@@ -248,12 +248,14 @@ func _build_shop_tab() -> void:
 		if mid in ["cockpit_mk1", "hull_cell"]:
 			continue
 		var def: Dictionary = GameData.modules[mid]
-		if _shop_cat_filter != "All" and def["category"] != _shop_cat_filter:
+		var cat_match: bool = (_shop_cat_filter == "All" or str(def["category"]) == _shop_cat_filter or (mid == "magnetic_radar" and _shop_cat_filter == "Weapons"))
+		if not cat_match:
 			continue
 
 		var card := PanelContainer.new()
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		card.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(Color(0.05, 0.09, 0.17, 0.96), Color(0.18, 0.56, 0.82), 8, 1))
+		var border_col := Color(0.92, 0.36, 0.96) if mid == "magnetic_radar" else Color(0.18, 0.56, 0.82)
+		card.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(Color(0.05, 0.09, 0.17, 0.96), border_col, 8, 2 if mid == "magnetic_radar" else 1))
 		grid.add_child(card)
 
 		var hb := HBoxContainer.new()
@@ -290,9 +292,10 @@ func _build_shop_tab() -> void:
 		var st := Label.new()
 		var edraw := float(def["energy_draw"])
 		var estr := ("+%d MW" % int(absf(edraw))) if edraw < 0 else ("-%d MW" % int(edraw))
-		st.text = "Mass %.1ft  •  HP %d  •  Power %s" % [float(def["mass"]), int(def["max_hp"]), estr]
+		var extra_tag := ("  •  AUTO-HOMING %dm" % int(def["bullet_magnet_range"])) if def.has("bullet_magnet_range") else ""
+		st.text = "Mass %.1ft  •  HP %d  •  Power %s%s" % [float(def["mass"]), int(def["max_hp"]), estr, extra_tag]
 		st.add_theme_font_size_override("font_size", 14)
-		st.add_theme_color_override("font_color", Color(0.45, 0.92, 1.0))
+		st.add_theme_color_override("font_color", Color(0.96, 0.52, 1.0) if def.has("bullet_magnet_range") else Color(0.45, 0.92, 1.0))
 		vb.add_child(st)
 
 		var act_hb := HBoxContainer.new()

@@ -170,7 +170,10 @@ func _init_modules() -> void:
 		"Launches an orbiting 3D point-defense combat & mining support drone around your spacecraft.",
 		{"drone_count": 1, "drone_dps": 32.0})
 
-	# Utility (5)
+	# Utility (6)
+	_add_mod("magnetic_radar", "Magnetic Homing Radar", "Utility", "equipment/eq_magnetic_radar.glb", 950, 4.6, 115.0, 6.0, Vector3i(1, 1, 1),
+		"Magnetizes all fired bullets and projectiles so they automatically curve in flight and fly straight into enemies!",
+		{"radar_range": 260.0, "bullet_magnet_range": 240.0, "bullet_magnet_turn": 7.8})
 	_add_mod("radar", "Deep-Space Tactical Radar", "Utility", "equipment/eq_radar.glb", 540, 3.8, 95.0, 4.0, Vector3i(1, 1, 1),
 		"Rotating parabolic sensor dish extending threat tracking range and target lead telemetry.",
 		{"radar_range": 220.0, "crit_chance": 0.06})

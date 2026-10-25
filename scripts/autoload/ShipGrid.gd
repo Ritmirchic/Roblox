@@ -451,6 +451,8 @@ func compute_ship_stats(extra_cargo_mass: float = -1.0) -> Dictionary:
 	var mining_dps := 0.0
 	var weapon_dps := 0.0
 	var best_magnet_range := 0.0
+	var bullet_magnet_range := 0.0
+	var bullet_magnet_turn := 0.0
 	var radar_range := 140.0
 	var scanner_range := 0.0
 	var rare_chance := float(buffs.get("rare_chance_add", 0.0))
@@ -516,6 +518,9 @@ func compute_ship_stats(extra_cargo_mass: float = -1.0) -> Dictionary:
 			weapon_dps += wd * fr * eff
 		if def.has("magnet_range"):
 			best_magnet_range = maxf(best_magnet_range, GameData.get_module_scaled_stat(mid, "magnet_range", lvl) * eff)
+		if def.has("bullet_magnet_range") and eff > 0.0:
+			bullet_magnet_range = maxf(bullet_magnet_range, GameData.get_module_scaled_stat(mid, "bullet_magnet_range", lvl) * eff)
+			bullet_magnet_turn = maxf(bullet_magnet_turn, GameData.get_module_scaled_stat(mid, "bullet_magnet_turn", lvl) * eff)
 		if def.has("radar_range"):
 			radar_range = maxf(radar_range, GameData.get_module_scaled_stat(mid, "radar_range", lvl) * eff)
 		if def.has("scanner_range"):
@@ -589,6 +594,8 @@ func compute_ship_stats(extra_cargo_mass: float = -1.0) -> Dictionary:
 		"loot_mult": loot_mult,
 		"magnet_range": best_magnet_range * mag_mult,
 		"magnet_mult": mag_mult,
+		"bullet_magnet_range": bullet_magnet_range * mag_mult,
+		"bullet_magnet_turn": bullet_magnet_turn,
 		"radar_range": radar_range,
 		"scanner_range": scanner_range,
 		"rare_chance": clampf(rare_chance, 0.0, 0.85),
