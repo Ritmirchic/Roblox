@@ -1050,12 +1050,9 @@ func _build_launch_tab() -> void:
 	ref_hb.add_theme_constant_override("separation", 16)
 	ref_vb.add_child(ref_hb)
 
-	var cargo_units := ShipGrid.get_current_cargo_units()
-	var stats := ShipGrid.compute_ship_stats()
-	var preview_val := 0
-	for rk in ShipGrid.cargo.keys():
-		preview_val += int(ShipGrid.cargo[rk]) * int(GameData.RESOURCES[rk]["value"])
-	preview_val = int(round(float(preview_val) * float(stats["credit_mult"])))
+	var cargo_units: int = ShipGrid.get_current_cargo_units()
+	var stats: Dictionary = ShipGrid.compute_ship_stats()
+	var preview_val: int = ShipGrid.get_cargo_sale_value()
 
 	var clbl := Label.new()
 	clbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL

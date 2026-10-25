@@ -454,7 +454,7 @@ func _build_hangar_ui() -> void:
 	_left_panel.offset_left = 12
 	_left_panel.offset_right = 336
 	_left_panel.offset_top = 66
-	_left_panel.offset_bottom = -80
+	_left_panel.offset_bottom = -86
 	_left_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	_ui_root.add_child(_left_panel)
 
@@ -610,7 +610,7 @@ func _build_hangar_ui() -> void:
 	_right_panel.offset_left = -336
 	_right_panel.offset_right = -12
 	_right_panel.offset_top = 66
-	_right_panel.offset_bottom = -80
+	_right_panel.offset_bottom = -86
 	_right_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	_ui_root.add_child(_right_panel)
 
@@ -653,12 +653,13 @@ func _build_hangar_ui() -> void:
 	_status_box.anchor_right = 1.0
 	_status_box.anchor_top = 1.0
 	_status_box.anchor_bottom = 1.0
+	_status_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_status_box.offset_left = 348
 	_status_box.offset_right = -348
-	_status_box.offset_top = -120
-	_status_box.offset_bottom = -80
+	_status_box.offset_top = -126
+	_status_box.offset_bottom = -88
 	_status_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_status_box.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(Color(0.02, 0.045, 0.105, 0.90), Color(0.22, 0.72, 1.0, 0.65), 10, 12, 6))
+	_status_box.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(Color(0.02, 0.045, 0.105, 0.90), Color(0.22, 0.72, 1.0, 0.65), 10, 12, 5))
 	_ui_root.add_child(_status_box)
 
 	_status_banner = Label.new()
@@ -668,17 +669,18 @@ func _build_hangar_ui() -> void:
 	_status_banner.add_theme_font_size_override("font_size", 13)
 	_status_box.add_child(_status_banner)
 
-	# 5. RELOCATED BOTTOM STATION DOCK (y: H-70..H-10)
+	# 5. RELOCATED BOTTOM STATION DOCK (y: H-72..H-8)
 	_bottom_dock = PanelContainer.new()
 	_bottom_dock.name = "HangarBottomDock"
 	_bottom_dock.anchor_left = 0.0
 	_bottom_dock.anchor_right = 1.0
 	_bottom_dock.anchor_top = 1.0
 	_bottom_dock.anchor_bottom = 1.0
+	_bottom_dock.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_bottom_dock.offset_left = 12
 	_bottom_dock.offset_right = -12
-	_bottom_dock.offset_top = -70
-	_bottom_dock.offset_bottom = -10
+	_bottom_dock.offset_top = -72
+	_bottom_dock.offset_bottom = -8
 	_bottom_dock.mouse_filter = Control.MOUSE_FILTER_STOP
 	_bottom_dock.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(Color(0.022, 0.044, 0.10, 0.95), Color(0.22, 0.72, 1.0, 0.82), 13, 2, 8))
 	_ui_root.add_child(_bottom_dock)

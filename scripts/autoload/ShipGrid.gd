@@ -402,6 +402,16 @@ func add_cargo_resource(res_id: String, amount: int) -> int:
 		cargo_changed.emit()
 	return added
 
+func get_cargo_sale_value() -> int:
+	var buffs := _collect_buffs()
+	var val_mult := 1.0 + float(buffs.get("credit_mult", 0.0)) + float(buffs.get("all_stats_mult", 0.0))
+	var total_cr := 0
+	for k in cargo.keys():
+		var cnt := maxi(0, int(cargo[k]))
+		if cnt > 0 and GameData.RESOURCES.has(k):
+			total_cr += int(round(float(cnt * int(GameData.RESOURCES[k]["value"])) * val_mult))
+	return total_cr
+
 func sell_all_cargo() -> int:
 	var buffs := _collect_buffs()
 	var val_mult := 1.0 + float(buffs.get("credit_mult", 0.0)) + float(buffs.get("all_stats_mult", 0.0))
