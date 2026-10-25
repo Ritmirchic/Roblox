@@ -1,0 +1,131 @@
+:root {
+  color-scheme: dark;
+  --ink: #05070a;
+  --gold: #f3c76b;
+  --parchment: #efe3c8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #05070a;
+  overflow: hidden;
+  overscroll-behavior: none;
+  font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+  color: var(--parchment);
+}
+
+#game {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  touch-action: none;
+  background: radial-gradient(120% 100% at 70% 20%, #0d1318 0%, #05070a 60%);
+  outline: none;
+}
+
+#boot {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(60% 60% at 50% 42%, rgba(243, 199, 107, 0.09), transparent 70%),
+    #05070a;
+  z-index: 10;
+  transition: opacity 380ms ease, visibility 380ms ease;
+}
+
+#boot.boot-out {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.boot-inner {
+  text-align: center;
+  user-select: none;
+}
+
+.boot-lantern {
+  width: 54px;
+  height: 76px;
+  margin: 0 auto 22px;
+  position: relative;
+  border: 2px solid #3a3128;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(243, 199, 107, 0.18), rgba(255, 180, 80, 0.04));
+  box-shadow: 0 0 42px rgba(243, 199, 107, 0.3), inset 0 0 22px rgba(243, 199, 107, 0.14);
+  animation: flicker 3.4s ease-in-out infinite;
+}
+
+.boot-lantern::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  width: 18px;
+  height: 34px;
+  border-radius: 60% 60% 50% 50%;
+  background: radial-gradient(circle at 50% 65%, #fff6d5 0%, #ffbd63 45%, rgba(255, 130, 50, 0) 72%);
+  transform: translateX(-50%);
+  animation: flame 1.7s ease-in-out infinite alternate;
+}
+
+.boot-lantern::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 12px;
+  border-top: 2px solid #3a3128;
+}
+
+.boot-title {
+  margin: 0;
+  font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+  font-size: 30px;
+  letter-spacing: 8px;
+  color: var(--parchment);
+  font-weight: 700;
+  text-shadow: 0 0 24px rgba(243, 199, 107, 0.35);
+}
+
+.boot-sub {
+  margin: 10px 0 0;
+  font-size: 12px;
+  letter-spacing: 2.4px;
+  text-transform: uppercase;
+  color: rgba(205, 191, 162, 0.6);
+}
+
+.boot-error {
+  margin-top: 22px;
+  max-width: 460px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #ffb0a8;
+}
+
+@keyframes flicker {
+  0%, 100% { box-shadow: 0 0 34px rgba(243, 199, 107, 0.24), inset 0 0 18px rgba(243, 199, 107, 0.12); }
+  38% { box-shadow: 0 0 52px rgba(243, 199, 107, 0.4), inset 0 0 26px rgba(243, 199, 107, 0.18); }
+  62% { box-shadow: 0 0 28px rgba(243, 199, 107, 0.2), inset 0 0 16px rgba(243, 199, 107, 0.1); }
+}
+
+@keyframes flame {
+  from { transform: translateX(-50%) scale(0.92, 0.96); opacity: 0.82; }
+  to { transform: translateX(-50%) scale(1.06, 1.08); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-lantern,
+  .boot-lantern::before {
+    animation: none;
+  }
+}

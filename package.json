@@ -1,0 +1,30 @@
+{
+  "name": "wick-and-wane",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Wick & Wane - a lantern-lit roguelite tower defense for the browser",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4173",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:preview": "vitest run --config vitest.preview.config.ts",
+    "typecheck": "tsc --noEmit",
+    "zip": "npm run build && npm run build:portable && node tools/zip-release.mjs",
+    "build:portable": "tsc --noEmit && BASE_PATH=./ vite build --outDir artifacts/portable --emptyOutDir"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "^1.0.13",
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^26.6.5",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

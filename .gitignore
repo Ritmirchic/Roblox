@@ -1,0 +1,5 @@
+artifacts/
+tests/__screens__/
+node_modules/
+*.log
+.DS_Store
