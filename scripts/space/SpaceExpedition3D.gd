@@ -45,6 +45,7 @@ var _min_ach_lbl: Label
 var _hazard_warn_lbl: Label
 var _pause_panel: PanelContainer
 var _extracting: bool = false
+var autopilot_override: bool = false
 
 func setup_sector(sec_idx: int) -> void:
 	sector_index = clampi(sec_idx, 0, GameData.sectors.size() - 1)
@@ -542,6 +543,8 @@ func _process(delta: float) -> void:
 	_radar_canvas.queue_redraw()
 
 func _handle_flight_inputs(_delta: float) -> void:
+	if autopilot_override:
+		return
 	if _pause_panel.visible:
 		player_ship.thrust_input = Vector3.ZERO
 		player_ship.rot_input = Vector3.ZERO

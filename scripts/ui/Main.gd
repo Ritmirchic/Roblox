@@ -278,6 +278,7 @@ func _run_packaged_exe_self_test() -> void:
 		await get_tree().physics_frame
 		if _active_world is SpaceExpedition3D:
 			var sw := _active_world as SpaceExpedition3D
+			sw.autopilot_override = true
 			if is_instance_valid(sw.player_ship):
 				sw.player_ship.thrust_input = Vector3(0, 0, 1)
 				sw.player_ship.firing_mining = true

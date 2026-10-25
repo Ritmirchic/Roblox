@@ -128,11 +128,13 @@ func get_footprint_cells(mod_id: String, anchor: Vector3i, yaw: int) -> Array[Ve
 	return out
 
 func _rotate_cell_offset(v: Vector3i, yaw: int) -> Vector3i:
+	# Right-handed rotation around +Y matching rotation_degrees.y = yaw * 90.0:
+	# yaw=1 (+90 deg): (0,0,-1) -> (-1,0,0) => (v.z, v.y, -v.x)
 	match posmod(yaw, 4):
 		0: return v
-		1: return Vector3i(-v.z, v.y, v.x)
+		1: return Vector3i(v.z, v.y, -v.x)
 		2: return Vector3i(-v.x, v.y, -v.z)
-		3: return Vector3i(v.z, v.y, -v.x)
+		3: return Vector3i(-v.z, v.y, v.x)
 	return v
 
 func get_yaw_forward_vector(yaw: int) -> Vector3:

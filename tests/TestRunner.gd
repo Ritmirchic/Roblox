@@ -276,6 +276,7 @@ func _test_live_3d_gameplay_mining_combat_magnets() -> void:
 	_check(bool(ShipGrid.place_module("machine_gun", Vector3i(0, 1, 0), 0)["ok"]), "Install Rotary Autocannon")
 
 	var exp_world := SpaceExpedition3D.new()
+	exp_world.autopilot_override = true
 	exp_world.setup_sector(0)
 	add_child(exp_world)
 	await get_tree().process_frame
@@ -338,10 +339,11 @@ func _test_live_3d_gameplay_mining_combat_magnets() -> void:
 # 9. Versioned Save/Load & Corrupted Save Fallback
 func _test_save_load_and_corruption_recovery() -> void:
 	SaveManager.reset_all_progress()
-	ShipGrid.credits = 42424
-	ShipGrid.crystals = 333
+	ShipGrid.credits = 200000
 	for _i in range(12):
 		ShipGrid.purchase_expansion_cell()
+	ShipGrid.credits = 42424
+	ShipGrid.crystals = 333
 	CrewManager.add_card_to_collection("crew_38")
 	CrewManager.equip_card("crew_38")
 	UpgradeManager.fourth_slot_unlocked = true
