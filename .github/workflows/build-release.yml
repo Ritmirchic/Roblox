@@ -62,13 +62,17 @@ jobs:
           Copy-Item -Path "C:\godot\tpl_extract\templates\windows_*_x86_64*" -Destination $tplDest -Force
 
           curl.exe -L --retry 4 -o $rcedit "https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe"
+          Copy-Item $rcedit "C:\godot\rcedit.exe" -Force
+          "C:\godot" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
           $edCfgDir = Join-Path $env:APPDATA "Godot"
           $edCfg = Join-Path $edCfgDir "editor_settings-4.tres"
           @(
             '[gd_resource type="EditorSettings" format=3]',
             '',
             '[resource]',
-            'filesystem/tools/rcedit = "C:/godot/rcedit-x64.exe"'
+            'export/windows/rcedit = "C:/godot/rcedit.exe"',
+            'filesystem/tools/rcedit = "C:/godot/rcedit.exe"'
           ) | Set-Content -Path $edCfg -Encoding UTF8
 
           if (-not (Test-Path "$tplDest\windows_release_x86_64.exe")) {
@@ -151,8 +155,13 @@ jobs:
 
           # Silently install SPACE_MINER_SETUP.exe to a clean directory and run --self-test on the installed EXE!
           $installDir = "C:\SpaceMinerInstalledTest"
-          $proc = Start-Process -FilePath "$PWD\dist\SPACE_MINER_SETUP.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=$installDir" -Wait -PassThru
+          $innoLog = "C:\inno_install.log"
+          $proc = Start-Process -FilePath "$PWD\dist\SPACE_MINER_SETUP.exe" -ArgumentList "/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER /DIR=`"$installDir`" /LOG=`"$innoLog`"" -Wait -PassThru
           if ($proc.ExitCode -ne 0 -or -not (Test-Path "$installDir\SPACE_MINER.exe")) {
+            if (Test-Path $innoLog) {
+              $tail = (Get-Content $innoLog | Select-Object -Last 25) -join " | "
+              Write-Host "::error title=InnoInstallLog::$tail"
+            }
             Write-Host "::error::Silent install test of SPACE_MINER_SETUP.exe failed (exit=$($proc.ExitCode))"
             exit 1
           }
