@@ -35,7 +35,7 @@ const NAV_TABS: Array[Array] = [
 ]
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	ThemeHelper.fill_full_rect(self)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	visible = false
 	_build_shell()
@@ -81,7 +81,7 @@ func show_toast(msg: String, is_err: bool = false) -> void:
 
 func _build_shell() -> void:
 	var dim := ColorRect.new()
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ThemeHelper.fill_full_rect(dim)
 	dim.color = Color(0.008, 0.016, 0.042, 0.84)
 	dim.gui_input.connect(func(ev: InputEvent):
 		if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and ev.pressed:
@@ -91,17 +91,13 @@ func _build_shell() -> void:
 
 	_modal_box = PanelContainer.new()
 	_modal_box.name = "StationModalBox"
-	_modal_box.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_modal_box.offset_left = 32
-	_modal_box.offset_right = -32
-	_modal_box.offset_top = 62
-	_modal_box.offset_bottom = -16
+	add_child(_modal_box)
+	ThemeHelper.fill_full_rect(_modal_box, 32.0, 62.0, 32.0, 16.0)
 	_modal_box.mouse_filter = Control.MOUSE_FILTER_STOP
 	_modal_box.add_theme_stylebox_override(
 		"panel",
 		ThemeHelper.make_panel_style(Color(0.024, 0.046, 0.105, 0.97), Color(0.22, 0.78, 1.0, 0.88), 16, 2, 16)
 	)
-	add_child(_modal_box)
 
 	var main_vb := VBoxContainer.new()
 	main_vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL

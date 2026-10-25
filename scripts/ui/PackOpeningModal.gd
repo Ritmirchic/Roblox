@@ -32,7 +32,7 @@ var _fifth_banner: Label
 var _anim_t: float = 0.0
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	ThemeHelper.fill_full_rect(self)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	visible = false
 	_build_ui()
@@ -49,19 +49,15 @@ func _process(delta: float) -> void:
 
 func _build_ui() -> void:
 	_dim_bg = ColorRect.new()
-	_dim_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_dim_bg.color = Color(0.012, 0.022, 0.055, 0.94)
 	add_child(_dim_bg)
+	ThemeHelper.fill_full_rect(_dim_bg)
+	_dim_bg.color = Color(0.012, 0.022, 0.055, 0.94)
 
 	var main_vb := VBoxContainer.new()
-	main_vb.set_anchors_preset(Control.PRESET_FULL_RECT)
-	main_vb.offset_left = 40
-	main_vb.offset_right = -40
-	main_vb.offset_top = 36
-	main_vb.offset_bottom = -36
+	add_child(main_vb)
+	ThemeHelper.fill_full_rect(main_vb, 40.0, 36.0, 40.0, 36.0)
 	main_vb.alignment = BoxContainer.ALIGNMENT_CENTER
 	main_vb.add_theme_constant_override("separation", 18)
-	add_child(main_vb)
 
 	_title_lbl = Label.new()
 	_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -119,11 +115,11 @@ func _build_ui() -> void:
 	stage_area.add_child(_center_pack)
 
 	_cards_row = HBoxContainer.new()
-	_cards_row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	stage_area.add_child(_cards_row)
+	ThemeHelper.fill_full_rect(_cards_row)
 	_cards_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	_cards_row.add_theme_constant_override("separation", 44)
 	_cards_row.visible = false
-	stage_area.add_child(_cards_row)
 
 	_action_row = HBoxContainer.new()
 	_action_row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -143,10 +139,10 @@ func _build_ui() -> void:
 	_action_row.add_child(_done_btn)
 
 	_burst_flash = ColorRect.new()
-	_burst_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(_burst_flash)
+	ThemeHelper.fill_full_rect(_burst_flash)
 	_burst_flash.color = Color(0.85, 0.96, 1.0, 0.0)
 	_burst_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_burst_flash)
 
 func play_ceremony(pack_id: String, results: Array[Dictionary], unlocked_fifth: bool) -> void:
 	_results = results

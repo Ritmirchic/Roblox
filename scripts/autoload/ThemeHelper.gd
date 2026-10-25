@@ -152,6 +152,18 @@ func clear_children(parent: Node) -> void:
 		parent.remove_child(ch)
 		ch.queue_free()
 
+func fill_full_rect(ctrl: Control, margin_l: float = 0.0, margin_t: float = 0.0, margin_r: float = 0.0, margin_b: float = 0.0) -> void:
+	if not is_instance_valid(ctrl):
+		return
+	ctrl.anchor_left = 0.0
+	ctrl.anchor_top = 0.0
+	ctrl.anchor_right = 1.0
+	ctrl.anchor_bottom = 1.0
+	ctrl.offset_left = margin_l
+	ctrl.offset_top = margin_t
+	ctrl.offset_right = -margin_r
+	ctrl.offset_bottom = -margin_b
+
 func style_accent_button(btn: Button, accent: Color) -> void:
 	var n := make_panel_style(accent.darkened(0.64), accent.lightened(0.12), 9, 2, 12)
 	var h := make_panel_style(accent.darkened(0.42), accent.lightened(0.36), 9, 2, 12)

@@ -43,10 +43,10 @@ func _build_transition_curtain() -> void:
 	_fade_layer.layer = 90
 	add_child(_fade_layer)
 	_fade_rect = ColorRect.new()
-	_fade_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_fade_layer.add_child(_fade_rect)
+	ThemeHelper.fill_full_rect(_fade_rect)
 	_fade_rect.color = Color(0.01, 0.02, 0.05, 0.0)
 	_fade_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_fade_layer.add_child(_fade_rect)
 
 func _pulse_scene_curtain() -> void:
 	if ThemeHelper.reduced_motion or not is_instance_valid(_fade_rect):
@@ -159,9 +159,9 @@ func _show_main_menu() -> void:
 	add_child(_menu_layer)
 
 	var root := Control.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.theme = ThemeHelper.main_theme
 	_menu_layer.add_child(root)
+	ThemeHelper.fill_full_rect(root)
+	root.theme = ThemeHelper.main_theme
 
 	# Top-Right Floating Language Pill
 	var lang_bar := PanelContainer.new()

@@ -260,16 +260,16 @@ func _build_expedition_hud() -> void:
 	add_child(_hud_layer)
 
 	_hud_root = Control.new()
-	_hud_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_hud_layer.add_child(_hud_root)
+	ThemeHelper.fill_full_rect(_hud_root)
 	_hud_root.theme = ThemeHelper.main_theme
 	_hud_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_hud_layer.add_child(_hud_root)
 
 	_overlay_canvas = Control.new()
-	_overlay_canvas.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_hud_root.add_child(_overlay_canvas)
+	ThemeHelper.fill_full_rect(_overlay_canvas)
 	_overlay_canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_overlay_canvas.draw.connect(_draw_hud_world_overlays)
-	_hud_root.add_child(_overlay_canvas)
 
 	# 1. Top-Left Ship Status Panel (x: 14..362, y: 12..236)
 	_status_box = PanelContainer.new()

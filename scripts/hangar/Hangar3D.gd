@@ -375,10 +375,10 @@ func _build_hangar_ui() -> void:
 	add_child(_hud_layer)
 
 	_ui_root = Control.new()
-	_ui_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_hud_layer.add_child(_ui_root)
+	ThemeHelper.fill_full_rect(_ui_root)
 	_ui_root.theme = ThemeHelper.main_theme
 	_ui_root.mouse_filter = Control.MOUSE_FILTER_PASS
-	_hud_layer.add_child(_ui_root)
 
 	# 1. TOP COMMAND HEADER BAR (y: 0..56)
 	_top_bar = PanelContainer.new()

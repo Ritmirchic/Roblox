@@ -665,7 +665,15 @@ func _test_multilingual_localization_and_gui_non_overlap() -> void:
 		await get_tree().process_frame
 
 		var body_root: Control = hangar._station_panels._body_root
+		_check(hangar._station_panels.size.x >= 1200.0 and hangar._station_panels.size.y >= 700.0, "Station overlay '%s' fills viewport (%s)" % [tab, str(hangar._station_panels.size)])
 		_check(body_root.size.x >= 1100.0 and body_root.size.y >= 480.0, "Station tab '%s' body_root fills modal (%s)" % [tab, str(body_root.size)])
+		_check(hangar._station_panels._pack_modal.size.x >= 1200.0 and hangar._station_panels._pack_modal.size.y >= 700.0, "PackOpeningModal fills viewport (%s)" % str(hangar._station_panels._pack_modal.size))
+
+		# Verify every ScrollContainer inside the active tab has >= 320px visible viewport height (NEVER 0px!)
+		for sc_node in body_root.find_children("*", "ScrollContainer", true, false):
+			var sc_ctrl := sc_node as ScrollContainer
+			if sc_ctrl.is_visible_in_tree():
+				_check(sc_ctrl.size.x >= 280.0 and sc_ctrl.size.y >= 320.0, "Tab '%s' ScrollContainer visible viewport size=%s" % [tab, str(sc_ctrl.size)])
 
 		var bad_scales: Array[String] = []
 		var narrow_lbls: Array[String] = []
