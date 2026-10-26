@@ -218,38 +218,32 @@ jobs:
           Write-Host "::notice title=SHA256_SETUP_EXE::$setupSha ($($setupExe.Length) bytes)"
           Write-Host "::notice title=SHA256_SOURCE_ZIP::$srcSha ($($srcZip.Length) bytes)"
 
-          $tag = "space-miner-v1.0.0"
-          $notes = @"
-          # SPACE MINER: BUILD & CONQUER — v2.1.0 (64-Bit Windows · Full Art, HUD & Settings Expansion)
+          # The release tag, title and body must follow the project version - a
+          # hardcoded tag is how v2.1.0 ended up published over "space-miner-v1.0.0".
+          $ver = "0.0.0"
+          $vline = Select-String -Path "project.godot" -Pattern 'config/version="([^"]+)"' | Select-Object -First 1
+          if ($vline) { $ver = $vline.Matches[0].Groups[1].Value }
+          $tag = "space-miner-v$ver"
+          $title = "SPACE MINER: BUILD & CONQUER v$ver"
 
-          Complete standalone 64-bit Windows 3D space mining, modular ship construction, orbital combat and collectible card progression game built on **Godot Engine 4.3**.
+          $sums = @(
+            "## SHA-256 Checksums",
+            '```text',
+            "$winSha  SPACE_MINER_WINDOWS.zip",
+            "$setupSha  SPACE_MINER_SETUP.exe",
+            "$srcSha  SPACE_MINER_SOURCE.zip",
+            '```'
+          ) -join "`n"
 
-          ### v2.1.0 Highlights
-          - **Hall of Achievements — a real empty-space 3D room**: every achievement card ever earned physically floats around the pilot on a glowing dais (nebula haze, star field, per-rarity emissive plaques). Drag to look around, mouse wheel to orbit closer, click any card for its dossier, `F` to step through the collection, `ESC` to return. Cards refresh live as new UTC-bucket achievements are completed.
-          - **Genuinely Unique Artwork, Not Recolors**: all **42 crew fighter portraits**, **18 upgrade protocol icons** and **30 achievement dioramas** are rendered per-item through an offline CPU PBR pipeline (mesh-specific geometry, materials, lighting, backdrop) — `42/42`, `18/18` and `30/30` distinct SHA-256 digests, verified with zero duplicates.
-          - **Redrawn Upgrade Core Icons & Achievement Backgrounds**: upgrade icons are rendered from the actual installed ship equipment models; every rarity now owns a procedurally shaded metal plaque (starburst rays, laurel wreath, emblem, corner brackets, brushed micro-relief, specular + rim + AO + film grain) that is also used as the shared GUI panel material, so menus, the station modal and achievement cards speak one visual language.
-          - **Meteor Shattering Into Collectible Debris**: destroyed asteroids now burst into 3–6 visible, physics-thrown rock chunks (5 on full shatter) with boosted explosion energy, each individually magnetically collectible — no more vanishing rocks.
-          - **Portal-Only Hangar Return**: the auxiliary steering reticle was removed (only the exact 3D ballistic Crosshair #2 remains) and every instant-exit path is gone — the warp gate (`< 9.5 m`) is now the single way back to the hangar; pause menu buttons only close the pause overlay.
-          - **Transparent Booster Pack Cutouts**: pack art is alpha-cut to its silhouette so the opening ceremony shows the glowing wings and flares over the live 3D scene with no black rectangular edges.
-          - **Expanded Settings (5 groups, 19 live controls)**: DISPLAY & SCREEN (3 graphics presets, V-Sync, frame-rate limit, UI scale, fullscreen, reduced motion), AUDIO (master/music/SFX + mute), FLIGHT CONTROLS (sensitivity, field of view, cockpit shake, invert pitch axis), PILOT HUD (crosshair opacity, resource panel, achievement popups) and DATA & LANGUAGE (10 languages, auto-save toggle, full progress reset with confirmation). Every control is functional, clamped, applied live to the engine and round-trips through the SHA-256 save file.
-          - **Real Impact Feedback Systems**: trauma-based cockpit camera shake driven by meteor destruction and plasma hits, plus gold achievement popups in flight and in the station, both respecting the reduced-motion and popup settings.
-          - **10 World Languages (Russian Primary Default)** with bundled SIL OFL `Exo 2`, `JetBrains Mono` and rebuilt CJK subsets — a regression test now proves **every** localized string in the project renders in the shipped font chain (`0` missing glyphs for Russian, Simplified Chinese, Japanese, Korean and Turkish).
-          - **Studio 44.1 kHz Sci-Fi Audio**: all 23 ambient loops and SFX synthesized at `44.1 kHz` 16-bit PCM with filtered warm harmonics and musical cadences.
-
-          ## Downloads
-          - **Windows Standalone Portable (`SPACE_MINER_WINDOWS.zip`)**: Extract and launch `SPACE_MINER.exe`. No external runtimes required.
-          - **Windows Installer (`SPACE_MINER_SETUP.exe`)**: Bilingual (Russian/English) Inno Setup 64-bit Windows installer with Start Menu & optional Desktop shortcuts and uninstaller.
-          - **Complete Source Code (`SPACE_MINER_SOURCE.zip`)**: Clean Godot 4.3 project, shaders, 54 PBR `.glb` 3D assets, 75 card/pack illustrations, 44.1 kHz audio, multilingual fonts, automated test suites, and installer script.
-
-          ## SHA-256 Checksums
-          ```text
-          $winSha  SPACE_MINER_WINDOWS.zip
-          $setupSha  SPACE_MINER_SETUP.exe
-          $srcSha  SPACE_MINER_SOURCE.zip
-          ```
-          "@
-
-          $notes | Set-Content -Path "dist\RELEASE_NOTES.md" -Encoding UTF8
+          if (Test-Path "RELEASE_NOTES.md") {
+            $body = (Get-Content "RELEASE_NOTES.md" -Raw).TrimEnd()
+          } else {
+            $body = "# $title`n`n64-bit Windows build verified by CI: Godot engine test suite, exported build," +
+              " installed self-test, multilingual GUI and 44.1 kHz audio.`n`n## Downloads`n" +
+              "- SPACE_MINER_WINDOWS.zip (portable standalone)`n- SPACE_MINER_SETUP.exe (Inno Setup installer)`n" +
+              "- SPACE_MINER_SOURCE.zip (full source)`n"
+          }
+          ($body + "`n`n" + $sums + "`n") | Set-Content -Path "dist\RELEASE_NOTES_BODY.md" -Encoding UTF8
 
           $ErrorActionPreference = "Continue"
           $exists = $false
@@ -259,9 +253,10 @@ jobs:
 
           if ($exists) {
             gh release upload $tag "dist\SPACE_MINER_WINDOWS.zip" "dist\SPACE_MINER_SETUP.exe" "dist\SPACE_MINER_SOURCE.zip" "dist\SHA256SUMS.txt" --clobber --repo "${{ github.repository }}"
-            gh release edit $tag --title "SPACE MINER: BUILD & CONQUER v2.1.0" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
+            gh release edit $tag --title $title --notes-file "dist\RELEASE_NOTES_BODY.md" --target "${{ github.sha }}" --repo "${{ github.repository }}"
           } else {
-            gh release create $tag "dist\SPACE_MINER_WINDOWS.zip" "dist\SPACE_MINER_SETUP.exe" "dist\SPACE_MINER_SOURCE.zip" "dist\SHA256SUMS.txt" --target "${{ github.sha }}" --title "SPACE MINER: BUILD & CONQUER v2.1.0" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
+            gh release create $tag "dist\SPACE_MINER_WINDOWS.zip" "dist\SPACE_MINER_SETUP.exe" "dist\SPACE_MINER_SOURCE.zip" "dist\SHA256SUMS.txt" --target "${{ github.sha }}" --title $title --notes-file "dist\RELEASE_NOTES_BODY.md" --repo "${{ github.repository }}"
           }
 
+          Write-Host "::notice title=ReleaseNotesBodyWritten::dist/RELEASE_NOTES_BODY.md for $tag"
           Write-Host "::notice title=ReleasePublished::https://github.com/${{ github.repository }}/releases/tag/$tag"
