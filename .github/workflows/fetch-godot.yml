@@ -92,9 +92,10 @@ jobs:
 
       - name: Check step results
         run: |
-          for s in editor templates extract chunk; do
-            echo "$s=${{ steps[s].outcome }}"
-          done
+          echo "editor=${{ steps.editor.outcome }}"
+          echo "templates=${{ steps.templates.outcome }}"
+          echo "extract=${{ steps.extract.outcome }}"
+          echo "chunk=${{ steps.chunk.outcome }}"
           if [ "${{ steps.editor.outcome }}" != "success" ] \
             || [ "${{ steps.templates.outcome }}" != "success" ] \
             || [ "${{ steps.extract.outcome }}" != "success" ] \
