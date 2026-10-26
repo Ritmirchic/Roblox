@@ -18,17 +18,19 @@ func register_hud(hud: CanvasLayer) -> void:
 func set_screen_factory(callable: Callable) -> void:
 	_factory = callable
 
-func open(screen: String) -> void:
+func open(screen: String, payload: Dictionary = {}) -> void:
 	if screen in open_screens:
 		return
 	open_screens.append(screen)
 	if not _factory.is_valid():
 		push_error("UI factory not configured")
 		return
-	var node: Control = _factory.call(screen)
+	var node: Control = _factory.call(screen, payload)
 	if node:
 		add_child(node)
 		node.set_meta("screen_id", screen)
+		if node.has_method("setup"):
+			node.setup(payload)
 	screen_opened.emit(screen)
 	_apply_focus()
 

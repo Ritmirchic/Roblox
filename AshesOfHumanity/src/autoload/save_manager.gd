@@ -8,6 +8,12 @@ const SLOT_PREFIX := "save_slot_"
 const EXT := ".sav"
 var autosave_interval := 150.0
 var _autosave_t := 0.0
+var pending: Dictionary = {}
+
+func take_pending() -> Dictionary:
+	var p := pending
+	pending = {}
+	return p
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -49,7 +55,7 @@ func save_game(slot: int, autosave: bool = false) -> bool:
 	save_finished.emit(slot, true)
 	return true
 
-func load_game(slot: int) -> bool:
+func load_game(slot: int) -> Variant:
 	if not has_save(slot):
 		load_finished.emit(slot, false)
 		return false
@@ -73,6 +79,7 @@ func load_game(slot: int) -> bool:
 	WorldClock.from_save_dict(parsed.get("clock", {}))
 	Weather.from_save_dict(parsed.get("weather", {}))
 	QuestMan.from_save_dict(parsed.get("quests", {}))
+	pending = parsed
 	load_finished.emit(slot, true)
 	return parsed
 

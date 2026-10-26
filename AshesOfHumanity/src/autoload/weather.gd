@@ -110,7 +110,8 @@ func _apply_state() -> void:
 				_env.fog_light_color = Color(0.45, 0.6, 0.35)
 	if _rain:
 		_rain.visible = current == RAIN or current == STORM
-		_rain.amount = int(1600 + 1800 * intensity) if _rain.visible else 0
+		# GPUParticles3D rejects amount 0; visibility handles the off state.
+		_rain.amount = maxi(1, int(1600 + 1800 * intensity))
 
 func _lightning() -> void:
 	_strike_cooldown = randf_range(5.0, 14.0)

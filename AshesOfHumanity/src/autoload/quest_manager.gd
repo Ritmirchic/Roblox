@@ -31,8 +31,15 @@ func accept(id: String) -> bool:
 	if not can_accept(id):
 		return false
 	var q := QuestDB.get_quest(id)
-	active[id] = {"objective_progress": [0] * q.objectives.size(),
-		"objectives_done": [false] * q.objectives.size()}
+	var progress: Array = []
+	var done_flags: Array = []
+	progress.resize(q.objectives.size())
+	done_flags.resize(q.objectives.size())
+	for i in q.objectives.size():
+		progress[i] = 0
+		done_flags[i] = false
+	active[id] = {"objective_progress": progress,
+		"objectives_done": done_flags}
 	for flag in q.get("start_flags", []):
 		GameState.set_story_flag(flag)
 	quest_accepted.emit(q)
@@ -120,6 +127,11 @@ func objective_labels(id: String) -> Array:
 
 func active_quests() -> Array:
 	return active.keys()
+
+func reset_state() -> void:
+	active.clear()
+	completed.clear()
+	available_turn_ins.clear()
 
 # ------------------------------------------------------------------ markers
 func _refresh_markers() -> void:

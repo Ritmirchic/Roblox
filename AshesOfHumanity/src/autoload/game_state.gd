@@ -7,6 +7,11 @@ signal skill_points_changed(remaining: int)
 signal story_flag_set(flag: String)
 signal phase_changed(phase: String)
 signal player_registered(player: Node)
+signal boss_spawned(boss: Node)
+signal boss_health_changed(fraction: float, boss: Node)
+signal boss_died(boss: Node)
+signal enemy_killed(enemy: Node)
+signal noise_emitted(pos: Vector3, radius: float)
 
 const PHASE_MENU := "menu"
 const PHASE_PLAYING := "playing"
@@ -40,6 +45,7 @@ var looted_containers: Dictionary = {}
 var killed_enemies: Dictionary = {}
 var discovered_locations: Dictionary = {}
 var world_buildings: Array = []
+var container_storage: Dictionary = {}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -117,6 +123,8 @@ func to_save_dict() -> Dictionary:
 		"looted_containers": looted_containers.duplicate(true),
 		"killed_enemies": killed_enemies.duplicate(true),
 		"discovered_locations": discovered_locations.duplicate(true),
+		"world_buildings": world_buildings.duplicate(true),
+		"container_storage": container_storage.duplicate(true),
 	}
 
 func from_save_dict(d: Dictionary) -> void:
@@ -134,6 +142,8 @@ func from_save_dict(d: Dictionary) -> void:
 	looted_containers = d.get("looted_containers", {})
 	killed_enemies = d.get("killed_enemies", {})
 	discovered_locations = d.get("discovered_locations", {})
+	world_buildings = d.get("world_buildings", [])
+	container_storage = d.get("container_storage", {})
 
 func reset_run() -> void:
 	level = 1
@@ -148,4 +158,6 @@ func reset_run() -> void:
 	looted_containers.clear()
 	killed_enemies.clear()
 	discovered_locations.clear()
+	container_storage.clear()
+	world_buildings.clear()
 	current_region_id = "suburbs"

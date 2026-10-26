@@ -63,7 +63,7 @@ func _register_input() -> void:
 		"weapon_4": [KEY_4],
 		"med_use": [KEY_H],
 		"toggle_view": [KEY_V],
-		"inventory": [KEY_I, KEY_TAB],
+		"inventory": [KEY_I],
 		"journal": [KEY_J],
 		"map": [KEY_M],
 		"character": [KEY_K],
@@ -72,6 +72,7 @@ func _register_input() -> void:
 		"pause": [KEY_ESCAPE],
 		"quick_save": [KEY_F5],
 		"quick_load": [KEY_F9],
+		"rotate_build": [KEY_Q],
 	}
 	for action_name in actions:
 		if not InputMap.has_action(action_name):

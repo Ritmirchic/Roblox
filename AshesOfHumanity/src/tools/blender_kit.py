@@ -60,6 +60,21 @@ def join_parts(parts, name):
     return active
 
 
+def export_rig(parts, root_name):
+    """Keep body parts separate (procedural animation in engine) and parent
+    them under a single Empty root."""
+    bpy.ops.object.empty_add(type="PLAIN_AXES", location=(0, 0, 0))
+    root = bpy.context.object
+    root.name = root_name
+    bpy.ops.object.select_all(action="DESELECT")
+    for p in parts:
+        p.select_set(True)
+    root.select_set(True)
+    bpy.context.view_layer.objects.active = root
+    bpy.ops.object.parent_set(type="OBJECT", keep_transform=True)
+    export_glb(root_name)
+
+
 def box(name, loc, scale, mat, bevel=0.0, rot=(0, 0, 0)):
     bpy.ops.mesh.primitive_cube_add(size=1.0, location=loc, rotation=rot)
     o = bpy.context.object
@@ -373,56 +388,67 @@ def prop_debris():
 
 
 # ------------------------------------------------------------------ weapons
+def _export_weapon(name, builder):
+    reset_scene()
+    parts = builder()
+    export_rig(parts, "wpn_" + name)
+
+
 def weapon_kit():
+    # knife
+    _export_weapon("knife", lambda: [
+        box("knife_blade", (0, 0, 0.35), (0.06, 0.5, 0.12), M.metal, 0.02),
+        box("knife_grip", (0, -0.32, 0.35), (0.09, 0.22, 0.1), M.rubber, 0.02)])
+    # fire axe
+    _export_weapon("axe", lambda: [
+        cyl("axe_handle", (0, 0, 0.55), 0.035, 1.1, M.wood, vertices=8),
+        box("axe_head", (0, 0, 1.05), (0.35, 0.1, 0.28), M.metal, 0.03)])
+    # pipe bat
+    _export_weapon("pipe", lambda: [
+        cyl("bat_pipe", (0, 0, 0.5), 0.06, 1.0, M.rust, vertices=10)])
+    # machete
+    _export_weapon("machete", lambda: [
+        box("machete_blade", (0, 0.05, 0.55), (0.05, 0.75, 0.14), M.metal, 0.02),
+        box("machete_grip", (0, -0.4, 0.45), (0.08, 0.2, 0.1), M.rubber, 0.02)])
+    # pistol
+    _export_weapon("pistol", lambda: [
+        box("pistol_body", (0, 0, 0.3), (0.1, 0.3, 0.16), M.metal, 0.02),
+        box("pistol_grip", (0, -0.12, 0.12), (0.09, 0.16, 0.22), M.rubber,
+            0.02, rot=(math.radians(-15), 0, 0)),
+        cyl("pistol_barrel", (0, 0.12, 0.3), 0.035, 0.22, M.dark_concrete,
+            vertices=8, rot=(math.pi / 2, 0, 0))])
+    # shotgun
+    _export_weapon("shotgun", lambda: [
+        cyl("shot_barrel", (0, 0.05, 0.45), 0.04, 0.9, M.metal, vertices=10,
+            rot=(math.pi / 2, 0, 0)),
+        box("shot_pump", (0, -0.05, 0.4), (0.08, 0.25, 0.08), M.wood),
+        box("shot_stock", (0, -0.5, 0.42), (0.09, 0.35, 0.16), M.wood, 0.03)])
+    # rifle
+    _export_weapon("rifle", lambda: [
+        cyl("rifle_barrel", (0, 0.1, 0.5), 0.03, 1.0, M.metal, vertices=8,
+            rot=(math.pi / 2, 0, 0)),
+        box("rifle_body", (0, -0.3, 0.45), (0.09, 0.4, 0.16),
+            M.dark_concrete, 0.02),
+        box("rifle_mag", (0, -0.28, 0.28), (0.07, 0.12, 0.22), M.metal,
+            rot=(math.radians(10), 0, 0)),
+        box("rifle_scope", (0, -0.15, 0.6), (0.06, 0.22, 0.08), M.metal, 0.02),
+        box("rifle_stock", (0, -0.6, 0.45), (0.08, 0.3, 0.14), M.wood, 0.03)])
+    # crossbow
+    _export_weapon("crossbow", lambda: [
+        box("xbow_stock", (0, -0.2, 0.45), (0.08, 0.7, 0.12), M.wood, 0.02),
+        box("xbow_limb_l", (-0.15, -0.1, 0.5), (0.5, 0.05, 0.06), M.metal,
+            rot=(0, 0, math.radians(25))),
+        box("xbow_limb_r", (0.15, -0.1, 0.5), (0.5, 0.05, 0.06), M.metal,
+            rot=(0, 0, math.radians(-25))),
+        cyl("xbow_bolt", (0, 0.1, 0.48), 0.015, 0.5, M.metal, vertices=6,
+            rot=(math.pi / 2, 0, 0))])
+    # Combined display kit (kept for prop dressing).
     reset_scene()
     p = []
-    # knife
-    p.append(box("knife_blade", (0, 0, 0.35), (0.06, 0.5, 0.12),
-                 M.metal, 0.02))
-    p.append(box("knife_grip", (0, -0.32, 0.35), (0.09, 0.22, 0.1),
-                 M.rubber, 0.02))
-    # fire axe
-    p.append(cyl("axe_handle", (0.3, 0, 0.55), 0.035, 1.1, M.wood,
-                 vertices=8, rot=(0, 0, 0)))
-    p.append(box("axe_head", (0.3, 0, 1.05), (0.35, 0.1, 0.28),
-                 M.metal, 0.03))
-    # pipe bat
-    p.append(cyl("bat_pipe", (0.65, 0, 0.5), 0.06, 1.0, M.rust,
-                 vertices=10))
-    # pistol
-    p.append(box("pistol_body", (1.05, 0, 0.3), (0.1, 0.3, 0.16),
-                 M.metal, 0.02))
-    p.append(box("pistol_grip", (1.05, -0.12, 0.12), (0.09, 0.16, 0.22),
-                 M.rubber, 0.02, rot=(math.radians(-15), 0, 0)))
-    p.append(cyl("pistol_barrel", (1.05, 0.12, 0.3), 0.035, 0.22,
-                 M.dark_concrete, vertices=8, rot=(math.pi / 2, 0, 0)))
-    # shotgun
-    p.append(cyl("shot_barrel", (1.6, 0, 0.45), 0.04, 0.9, M.metal,
-                 vertices=10, rot=(math.pi / 2, 0, 0)))
-    p.append(box("shot_pump", (1.6, -0.05, 0.4), (0.08, 0.25, 0.08),
-                 M.wood))
-    p.append(box("shot_stock", (1.6, -0.5, 0.42), (0.09, 0.35, 0.16),
-                 M.wood, 0.03))
-    # rifle
-    p.append(cyl("rifle_barrel", (2.2, 0.05, 0.5), 0.03, 1.0, M.metal,
-                 vertices=8, rot=(math.pi / 2, 0, 0)))
-    p.append(box("rifle_body", (2.2, -0.3, 0.45), (0.09, 0.4, 0.16),
-                 M.dark_concrete, 0.02))
-    p.append(box("rifle_mag", (2.2, -0.28, 0.28), (0.07, 0.12, 0.22),
-                 M.metal, rot=(math.radians(10), 0, 0)))
-    p.append(box("rifle_scope", (2.2, -0.15, 0.6), (0.06, 0.22, 0.08),
-                 M.metal, 0.02))
-    p.append(box("rifle_stock", (2.2, -0.6, 0.45), (0.08, 0.3, 0.14),
-                 M.wood, 0.03))
-    # crossbow
-    p.append(box("xbow_stock", (2.8, -0.2, 0.45), (0.08, 0.7, 0.12),
-                 M.wood, 0.02))
-    p.append(box("xbow_limb_l", (2.65, -0.1, 0.5), (0.5, 0.05, 0.06),
-                 M.metal, rot=(0, 0, math.radians(25))))
-    p.append(box("xbow_limb_r", (2.95, -0.1, 0.5), (0.5, 0.05, 0.06),
-                 M.metal, rot=(0, 0, math.radians(-25))))
-    p.append(cyl("xbow_bolt", (2.8, 0.1, 0.48), 0.015, 0.5, M.metal,
-                 vertices=6, rot=(math.pi / 2, 0, 0)))
+    p.append(box("kit_knife", (-2, 0, 0.3), (0.06, 0.5, 0.12), M.metal))
+    p.append(cyl("kit_pipe", (0, 0, 0.4), 0.06, 1.0, M.rust, vertices=10))
+    p.append(cyl("kit_rifle", (2, 0, 0.4), 0.03, 1.2, M.metal, vertices=8,
+                 rot=(math.pi / 2, 0, 0)))
     join_parts(p, "weapon_kit")
     export_glb("weapon_kit")
 
@@ -516,8 +542,7 @@ def player_survivor():
         ]
     p = humanoid("survivor", 1.8, jacket, jeans, build=1.0,
                  long_arms=1.0, extras=extras)
-    join_parts(p, "player_survivor")
-    export_glb("player_survivor")
+    export_rig(p, "player_survivor")
 
 
 def mutants():
@@ -586,8 +611,7 @@ def mutants():
         parts = humanoid(f"mut_{name}", height, flesh, accent, build=build,
                          long_arms=la, head_scale=hs,
                          extras=extra_map[key])
-        join_parts(parts, f"mutant_{name}")
-        export_glb(f"mutant_{name}")
+        export_rig(parts, f"mutant_{name}")
 
 
 def bosses():
@@ -617,8 +641,7 @@ def bosses():
     p = humanoid("boss_king", 3.0, king_flesh, M.mutant_dark, build=0.9,
                  long_arms=1.5, head_scale=(0.24, 0.26, 0.28),
                  extras=king_extras)
-    join_parts(p, "boss_hollow_king")
-    export_glb("boss_hollow_king")
+    export_rig(p, "boss_hollow_king")
 
     # Iron Abomination: metal-fused quadruped-ish heavy behemoth
     reset_scene()
@@ -639,8 +662,7 @@ def bosses():
                      vertices=6, radius2=0.0))
     p.append(box("boss_iron_saw", (1.1, -0.8, 1.2), (0.15, 0.7, 0.7),
                  M.metal, 0.05, rot=(0, math.radians(20), 0)))
-    join_parts(p, "boss_iron_abomination")
-    export_glb("boss_iron_abomination")
+    export_rig(p, "boss_iron_abomination")
 
     # Forest Matriarch: bloated multi-limbed plant-mutant
     reset_scene()
@@ -666,8 +688,33 @@ def bosses():
         p.append(sphere(f"boss_matr_sac_{i}",
                         (math.cos(ang) * 0.9, math.sin(ang) * 0.9, 2.9),
                         (0.12, 0.12, 0.12), M.contaminated, segments=8, rings=5))
-    join_parts(p, "boss_forest_matriarch")
-    export_glb("boss_forest_matriarch")
+    export_rig(p, "boss_forest_matriarch")
+
+    # Last Signal: floating crystalline broadcast construct (final boss).
+    reset_scene()
+    signal_mat = material("signal_core", (0.75, 0.8, 0.85), 0.2, 0.6,
+                          emission=(0.4, 0.85, 1.0), emission_strength=4.0)
+    dark_metal = material("signal_dark", (0.12, 0.14, 0.17), 0.4, 0.85)
+    p = []
+    p.append(sphere("boss_signal_core", (0, 0, 2.4), (0.55, 0.55, 0.7),
+                    signal_mat, segments=12, rings=7))
+    p.append(torus("boss_signal_ring_h", (0, 0, 2.4), 1.0, 0.06, dark_metal))
+    p.append(torus("boss_signal_ring_v1", (0, 0, 2.4), 0.85, 0.05,
+                   signal_mat, rot=(math.pi / 2, 0.3, 0)))
+    p.append(torus("boss_signal_ring_v2", (0, 0, 2.4), 0.7, 0.04,
+                   signal_mat, rot=(0.2, 0, math.pi / 2)))
+    for i in range(6):
+        ang = i * math.tau / 6
+        p.append(cyl(f"boss_signal_spike_{i}",
+                     (math.cos(ang) * 1.15, math.sin(ang) * 1.15, 2.4),
+                     0.05, 0.7, dark_metal, vertices=6, radius2=0.0,
+                     rot=(math.radians(55), 0, ang)))
+        p.append(sphere(f"boss_signal_orb_{i}",
+                        (math.cos(ang) * 1.45, math.sin(ang) * 1.45, 2.4),
+                        (0.12, 0.12, 0.12), signal_mat, segments=8, rings=5))
+    p.append(cyl("boss_signal_base", (0, 0, 0.4), 0.7, 0.8, dark_metal,
+                 vertices=10, radius2=0.95))
+    export_rig(p, "boss_last_signal")
 
 
 def main():

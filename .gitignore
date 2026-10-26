@@ -7,3 +7,7 @@ __pycache__/
 *.pyc
 # OS
 .DS_Store
+
+# Build artifacts and release packages
+AshesOfHumanity/dist/
+*.zip

@@ -136,6 +136,18 @@ func _build() -> void:
 		"w": 1, "h": 1, "weight": 0.15, "max_stack": 10, "rarity": "uncommon"})
 	_add("processor", {"name": "Processor Chip", "category": "electronics", "w": 1, "h": 1,
 		"weight": 0.05, "max_stack": 5, "rarity": "rare"})
+	# --- extended scavenging materials and provisions
+	_add("raw_meat", {"name": "Raw Mutant Meat", "category": "food", "w": 1, "h": 1,
+		"weight": 0.55, "max_stack": 6, "nutrition": 20, "infection_risk": 35,
+		"description": "Eat only if desperate. Cook it first."})
+	_add("leather", {"name": "Tanned Leather", "category": "material", "w": 1, "h": 1,
+		"weight": 0.3, "max_stack": 15})
+	_add("kevlar", {"name": "Kevlar Weave", "category": "material", "w": 1, "h": 1,
+		"weight": 0.4, "max_stack": 8, "rarity": "rare"})
+	_add("alcohol", {"name": "Medical Alcohol", "category": "material", "w": 1, "h": 1,
+		"weight": 0.25, "max_stack": 10})
+	_add("fuel", {"name": "Canister Fuel", "category": "material", "w": 1, "h": 2,
+		"weight": 1.5, "max_stack": 6})
 	# --- quest
 	_add("q_note", {"name": "Handwritten Note", "category": "quest", "w": 1, "h": 1,
 		"weight": 0.02, "quest_relevant": true,
