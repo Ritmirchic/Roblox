@@ -18,9 +18,9 @@ downloadable directly:
 
 | File | Size | Direct download |
 |---|---|---|
-| `ASHES_OF_HUMANITY_SETUP.exe` | 27 318 393 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_SETUP.exe |
-| `ASHES_OF_HUMANITY_WINDOWS.zip` | 26 871 147 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_WINDOWS.zip |
-| `ASHES_OF_HUMANITY_SOURCE.zip` | 34 907 652 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_SOURCE.zip |
+| `ASHES_OF_HUMANITY_SETUP.exe` | 27 325 359 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_SETUP.exe |
+| `ASHES_OF_HUMANITY_WINDOWS.zip` | 26 878 113 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_WINDOWS.zip |
+| `ASHES_OF_HUMANITY_SOURCE.zip` | 34 909 610 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_SOURCE.zip |
 
 Or browse the folder:
 https://github.com/Ritmirchic/Roblox/tree/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0
@@ -122,13 +122,13 @@ title art, loading screen and Win32 version information.
 
 ```
 $ ./build/AshesOfHumanity.exe --test
- RESULT: 93 passed, 0 failed
+ RESULT: 96 passed, 0 failed
 
 $ ./build/AshesOfHumanity.exe --sim 60
  sim: finished - hp=96.6 hunger=75.3 thirst=78.0 mutants=51 level=1
 ```
 
-* 93 automated checks covering world generation, collision, item and weapon
+* 96 automated checks covering world generation, collision, item and weapon
   databases, inventory, crafting, combat, AI, quests, save/load and
   migration, audio, UI and the animator.
 * A 60 second headless gameplay simulation that cycles through every
@@ -136,6 +136,16 @@ $ ./build/AshesOfHumanity.exe --sim 60
   dialogue, cutscene) without a crash.
 * The shipped payloads were verified by extracting the installer and the zip
   and comparing all 195 files byte for byte against the originals.
+* v1.0.0 rebuild 3 (2026-10-26) - **crash fix**: the asset exporter wrote the
+  global material slot index into the submesh records while the material table
+  of a mesh only holds the materials that mesh uses.  2493 of the submeshes in
+  79 meshes therefore pointed outside the material array and the renderer
+  read past the end of it, which killed the game on the first world frame.
+  The exporter now writes the local index, the renderer clamps invalid indices
+  and three new automated checks guard the material, index and joint ranges.
+  Also fixed: the function keys F2-F12 were never polled, and the window
+  handle was never handed to the game, so the close button and the cursor
+  lock did not work.
 * v1.0.0 rebuild 2 (2026-10-26): the installer was rewritten on the wide
   character API (Unicode paths), directory creation now handles every level of
   an archive path, the installer is a GUI subsystem binary without a console

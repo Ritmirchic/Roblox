@@ -204,7 +204,11 @@ void Input::beginFrame() {
   g_mouseDx = g_mouseDy = 0;
   g_wheel = 0;
 #if defined(_WIN32)
-  for (int i = 0; i < KEY_COUNT; ++i) {
+  // Poll the whole virtual key range: the engine key codes are not the same
+  // numbers as the Windows ones.
+  static const int kMouseVk[5] = { VK_LBUTTON, VK_RBUTTON, VK_MBUTTON,
+                                    VK_XBUTTON1, VK_XBUTTON2 };
+  for (int i = 0; i < 256; ++i) {
     int code = mapVk(i);
     if (code == KEY_NONE) continue;
     bool down = (GetAsyncKeyState(i) & 0x8000) != 0;
@@ -213,7 +217,7 @@ void Input::beginFrame() {
     g_keys[code] = down;
   }
   for (int b = 0; b < 5; ++b) {
-    bool down = (GetAsyncKeyState(VK_LBUTTON + b) & 0x8000) != 0;
+    bool down = (GetAsyncKeyState(kMouseVk[b]) & 0x8000) != 0;
     if (down && !g_mouse[b]) g_mousePressed[b] = true;
     if (!down && g_mouse[b]) g_mouseReleased[b] = true;
     g_mouse[b] = down;

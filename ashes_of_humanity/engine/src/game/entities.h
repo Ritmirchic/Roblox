@@ -312,7 +312,10 @@ struct Player {
 class ItemDatabase {
 public:
   void build();
-  const ItemDef& def(int id) const { return m_defs[id]; }
+  const ItemDef& def(int id) const {
+    if (id < 0 || id >= (int)m_defs.size()) { static const ItemDef fallback; return fallback; }
+    return m_defs[id];
+  }
   int  find(const std::string& name) const;
   const std::vector<ItemDef>& defs() const { return m_defs; }
   const ItemDef* weaponItem(int weaponId) const;
@@ -325,7 +328,10 @@ private:
 class WeaponDatabase {
 public:
   void build();
-  const WeaponDef& def(int id) const { return m_weapons[id]; }
+  const WeaponDef& def(int id) const {
+    if (id < 0 || id >= (int)m_weapons.size()) { static const WeaponDef fallback; return fallback; }
+    return m_weapons[id];
+  }
   int  find(const std::string& name) const;
   const std::vector<WeaponDef>& all() const { return m_weapons; }
   const std::vector<AttachmentDef>& attachments() const { return m_attachments; }

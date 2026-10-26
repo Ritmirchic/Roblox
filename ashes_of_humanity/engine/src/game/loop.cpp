@@ -537,6 +537,29 @@ int Game::runTests() {
     }
     printf("  (meshes %d, animations %d, textures %d)\n", meshCount, animCount, texCount);
     rep.check(meshCount >= 70, "mesh assets parse correctly");
+    // every submesh must reference a material that the mesh actually owns
+    {
+      int badMaterial = 0, badIndex = 0, badJoint = 0;
+      for (const std::string& n : listDir("assets/meshes")) {
+        if (n.size() < 5 || n.compare(n.size() - 5, 5, ".afm") != 0) continue;
+        bool ok = false;
+        std::vector<u8> data = readFile("assets/meshes/" + n, &ok);
+        if (!ok || data.empty()) continue;
+        Mesh m;
+        if (!deserializeMesh(data.data(), data.size(), m)) continue;
+        for (const SubMesh& sm : m.subMeshes) {
+          if (sm.material < 0 || sm.material >= (int)m.materials.size()) badMaterial++;
+          if (sm.firstIndex + sm.indexCount > (int)m.idx.size()) badIndex++;
+        }
+        int maxJoint = 0;
+        for (const Vertex& v : m.verts)
+          for (int j = 0; j < 4; ++j) maxJoint = std::max(maxJoint, (int)v.joints[j]);
+        if (!m.bones.empty() && maxJoint >= (int)m.bones.size()) badJoint++;
+      }
+      rep.check(badMaterial == 0, "submesh material indices are in range");
+      rep.check(badIndex == 0, "submesh index ranges are in range");
+      rep.check(badJoint == 0, "skeleton joint indices are in range");
+    }
     rep.check(animCount >= 15, "animation assets parse correctly");
     rep.check(texCount >= 80, "texture assets parse correctly");
   }

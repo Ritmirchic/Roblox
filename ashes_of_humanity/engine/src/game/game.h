@@ -71,6 +71,7 @@ public:
   void shutdown();
   void run();
   void requestClose() { m_quit = true; }
+  void setWindow(Window* w) { m_window = w; }
 
   // Exposed for the automated test harness.
   GameState state() const { return m_state; }

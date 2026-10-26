@@ -12,6 +12,17 @@
 namespace aoh {
 
 // ---------------------------------------------------------------------------
+// Safe material lookup: a corrupt or out of range material index must never
+// take the renderer down.
+// ---------------------------------------------------------------------------
+static const Material& safeMaterial(const GpuMesh& mesh, int index) {
+  static const Material fallback;
+  if (index < 0 || index >= (int)mesh.materials.size()) return fallback;
+  return mesh.materials[index];
+}
+
+
+// ---------------------------------------------------------------------------
 // Small helpers
 // ---------------------------------------------------------------------------
 static f32  saturateF(f32 v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
@@ -781,7 +792,7 @@ void Game::renderWorld() {
       }
     }
     for (size_t si = 0; si < c.mesh->subMeshes.size(); ++si) {
-      const Material& mat = c.mesh->materials[c.mesh->subMeshes[si].material];
+      const Material& mat = safeMaterial(*c.mesh, c.mesh->subMeshes[si].material);
       m_renderer->submitMesh(c.mesh, Mat4::identityMatrix(), mat, ts, (int)si);
     }
   }
@@ -814,7 +825,7 @@ void Game::renderWorld() {
     r.at(0,0) = c; r.at(0,2) = s; r.at(2,0) = -s; r.at(2,2) = c;
     Mat4 model = r.translated(m.pos);
     for (size_t si = 0; si < g->subMeshes.size(); ++si) {
-      const Material& mat = g->materials[g->subMeshes[si].material];
+      const Material& mat = safeMaterial(*g, g->subMeshes[si].material);
       m_renderer->submitSkinned(g, model, boneMats, mat, resolveTextures(mat), (int)si, skinRow);
     }
   }
@@ -840,7 +851,7 @@ void Game::renderWorld() {
       r.at(0,0) = c; r.at(0,2) = s; r.at(2,0) = -s; r.at(2,2) = c;
       Mat4 model = r.translated(m_player.pos);
       for (size_t si = 0; si < g->subMeshes.size(); ++si) {
-        const Material& mat = g->materials[g->subMeshes[si].material];
+        const Material& mat = safeMaterial(*g, g->subMeshes[si].material);
         m_renderer->submitSkinned(g, model, boneMats, mat, resolveTextures(mat), (int)si, skinRow);
       }
     }
@@ -862,7 +873,7 @@ void Game::renderWorld() {
       if (it != m_meshCache.end()) {
         GpuMesh* g = it->second;
         for (size_t si = 0; si < g->subMeshes.size(); ++si) {
-          const Material& mat = g->materials[g->subMeshes[si].material];
+          const Material& mat = safeMaterial(*g, g->subMeshes[si].material);
           m_renderer->submitMesh(g, model, mat, resolveTextures(mat), (int)si);
         }
       }
@@ -874,7 +885,7 @@ void Game::renderWorld() {
 void Game::drawStatic(const StaticInstance& inst) {
   if (!inst.mesh) return;
   for (size_t si = 0; si < inst.mesh->subMeshes.size(); ++si) {
-    const Material& mat = inst.mesh->materials[inst.mesh->subMeshes[si].material];
+    const Material& mat = safeMaterial(*inst.mesh, inst.mesh->subMeshes[si].material);
     m_renderer->submitMesh(inst.mesh, inst.model, mat, resolveTextures(mat), (int)si);
   }
 }

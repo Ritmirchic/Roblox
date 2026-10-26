@@ -111,6 +111,7 @@ int main(int argc, char** argv) {
   wd.fullscreen = fullscreen;
 
   Window window;
+  game.setWindow(&window);
   if (!headless && !window.create(wd)) {
     LOGE("main: window creation failed");
     printf("Could not create a window (no display?).\n"

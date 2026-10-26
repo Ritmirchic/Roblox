@@ -572,6 +572,8 @@ def export_mesh(path, name, mb, mats, rig=None):
     sec_idx = w.buf
 
     # submeshes grouped by material
+    used = sorted(set(mb.mat))
+    remap = {old: i for i, old in enumerate(used)}
     sub = []
     cur = -1
     for i, mi in enumerate(mb.mat):
@@ -588,12 +590,12 @@ def export_mesh(path, name, mb, mats, rig=None):
             count += 1
         w.u32(start)
         w.u32(count)
-        w.i32v(mi)
+        # the material table below only stores the materials this mesh uses,
+        # so the submesh has to reference them by their local index
+        w.i32v(remap[mi])
     sec_sub = w.buf
 
     # materials actually used
-    used = sorted(set(mb.mat))
-    remap = {old: i for i, old in enumerate(used)}
     w = BinWriter()
     w.u32(len(used))
     for old in used:
