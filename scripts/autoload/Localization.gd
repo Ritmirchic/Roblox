@@ -32,6 +32,103 @@ const UI_STRINGS: Dictionary = {
 		"ko": "모듈형 3D 우주선 건조 • 소행성 채굴 • 크루 카드",
 		"tr": "MODÜLER 3D GEMİ İNŞASI • ASTEROİT MADENCİLİĞİ • MÜRETTEBAT KARTLARI",
 	},
+	"crew_foil_perks": {
+		"ru": "ПОКРЫТИЯ МОСТИКА: РЫНОК +%d%% • РАДАР +%d%% • РЕМОНТ +%d%%",
+		"en": "BRIDGE FOILS: MARKET +%d%% • RADAR +%d%% • REPAIR +%d%%",
+		"es": "ACABADOS DEL PUENTE: MERCADO +%d%% • RADAR +%d%% • REPARACIÓN +%d%%",
+		"de": "BRÜCKEN-FOLIEN: MARKT +%d%% • RADAR +%d%% • REPARATUR +%d%%",
+		"fr": "FINITIONS DU PONT : MARCHÉ +%d%% • RADAR +%d%% • RÉPARATION +%d%%",
+		"pt": "ACABAMENTOS DA PONTE: MERCADO +%d%% • RADAR +%d%% • REPARO +%d%%",
+		"zh": "舰桥涂层：市场 +%d%% • 雷达 +%d%% • 维修 +%d%%",
+		"ja": "ブリッジ加工：市場 +%d%% • レーダー +%d%% • 修復 +%d%%",
+		"ko": "브리지 코팅: 시장 +%d%% • 레이더 +%d%% • 수리 +%d%%",
+		"tr": "KÖPRÜ FOLYOLARI: PAZAR +%d%% • RADAR +%d%% • ONARIM +%d%%",
+	},
+
+	"hud_threat": {
+		"ru": "УГРОЗА",
+		"en": "THREAT",
+		"es": "AMENAZA",
+		"de": "BEDROHUNG",
+		"fr": "MENACE",
+		"pt": "AMEAÇA",
+		"zh": "威胁",
+		"ja": "脅威",
+		"ko": "위협",
+		"tr": "TEHDİT",
+	},
+	"threat_elite_inbound": {
+		"ru": "ЭЛИТНОЕ КРЫЛО ВЫХОДИТ НА ПОЗИЦИЮ",
+		"en": "ELITE WING INBOUND",
+		"es": "ALa ÉLITE ENCAMINO",
+		"de": "ELITE-STAFFEL IM ANFLUG",
+		"fr": "ESCADRE D'ÉLITE EN APPROCHE",
+		"pt": "ALA DE ELITE A CAMINHO",
+		"zh": "精英中队正在接近",
+		"ja": "精鋭飛行隊が接近中",
+		"ko": "정예 편대 접근 중",
+		"tr": "ELİT FİLO YAKLAŞIYOR",
+	},
+	"threat_heavy_inbound": {
+		"ru": "ТЯЖЁЛЫЙ ПАТРУЛЬ ОТВЕЧАЕТ НА ПРОМЫСЕЛ",
+		"en": "HEAVY PATROL RESPONDING TO MINING",
+		"es": "PATRULLA PESADA EN RESPUESTA",
+		"de": "SCHWERE PATROLLE REAGIERT",
+		"fr": "PATROUILLE LOURDE EN RÉACTION",
+		"pt": "PATRULHA PESADA EM REAÇÃO",
+		"zh": "重型巡逻队正在回应采矿活动",
+		"ja": "重警戒パトロールが採掘に反応",
+		"ko": "중무장 순찰대가 채굴에 대응",
+		"tr": "AĞIR DEVRIYE KAZIYA CEVAP VERİYOR",
+	},
+	"threat_standing_down": {
+		"ru": "УГРОЗА СПАДАЕТ — ПАТРУЛИ ОТХОДЯТ",
+		"en": "THREAT STANDING DOWN — PATROLS PULLING BACK",
+		"es": "AMENAZA EN DESCENSO",
+		"de": "BEDROHUNG SINKT — PATROLLEN ZIEHEN AB",
+		"fr": "MENACE EN BAISSE — PATROUILLES EN RETRAIT",
+		"pt": "AMEAÇA CAINDO — PATRULHAS RECUANDO",
+		"zh": "威胁下降 — 巡逻队撤退",
+		"ja": "脅威低下 — 哨戒が後退",
+		"ko": "위협 감소 — 순찰대 후퇴",
+		"tr": "TEHDİT DÜŞÜYOR — DEVRİYELER ÇEKİLİYOR",
+	},
+	"crew_salvage_card": {
+		"ru": "ТРОФЕЙ: КАРТА %1$s • ПОКРЫТИЕ %2$s",
+		"en": "SALVAGE: CARD %1$s • FINISH %2$s",
+		"es": "SALVAMENTO: CARTA %1$s • ACABADO %2$s",
+		"de": "BERGEGUT: KARTE %1$s • FINISH %2$s",
+		"fr": "SALVE : CARTE %1$s • FINITION %2$s",
+		"pt": "SALVADO: CARTA %1$s • ACABAMENTO %2$s",
+		"zh": "打捞：卡牌 %1$s • 涂层 %2$s",
+		"ja": "戦利品：カード %1$s • 仕上げ %2$s",
+		"ko": "전리품: 카드 %1$s • 코팅 %2$s",
+		"tr": "GANYMET: KART %1$s • KAPLAMA %2$s",
+	},
+	"foil_label": {
+		"ru": "ПОКРЫТИЕ",
+		"en": "FOIL FINISH",
+		"es": "ACABADO",
+		"de": "FINISH",
+		"fr": "FINITION",
+		"pt": "ACABAMENTO",
+		"zh": "涂层",
+		"ja": "仕上げ加工",
+		"ko": "코팅",
+		"tr": "KAPLAMA",
+	},
+	"foil_upgraded": {
+		"ru": "ПОКРЫТИЕ УЛУЧШЕНО: %s",
+		"en": "FOIL UPGRADED: %s",
+		"es": "ACABADO MEJORADO: %s",
+		"de": "FINISH VERBESSERT: %s",
+		"fr": "FINITION AMÉLIORÉE : %s",
+		"pt": "ACABAMENTO MELHORADO: %s",
+		"zh": "涂层升级：%s",
+		"ja": "仕上げアップグレード：%s",
+		"ko": "코팅 업그레이드: %s",
+		"tr": "KAPLAMA YÜKSELDİ: %s",
+	},
 	"menu_commander_status": {
 		"ru": "Статус командира: %d КР  •  %d КРИСТ  •  %d/42 карт экипажа",
 		"en": "Commander: %d CR  •  %d CRY  •  %d/42 Crew Cards",
@@ -549,17 +646,18 @@ const UI_STRINGS: Dictionary = {
 		"tr": "ENERJİ",
 	},
 	"hud_flight_hint": {
-		"ru": "WASD/Space/Ctrl: 6-DOF • Мышь: Прицел 360° (C: Центр) • Q/E: Бочка • ЛКМ: Огонь [Прицел #2 = Точка попадания] • ПКМ/F: Бур • H: В ангар",
-		"en": "WASD/Space/Ctrl: 6-DOF • Mouse: 360 Steer (C: Center) • Q/E: Roll • LMB: Fire [2nd Sight = Impact] • RMB/F: Mine • H: Hangar",
-		"es": "WASD/Espacio/Ctrl: 6-DOF • Ratón: Giro 360° • Q/E: Tonel • Clic Izq.: Fuego • Clic Der./F: Minar • H: Hangar",
-		"de": "WASD/Space/Strg: 6-DOF • Maus: 360° Steuern • Q/E: Rollen • LMT: Feuer • RMT/F: Bergbau • H: Hangar",
-		"fr": "WASD/Espace/Ctrl : 6-DOF • Souris : 360° • Q/E : Tonneau • Clic G : Tir • Clic D/F : Miner • H : Hangar",
-		"pt": "WASD/Espaço/Ctrl: 6-DOF • Mouse: Giro 360° • Q/E: Rolagem • BEM: Fogo • BDM/F: Minerar • H: Hangar",
-		"zh": "WASD/空格/Ctrl：六自由度机动 • 鼠标：360°转向 (C归中) • Q/E：翻滚 • 左键：开火 [第二准星=弹着点] • 右键/F：采矿 • H：返航",
-		"ja": "WASD/Space/Ctrl: 6軸移動 • マウス: 360°旋回 (C:中央) • Q/E: ロール • 左クリック: 射撃 • 右/F: 採掘 • H: 帰還",
-		"ko": "WASD/Space/Ctrl: 6자유도 이동 • 마우스: 360° 조종 (C:중앙) • Q/E: 롤링 • 좌클릭: 사격 • 우클릭/F: 채굴 • H: 귀환",
-		"tr": "WASD/Space/Ctrl: 6-DOF • Fare: 360° Yön (C: Merkez) • Q/E: Yatış • Sol Tık: Ateş • Sağ/F: Kazı • H: Hangar",
+		"ru": "WASD/Space/Ctrl: 6-ДОФ • Мышь: Прицел 360° (C: Центр) • Q/E: Бочка • ЛКМ: Огонь ТОЛЬКО по зелёной захваченной цели (T) • ПКМ/F: Бур по астероидам • H: В ангар",
+		"en": "WASD/Space/Ctrl: 6-DOF • Mouse: 360 Steer (C: Center) • Q/E: Roll • LMB: fire ONLY at the green locked target (T) • RMB/F: mining beam on rocks • H: Hangar",
+		"es": "WASD/Espacio/Ctrl: 6-DOF • Ratón: Giro 360° • Q/E: Tonel • Clic Izq.: fuego SOLO al objetivo marcado en verde (T) • Clic Der./F: Rayo minero • H: Hangar",
+		"de": "WASD/Space/Strg: 6-DOF • Maus: 360° Steuern • Q/E: Rollen • LMT: Feuer NUR auf das grün markierte Ziel (T) • RMT/F: Bohrstrahl • H: Hangar",
+		"fr": "WASD/Espace/Ctrl : 6-DOF • Souris : 360° • Q/E : Tonneau • Clic G : tir UNIQUEMENT sur la cible verrouillée verte (T) • Clic D/F : foreuse • H : Hangar",
+		"pt": "WASD/Espaço/Ctrl: 6-DOF • Mouse: Giro 360° • Q/E: Rolagem • BEM: fogo SOMENTE no alvo travado verde (T) • BDM/F: raio de mineração • H: Hangar",
+		"zh": "WASD/空格/Ctrl：六自由度机动 • 鼠标：360°转向 (C归中) • Q/E：翻滚 • 左键：只攻击绿色锁定目标 (T) • 右键/F：采矿光束 • H：返航",
+		"ja": "WASD/Space/Ctrl: 6軸移動 • マウス: 360°旋回 (C:中央) • Q/E: ロール • 左クリック: 緑のロック目標のみへ射撃 (T) • 右/F: 採掘ビーム • 帰還: H",
+		"ko": "WASD/Space/Ctrl: 6자유도 이동 • 마우스: 360° 조종 (C:중앙) • Q/E: 롤링 • 좌클릭: 초록 잠금 대상에게만 사격 (T) • 우클릭/F: 채굴 빔 • H: 귀환",
+		"tr": "WASD/Space/Ctrl: 6-DOF • Fare: 360° Yön (C: Merkez) • Q/E: Yatış • Sol Tık: YALNIZ yeşil kilitli hedefe ateş (T) • Sağ/F: Maden ışını • H: Hangar",
 	},
+
 	"hud_minute_task": {
 		"ru": "МИНУТНАЯ ЦЕЛЬ (%dс): %s (%d/%d)  •  +%d КРИСТ",
 		"en": "MINUTE TASK (%ds): %s (%d/%d)  •  +%d CRY",
@@ -1559,6 +1657,22 @@ const RARITIES: Dictionary = {
 	"Secret": {"ru": "Секретная", "en": "Secret", "es": "Secreta", "de": "Geheim", "fr": "Secrète", "pt": "Secreta", "zh": "秘藏", "ja": "シークレット", "ko": "시크릿", "tr": "Gizli"},
 }
 
+const FOIL_NAMES: Dictionary = {
+	"plain": {"ru": "Стандартное", "en": "Standard Print", "es": "Estándar", "de": "Standarddruck", "fr": "Tirage standard", "pt": "Padrão", "zh": "普通印刷", "ja": "通常版", "ko": "일반 인쇄", "tr": "Standart Baskı"},
+	"silver": {"ru": "Серебрение", "en": "Silvered", "es": "Plateada", "de": "Versilbert", "fr": "Argentée", "pt": "Prateada", "zh": "银色镀层", "ja": "シルバー加工", "ko": "실버 도금", "tr": "Gümüş Kaplama"},
+	"holo": {"ru": "Голография", "en": "Holographic", "es": "Holográfica", "de": "Holografisch", "fr": "Holographique", "pt": "Holográfica", "zh": "全息闪膜", "ja": "ホログラム", "ko": "홀로그램", "tr": "Holografik"},
+	"glitter": {"ru": "Блёстки", "en": "Glitter Foil", "es": "Glitter", "de": "Glitzer-Folie", "fr": "Pailletée", "pt": "Glitter", "zh": "闪粉箔膜", "ja": "グリッター", "ko": "글리터 호일", "tr": "Simli Folyo"},
+	"glow": {"ru": "Свечение", "en": "Luminous", "es": "Luminosa", "de": "Leuchtend", "fr": "Luminescente", "pt": "Luminosa", "zh": "夜光涂层", "ja": "発光加工", "ko": "야광 코팅", "tr": "Işıklı Kaplama"},
+}
+
+const FOIL_EFFECTS: Dictionary = {
+	"plain": {"ru": "Без бонусов покрытия", "en": "No finish bonus", "es": "Sin bonus de acabado", "de": "Kein Finish-Bonus", "fr": "Aucun bonus de finition", "pt": "Sem bônus de acabamento", "zh": "无涂层加成", "ja": "加工ボーナスなし", "ko": "코팅 보너스 없음", "tr": "Kaplama bonusu yok"},
+	"silver": {"ru": "+15% к бонусам карты, +4% к цене руды", "en": "+15% card bonuses, +4% ore price", "es": "+15% bonos, +4% precio mineral", "de": "+15% Kartenboni, +4% Erzpreis", "fr": "+15% bonus carte, +4% prix minerai", "pt": "+15% bônus, +4% preço do minério", "zh": "卡牌加成 +15%，矿石售价 +4%", "ja": "カード報酬 +15%、鉱石価格 +4%", "ko": "카드 보너스 +15%, 광물 가격 +4%", "tr": "+15% kart bonusu, +4% cevher fiyatı"},
+	"holo": {"ru": "+25% к бонусам карты, +6% к дальности радара", "en": "+25% card bonuses, +6% radar range", "es": "+25% bonos, +6% alcance de radar", "de": "+25% Kartenboni, +6% Radarsicht", "fr": "+25% bonus carte, +6% portée radar", "pt": "+25% bônus, +6% alcance de radar", "zh": "卡牌加成 +25%，雷达距离 +6%", "ja": "カード報酬 +25%、レーダー範囲 +6%", "ko": "카드 보너스 +25%, 레이더 범위 +6%", "tr": "+25% kart bonusu, +6% radar menzili"},
+	"glitter": {"ru": "+40% к бонусам карты, +5% к авторемонту", "en": "+40% card bonuses, +5% auto-repair", "es": "+40% bonos, +5% auto-reparación", "de": "+40% Kartenboni, +5% Autoreparatur", "fr": "+40% bonus carte, +5% autoréparation", "pt": "+40% bônus, +5% autorreparo", "zh": "卡牌加成 +40%，自动维修 +5%", "ja": "カード報酬 +40%、自動修復 +5%", "ko": "카드 보너스 +40%, 자동 수리 +5%", "tr": "+40% kart bonusu, +5% oto-onarım"},
+	"glow": {"ru": "+60% к бонусам, +8% к цене руды, +6% к авторемонту", "en": "+60% bonuses, +8% ore price, +6% repair", "es": "+60% bonos, +8% precio, +6% reparación", "de": "+60% Boni, +8% Erzpreis, +6% Reparatur", "fr": "+60% bonus, +8% prix minerai, +6% réparation", "pt": "+60% bônus, +8% preço, +6% reparo", "zh": "加成 +60%，矿石售价 +8%，维修 +6%", "ja": "報酬 +60%、鉱石価格 +8%、修復 +6%", "ko": "보너스 +60%, 광물 가격 +8%, 수리 +6%", "tr": "+60% bonus, +8% cevher fiyatı, +6% onarım"},
+}
+
 const ROLES: Dictionary = {
 	"Miner": {"ru": "Шахтёр", "en": "Miner", "es": "Minero", "de": "Bergmann", "fr": "Mineur", "pt": "Minerador", "zh": "采矿师", "ja": "マイナー", "ko": "채굴사", "tr": "Madenci"},
 	"Pilot": {"ru": "Пилот", "en": "Pilot", "es": "Piloto", "de": "Pilot", "fr": "Pilote", "pt": "Piloto", "zh": "王牌飞行员", "ja": "パイロット", "ko": "파일럿", "tr": "Pilot"},
@@ -1807,6 +1921,16 @@ func cat_name(cat_id: String) -> String:
 func rarity_name(rar: String) -> String:
 	var d: Dictionary = RARITIES.get(rar, {})
 	return str(d.get(current_lang, d.get("en", rar)))
+
+func foil_name(fid: String) -> String:
+	var d: Dictionary = FOIL_NAMES.get(fid, FOIL_NAMES["plain"])
+	return str(d.get(current_lang, d.get("en", fid)))
+
+
+func foil_effect(fid: String) -> String:
+	var d: Dictionary = FOIL_EFFECTS.get(fid, FOIL_EFFECTS["plain"])
+	return str(d.get(current_lang, d.get("en", "")))
+
 
 func role_name(role_id: String) -> String:
 	var d: Dictionary = ROLES.get(role_id, {})

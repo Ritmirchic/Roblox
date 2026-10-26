@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
 """
-Render the 42 SPACE MINER crew card portraits (360x440 PNG).
+Render the 42 SPACE MINER crew card portraits (360x440 PNG) - v2.3.0 androids.
 
-Every portrait is one coherent humanoid sculpted from a signed distance field
-(tools/crew_sdf.py) and painted procedurally in character-local space, so the
-result is a real bust - skull, jaw, face, hair, neck, shoulders, chest, arms -
-never a cropped or mirrored fragment of some other model.
+Every portrait is one coherent hard-surface android sculpted from a signed
+distance field (tools/crew_robot.py) and lit like a studio product shot:
+three light shapes, a procedural environment reflected by the chrome, GGX
+specular, glazed ceramic and clear-coated paint, panel seams, crevice grime,
+edge wear and emissive bloom. Nothing is a crop, a mirror or a decal of another
+card, and the rarity of the crew member drives real geometry and paint:
 
-Per-card variation driven by the roster in scripts/autoload/GameData.gd:
-  build        bulk, height, chest, shoulder width, head size, arm length
-  pose         lean, torso twist, per-arm swing, camera yaw
-  head gear    8 helmet types (dome, goggles, rebreather, miner cap, command
-               crest, pilot bubble, headset, weld mask) + 6 hair styles + beard
-  paint        suit/armour palette from rarity, rank bars, lit trim, chest
-               plaque with a role sigil, face (eyes, brows, nose, mouth,
-               cheeks), skin tone, hair colour, grime and edge wear
+  build        bulk, chest, shoulder width, head scale, arm size
+  pose         torso twist, lean, per-arm swing, camera yaw/pitch
+  helm         8 role headgear types + 8 crest options + 4 optics layouts
+  armour       4 pauldron styles, 4 backpack styles, 8 class tools, rank bars
+  paint        rarity palette, decals (stripes/chevrons), grime and edge wear
   scene        key/fill/rim lighting, nebula + planet + starfield backdrop
 
 Run: .venv/bin/python tools/render_crew_portraits.py [--only 1,14] [--montage]
@@ -22,32 +21,34 @@ Run: .venv/bin/python tools/render_crew_portraits.py [--only 1,14] [--montage]
 from __future__ import annotations
 
 import argparse
+import math
 import re
 import sys
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "assets" / "cards" / "crew"
-FRAME_W, FRAME_H = 720, 880          # render at 2x, LANCZOS down to card size
+FRAME_W, FRAME_H = 720, 880          # render at 2x supersample, LANCZOS down
 OUT_W, OUT_H = 360, 440
 sys.path.insert(0, str(ROOT / "tools"))
-from crew_sdf import (render_char, M_SKIN, M_SUIT, M_ARMOR, M_VISOR, M_TRIM,  # noqa: E402
-                      M_GEAR, M_HAIR)
+from crew_robot import (gbuffer, make_camera, KEY_DIR,                      # noqa: E402
+                        M_CERAMIC, M_PAINT, M_CHROME, M_GUNMETAL,
+                        M_EMIT, M_LENS, M_HOSE, M_GOLD)
 
 ROSTER_RE = re.compile(r'\[\s*(\d+)\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"')
-HEAD_Y = 1.615
+CHEST_Y = 1.252
 
-# rarity -> tier, suit, armour, trim, rim light, sky top, sky deep, nebula, planet, planet rim
+# rarity -> tier, paint, ceramic, trim, rim, sky top, sky deep, nebula, planet, planet rim
 RARITY = {
     "Common": (0, (0.235, 0.255, 0.295), (0.430, 0.455, 0.500), (0.55, 0.66, 0.74),
                (0.30, 0.50, 0.60), (0.030, 0.042, 0.068), (0.012, 0.020, 0.036),
                (0.085, 0.150, 0.205), (0.135, 0.145, 0.160), (0.35, 0.55, 0.65)),
     "Uncommon": (1, (0.185, 0.250, 0.215), (0.375, 0.455, 0.410), (0.36, 0.82, 0.52),
                  (0.24, 0.62, 0.46), (0.026, 0.048, 0.052), (0.010, 0.024, 0.030),
-               (0.070, 0.190, 0.150), (0.115, 0.160, 0.140), (0.30, 0.70, 0.55)),
+                 (0.070, 0.190, 0.150), (0.115, 0.160, 0.140), (0.30, 0.70, 0.55)),
     "Rare": (2, (0.180, 0.220, 0.305), (0.355, 0.430, 0.555), (0.34, 0.64, 0.98),
              (0.26, 0.58, 1.00), (0.022, 0.038, 0.075), (0.008, 0.016, 0.042),
              (0.070, 0.135, 0.275), (0.110, 0.150, 0.225), (0.30, 0.55, 0.95)),
@@ -56,7 +57,7 @@ RARITY = {
              (0.200, 0.090, 0.320), (0.150, 0.110, 0.215), (0.70, 0.35, 1.00)),
     "Legendary": (4, (0.295, 0.245, 0.145), (0.560, 0.460, 0.235), (1.00, 0.74, 0.22),
                   (1.00, 0.64, 0.24), (0.062, 0.038, 0.018), (0.028, 0.014, 0.006),
-                 (0.290, 0.190, 0.075), (0.230, 0.180, 0.110), (1.00, 0.72, 0.32)),
+                  (0.290, 0.190, 0.075), (0.230, 0.180, 0.110), (1.00, 0.72, 0.32)),
     "Mythic": (5, (0.155, 0.255, 0.265), (0.305, 0.470, 0.485), (0.18, 0.92, 0.86),
                (0.24, 0.98, 0.88), (0.014, 0.046, 0.054), (0.006, 0.024, 0.030),
                (0.045, 0.215, 0.215), (0.090, 0.190, 0.190), (0.20, 0.95, 0.90)),
@@ -64,21 +65,39 @@ RARITY = {
                (1.00, 0.24, 0.34), (0.058, 0.014, 0.022), (0.026, 0.006, 0.012),
                (0.255, 0.055, 0.090), (0.195, 0.075, 0.090), (1.00, 0.28, 0.36)),
 }
-ROLE_HELMET = {"Miner": 3, "Pilot": 5, "Engineer": 7, "Gunner": 0, "Collector": 2,
-               "Navigator": 4, "Scientist": 1, "Commander": 4}
+# headgear per role (matches map_robot): 1 miner hat, 2 pilot shell, 3 weld mask,
+# 4 gunner booms, 5 grabber claws, 6 compass ring, 7 monocle, 0 open helm
+ROLE_GEAR = {"Miner": 1, "Pilot": 2, "Engineer": 3, "Gunner": 4, "Collector": 5,
+             "Navigator": 6, "Scientist": 7, "Commander": 0}
+# class tool / arm chassis: 0/4 drill, 2/3 gun, others articulated hand
+ROLE_TOOL = {"Miner": 0, "Engineer": 2, "Gunner": 3, "Pilot": 1, "Collector": 4,
+             "Navigator": 5, "Scientist": 6, "Commander": 7}
+ROLE_OPTICS = {"Miner": 0, "Engineer": 0, "Pilot": 1, "Gunner": 1, "Collector": 3,
+               "Navigator": 2, "Scientist": 2, "Commander": 0}
+# crest: 1 blades, 2 halo, 3 antenna, 4 horns, 5 dish, 6 crown, 7 spine fins
+ROLE_CREST = {"Miner": 0, "Pilot": 3, "Engineer": 2, "Gunner": 4, "Collector": 5,
+              "Navigator": 7, "Scientist": 0, "Commander": 6}
 ROLE_SIGIL = {"Miner": 0, "Pilot": 1, "Engineer": 2, "Gunner": 3, "Collector": 4,
               "Navigator": 5, "Scientist": 6, "Commander": 7}
-# bulk, arm swing, head size, shoulder pad, heavy life-support pack
-ROLE_BUILD = {"Miner": (1.10, 0.42, 1.00, 1.10, 0.0), "Engineer": (1.05, 0.32, 0.99, 1.04, 0.0),
-              "Gunner": (1.04, 0.50, 1.01, 1.02, 0.0), "Pilot": (0.94, 0.18, 1.02, 0.96, 1.0),
-              "Commander": (1.01, 0.10, 0.99, 1.04, 1.0), "Scientist": (0.92, 0.24, 1.03, 0.93, 1.0),
-              "Navigator": (0.95, 0.28, 1.02, 0.96, 1.0), "Collector": (0.99, 0.36, 1.00, 0.99, 0.0)}
-SKIN_TONES = [(0.808, 0.641, 0.533), (0.704, 0.524, 0.404), (0.553, 0.378, 0.268),
-              (0.378, 0.247, 0.172), (0.872, 0.726, 0.610), (0.645, 0.459, 0.333),
-              (0.472, 0.314, 0.224), (0.764, 0.594, 0.474)]
-HAIR_TONES = [(0.055, 0.045, 0.042), (0.150, 0.088, 0.052), (0.295, 0.180, 0.095),
-              (0.430, 0.300, 0.140), (0.520, 0.420, 0.255), (0.585, 0.580, 0.575),
-              (0.360, 0.120, 0.075), (0.085, 0.075, 0.085)]
+# bulk, arm swing, head scale, shoulder width, backpack style
+ROLE_BUILD = {"Miner": (1.12, 0.40, 0.99, 1.10, 1), "Engineer": (1.06, 0.32, 1.00, 1.05, 1),
+              "Gunner": (1.08, 0.48, 1.00, 1.06, 2), "Pilot": (0.96, 0.20, 1.02, 0.98, 3),
+              "Commander": (1.04, 0.12, 1.00, 1.08, 2), "Scientist": (0.94, 0.26, 1.03, 0.95, 0),
+              "Navigator": (0.96, 0.30, 1.02, 0.97, 3), "Collector": (1.00, 0.36, 1.01, 1.00, 1)}
+# pauldron style per rarity: bulkier plating for the high tiers
+ROLE_PAULDRON = {0: 0, 1: 1, 2: 1, 3: 2, 4: 3, 5: 3, 6: 3}
+
+# material shading parameters: albedo key, roughness, metalness, coat, emission
+MATS = {
+    M_CERAMIC: ("ceramic", 0.26, 0.00, 0.85, 0.00),
+    M_PAINT:   ("paint",    0.31, 0.34, 1.00, 0.00),
+    M_CHROME:  ("chrome",   0.075, 1.00, 0.00, 0.00),
+    M_GUNMETAL: ("gunmetal", 0.40, 0.92, 0.00, 0.00),
+    M_EMIT:    ("emit",     0.22, 0.00, 0.00, 1.00),
+    M_LENS:    ("lens",     0.07, 0.10, 1.00, 0.16),
+    M_HOSE:    ("hose",     0.66, 0.00, 0.00, 0.00),
+    M_GOLD:    ("gold",     0.20, 1.00, 0.00, 0.00),
+}
 
 
 def load_roster():
@@ -98,17 +117,22 @@ def blur(a, px):
 
 
 def smoothstep(e0, e1, x):
-    t = np.clip((x - e0) / max(float(e1) - float(e0), 1e-6), 0.0, 1.0)
+    """Hermite ramp; e1 < e0 inverts it (1 at e0, 0 at e1), which the masks use."""
+    d = float(e1) - float(e0)
+    if -1e-9 < d < 1e-9:
+        d = 1e-9 if d >= 0.0 else -1e-9
+    t = np.clip((np.asarray(x, np.float32) - float(e0)) / d, 0.0, 1.0)
     return (t * t * (3.0 - 2.0 * t)).astype(np.float32)
 
 
-def noise(rng, size, cells, octaves=4, warp=0.0):
+def noise(rng, size, cells, octaves=4, warp=0.0, stretch=1.0):
+    """Fractal value noise. stretch>1 stretches the pattern horizontally."""
     h, w = size
     acc = np.zeros((h, w), np.float32)
     amp, tot = 1.0, 0.0
     for o in range(octaves):
-        gw = max(2, int(cells * (2 ** o)))
-        gh = max(2, int(cells * (2 ** o) * h / w))
+        gw = max(2, int(cells * (2 ** o) / stretch))
+        gh = max(2, int(cells * (2 ** o) * h / w * stretch))
         g = Image.fromarray((255 * rng.random((gh, gw))).astype(np.uint8), "L").resize((w, h), Image.BICUBIC)
         acc += amp * (np.asarray(g, np.float32) / 255.0)
         tot += amp
@@ -152,7 +176,6 @@ def sigil(kind, u, v):
     return smoothstep(0.04, 0.0, r - (0.32 + 0.44 * np.power(np.abs(np.cos(2.5 * a - np.pi / 2)), 1.7)))
 
 
-# ── painting ───────────────────────────────────────────────────────────────
 def paint(dst, mask, col):
     """dst (h,w,3) <- col ((3,) or (h,w,3)) where mask (h,w) is set."""
     c = np.asarray(col, np.float32)
@@ -169,233 +192,271 @@ def tone(dst, mask, mul):
     return dst * (1.0 + (k * mask)[..., None])
 
 
-def shade_char(nv, mat, valid, pal, rng, role, rank, synth, head_s, lean_c, lean_s, twist,  # noqa: C901
-                 helmet=6, key_az=0.0):
-    h, w, _ = nv.shape
+def band(x, k, wdt):
+    """Machined seam lines: 1 on the line, 0 by `wdt` (in band fractions) away."""
+    f = np.mod(np.asarray(x, np.float32) * float(k), 1.0)
+    d = np.minimum(f, 1.0 - f)
+    return (1.0 - smoothstep(0.0, wdt, d)).astype(np.float32)
+
+
+# ── lighting ────────────────────────────────────────────────────────────────
+LIGHTS = [
+    # (direction, colour key, intensity, softbox width, softbox height)
+    (KEY_DIR, "key", 2.20, 0.55, 0.30),
+    ((0.72, -0.16, 0.67), "fill", 0.48, 1.20, 0.80),
+    ((-0.12, 0.30, -0.95), "rim", 2.05, 0.42, 1.10),
+]
+
+
+def _norm(v):
+    v = np.asarray(v, np.float32)
+    return v / max(float(np.sqrt((v * v).sum())), 1e-9)
+
+
+def make_env(pal):
+    """A tiny procedural studio: a graded space backdrop plus the light shapes,
+    sampled by direction so chrome and glass reflect something believable."""
+    top = np.array(pal["sky_top"], np.float32) * 5.2
+    bot = np.array(pal["sky_bot"], np.float32) * 2.0
+    accent = np.array(pal["trim"], np.float32)
+    rims = np.array(pal["rim"], np.float32)
+    dirs = [np.array(l[0], np.float32) for l in LIGHTS]
+    cols = [np.array([1.00, 0.965, 0.905], np.float32) * LIGHTS[0][2],
+            accent * 0.85 * LIGHTS[1][2],
+            rims * 1.15 * LIGHTS[2][2]]
+    size = [(LIGHTS[i][3], LIGHTS[i][4]) for i in range(len(LIGHTS))]
+
+    def env(d):
+        """d: (...,3) unit directions -> linear radiance."""
+        dy = np.clip(d[..., 1], -1.0, 1.0)
+        t = (dy * 0.5 + 0.5).astype(np.float32)
+        out = bot[None, None, :] * (1.0 - t)[..., None] + top[None, None, :] * t[..., None]
+        out = out + (accent * 0.30)[None, None, :] * np.exp(-(np.abs(dy) * 3.4) ** 2)[..., None]
+        for i in range(len(dirs)):
+            L = dirs[i]
+            c = np.clip(d[..., 0] * L[0] + d[..., 1] * L[1] + d[..., 2] * L[2], -1.0, 1.0)
+            sw, sh = size[i]
+            blob = np.clip((c - (1.0 - sw)) / max(sw, 1e-3), 0.0, 1.0) ** 1.6
+            out = out + cols[i][None, None, :] * blob[..., None]
+        return out.astype(np.float32)
+
+    return env
+
+
+def ggx(n, v, L, rough, f0):
+    """Cook-Torrance with a Smith-GGX term; n,v are (h,w,3), f0/rough (h,w)."""
+    a = rough * rough
+    h = np.asarray(L, np.float32)[None, None, :] + v
+    hl = np.sqrt(np.maximum((h * h).sum(axis=2), 1e-9))
+    h = h / hl[..., None]
+    nh = np.maximum((n * h).sum(axis=2), 0.0)
+    nv = np.maximum((n * v).sum(axis=2), 1e-4)
+    nl = np.maximum(n[..., 0] * L[0] + n[..., 1] * L[1] + n[..., 2] * L[2], 0.0)
+    d = nh * nh * (a * a - 1.0) + 1.0
+    D = (a * a) / (np.pi * d * d + 1e-7)
+    k = (rough + 1.0) ** 2 / 8.0
+    G = (nv / (nv * (1.0 - k) + k)) * (nl / (nl * (1.0 - k) + k))
+    F = f0 + (1.0 - f0) * np.power(1.0 - np.maximum((v * h).sum(axis=2), 0.0), 5.0)
+    return ((D * G * F / (4.0 * nv * nl + 1e-5)) * nl)[..., None]
+
+
+def shade_robot(nv, mat, valid, shb, eye, pal, rng, sigil_kind, lean_c, lean_s,  # noqa: C901
+                twist, tier, decal):
+    """Physically-plausible shading pass for the android g-buffer."""
+    h, w = valid.shape
     n = nv[..., 0:3].astype(np.float32)
+    nl = np.sqrt(np.maximum((n * n).sum(axis=2), 1e-9))
+    n = n / np.maximum(nl, 1e-6)[..., None]
     ao = nv[..., 3].astype(np.float32)
-    lx, ly, lz = rot_y(nv[..., 4], nv[..., 5], nv[..., 6], lean_c, lean_s)
-    lx, _, lz = rot_y(lx, ly, lz, float(np.cos(twist)), float(np.sin(twist)))
-    lx = lx.astype(np.float32); lz = lz.astype(np.float32); ly = ly.astype(np.float32)
-    front = np.clip(n[..., 2], 0, 1) > 0.20
+    ao = np.where(valid, ao, 1.0)
+    pos = nv[..., 4:7].astype(np.float32)
+    depth = np.maximum(nv[..., 7].astype(np.float32), 1e-4)
 
-    suit_c = np.array(pal["suit"], np.float32)
-    armor_c = np.array(pal["armor"], np.float32)
-    trim_c = np.array(pal["trim"], np.float32)
-    skin_c = np.array(pal["skin"], np.float32)
-    hair_c = np.array(pal["hair"], np.float32)
-    rim_c = np.array(pal["rim"], np.float32)
-    sky_c = np.array(pal["nebula"], np.float32)
+    # character-local space (undo the camera-frame lean and the torso twist)
+    lx, ly, lz = rot_y(pos[..., 0], pos[..., 1], pos[..., 2], math.cos(-twist), math.sin(-twist))
+    lx, ly, lz = rot_y(lx, ly, lz, lean_c, -lean_s)
+    loc = np.stack([lx, ly, lz], axis=2)
 
-    L1 = np.array([np.sin(key_az) * 0.78 - 0.18, 0.62, np.cos(key_az) * 0.62 + 0.28], np.float32)
-    L1 = L1 / np.linalg.norm(L1)
-    L2 = np.array([0.78, 0.02, -0.42], np.float32); L2 /= np.linalg.norm(L2)
-    L3 = np.array([-0.18, 0.30, -0.94], np.float32); L3 /= np.linalg.norm(L3)
-    V = np.array([0.10, 0.06, 1.0], np.float32); V /= np.linalg.norm(V)
+    eye = np.asarray(eye, np.float32)
+    v = eye[None, None, :] - pos
+    v = v / np.maximum(np.sqrt(np.maximum((v * v).sum(axis=2), 1e-9))[..., None], 1e-6)
+    nvv = np.maximum((n * v).sum(axis=2), 0.0)
 
-    d1 = np.clip(np.einsum("ijk,k->ij", n, L1), 0, 1)
-    d2 = np.clip(np.einsum("ijk,k->ij", n, L2), 0, 1)
-    d3 = np.clip(np.einsum("ijk,k->ij", n, L3), 0, 1)
-    up = np.clip(n[..., 1], 0, 1)
-    hv = L1 + V
-    hv /= np.linalg.norm(hv)
-    spec_ang = np.clip(np.einsum("ijk,k->ij", n, hv), 0, 1)
+    env = make_env(pal)
+    paint_col = np.array(pal["paint"], np.float32)
+    cer_col = np.array(pal["ceramic"], np.float32)
+    trim = np.array(pal["trim"], np.float32)
+    gold = np.array([0.92, 0.68, 0.26], np.float32)
+    gun = np.array([0.052, 0.058, 0.070], np.float32)
+    hose = np.array([0.030, 0.031, 0.036], np.float32)
+    chrome = np.array([0.80, 0.84, 0.90], np.float32)
+    lens = np.array([0.012, 0.014, 0.021], np.float32)
 
-    fine = noise(rng, (h, w), 210, 3)
-    broad = noise(rng, (h, w), 24, 3)
-    wear = noise(rng, (h, w), 66, 2)
-    m = {i: np.ascontiguousarray((mat == i) & valid)
-         for i in (M_SKIN, M_SUIT, M_ARMOR, M_VISOR, M_TRIM, M_GEAR, M_HAIR)}
-
+    # ── per-pixel material fields ───────────────────────────────────────────
     albedo = np.zeros((h, w, 3), np.float32)
-    rough = np.full((h, w), 0.60, np.float32)
-    spec_k = np.zeros((h, w), np.float32)
-    emis = np.zeros((h, w, 3), np.float32)
+    rough = np.full((h, w), 0.45, np.float32)
+    metal = np.zeros((h, w), np.float32)
+    coat = np.zeros((h, w), np.float32)
+    emit = np.zeros((h, w, 3), np.float32)
+    idn = np.zeros((h, w), np.int32)
+    for mid, (key, r, mt, ct, eg) in MATS.items():
+        m = mat == mid
+        idn = np.where(m, mid, idn)
+        rough = np.where(m, np.float32(r), rough)
+        metal = np.where(m, np.float32(mt), metal)
+        coat = np.where(m, np.float32(ct), coat)
+        if key == "paint":
+            albedo = np.where(m[..., None], paint_col[None, None, :], albedo)
+        elif key == "ceramic":
+            albedo = np.where(m[..., None], cer_col[None, None, :], albedo)
+        elif key == "chrome":
+            albedo = np.where(m[..., None], chrome[None, None, :], albedo)
+        elif key == "gunmetal":
+            albedo = np.where(m[..., None], gun[None, None, :], albedo)
+        elif key == "gold":
+            albedo = np.where(m[..., None], gold[None, None, :], albedo)
+        elif key == "hose":
+            albedo = np.where(m[..., None], hose[None, None, :], albedo)
+        elif key == "lens":
+            albedo = np.where(m[..., None], lens[None, None, :], albedo)
+        elif key == "emit":
+            albedo = np.where(m[..., None], lens[None, None, :], albedo)
+            emit = np.where(m[..., None], trim[None, None, :], emit)
 
-    grime = smoothstep(1.30, 0.88, ly) * (0.5 + 0.5 * wear)
+    # ── surface detail: seams, micro-roughness, grime, edge wear ───────────
+    break_up = 0.30 + 1.45 * noise(rng, (h, w), 3, 2)     # which lines are real
+    seam_y = band(ly, 12.5, 0.055) * break_up
+    seam_x = band(lx, 7.5, 0.070) * break_up * np.clip(np.abs(n[..., 0]) * 2.2 - 0.75, 0, 1)
+    seam_h = band(np.sqrt(lx * lx + (ly - 1.620) ** 2), 9.0, 0.075)   # helm face rings
+    seams = np.clip(seam_y + seam_x + seam_h * 0.85 * (ly > 1.470), 0.0, 1.0)
+    is_shell = ((mat == M_PAINT) | (mat == M_CERAMIC) | (mat == M_GUNMETAL)).astype(np.float32)
+    is_metal = ((mat == M_CHROME) | (mat == M_GOLD)).astype(np.float32)
 
-    # ---- skin -------------------------------------------------------------
-    skin = skin_c[None, None, :] * (1.16 + 0.20 * broad)[..., None]
-    skin = skin * (1.0 - 0.28 * grime)[..., None]
-    skin = skin * (1.0 - 0.18 * (1.0 - up))[..., None]
-    skin = skin * (1.0 + 0.06 * (fine - 0.5) * 2.0)[..., None]
-    warm = (smoothstep(0.030, 0.088, np.abs(np.abs(lx) - 0.070))
-            * smoothstep(0.062, 0.016, np.abs(ly - (HEAD_Y - 0.030)))
-            * np.clip(lz - 0.05, 0, 1))[..., None]
-    skin = skin + np.array([0.034, 0.010, 0.003], np.float32)[None, None, :] * warm
-    albedo = paint(albedo, m[M_SKIN], skin)
-    rough = np.where(m[M_SKIN], 0.55 - 0.10 * fine, rough)
-    spec_k = np.where(m[M_SKIN], 0.13, spec_k)
+    micro = noise(rng, (h, w), 150, 3)
+    brushed = noise(rng, (h, w), 26, 2, stretch=16.0)
+    rough = np.clip(rough * (0.78 + 0.55 * micro) + is_metal * (brushed - 0.5) * 0.10, 0.02, 1.0)
 
-    # ---- face painter: shared by bare skin and by tinted canopy glass -----
-    ax = np.abs(lx) - 0.0455 * head_s
-    ay = ly - (HEAD_Y + 0.006 * head_s)
-    eye_e = (ax / (0.0250 * head_s)) ** 2 + (ay / (0.0128 * head_s)) ** 2
-    slot = (ax / (0.0192 * head_s)) ** 2 + (ay / (0.0084 * head_s)) ** 2
-    r_ir = np.sqrt(ax ** 2 + (ay * 1.9) ** 2)
-    brow_y = ly - (HEAD_Y + 0.040 * head_s + 0.0035 * (lx > 0).astype(np.float32))
-    fbrow = (np.abs(brow_y / (0.0088 * head_s))
-             + np.abs((np.abs(lx) - 0.0485 * head_s) / 0.0305)) < 1.0
-    mouth_y = ly - (HEAD_Y - 0.0640 * head_s
-                    + 0.0075 * np.clip(np.abs(lx) / (0.028 * head_s), 0, 1.3) ** 2)
-    fmouth = (np.abs(lx) < 0.0245 * head_s) & (np.abs(mouth_y) < 0.0031 * head_s)
-    sclera = np.array([0.82, 0.805, 0.785], np.float32)[None, None, :] \
-        * (0.74 + 0.26 * smoothstep(1.0, 0.30, eye_e))[..., None]
-    nose_sh = (smoothstep(0.030, 0.004, np.abs(lx - 0.014))
-               * smoothstep(HEAD_Y - 0.078, HEAD_Y - 0.006, ly) * smoothstep(0.098, 0.128, lz))
-    nose_hi = (smoothstep(0.013, 0.0, np.abs(lx)) * smoothstep(HEAD_Y - 0.052, HEAD_Y - 0.004, ly)
-               * smoothstep(0.104, 0.140, lz))
-    upper_lip = (np.abs(lx) < 0.034 * head_s) & (np.abs(ly - (HEAD_Y - 0.0555 * head_s)) < 0.0075)
-    jaw_sh = smoothstep(HEAD_Y - 0.120, HEAD_Y - 0.088, ly) * smoothstep(0.01, 0.10, lz)
-    glint = ((ax + 0.0044 * head_s) ** 2 + (ay - 0.0040 * head_s) ** 2) < (0.0042 * head_s) ** 2
+    grime_gain = [1.00, 0.92, 0.70, 0.46, 0.24, 0.14, 0.10][min(tier, 6)]
+    grime = smoothstep(0.66, 0.10, ao) * (0.35 + 1.25 * noise(rng, (h, w), 34, 4, warp=0.9))
+    grime = np.clip(grime, 0, 1) * grime_gain
+    dirt_col = np.array([0.055, 0.048, 0.040], np.float32)
 
-    def paint_face(dst, mask, dim=1.0):
-        fc = np.where(np.ascontiguousarray(mask)[..., None], dst * dim, 0.0)
-        fc = fc * (1.0 - 0.15 * smoothstep(1.22, 1.00, eye_e))[..., None]
-        fc = paint(fc, slot < 1.0, sclera)
-        fc = paint(fc, (r_ir < 0.0124 * head_s) & (slot < 1.20), np.array(pal["eye"], np.float32))
-        fc = paint(fc, r_ir < 0.0058 * head_s, np.array([0.028, 0.026, 0.028], np.float32))
-        fc = paint(fc, glint & (slot < 1.2), np.array([1.05, 1.08, 1.12], np.float32))
-        fc = paint(fc, fbrow, hair_c * 1.06)
-        fc = tone(fc, (np.abs(brow_y) < 0.017) & (np.abs(lx) < 0.090) & ~fbrow,
-                  np.full((h, w), -0.09, np.float32))
-        fc = fc * (1.0 - 0.24 * nose_sh)[..., None]
-        fc = fc + np.array([0.085, 0.070, 0.056], np.float32)[None, None, :] * nose_hi[..., None]
-        fc = paint(fc, fmouth, np.array([0.262, 0.108, 0.092], np.float32))
-        fc = tone(fc, upper_lip, np.full((h, w), 0.10, np.float32))
-        fc = fc * (1.0 - 0.20 * jaw_sh)[..., None]
-        return np.where(np.ascontiguousarray(mask)[..., None], fc, dst)
+    # paint chips along plate rims: where the material id changes, plus a
+    # small contribution from genuinely sharp geometric creases
+    m32 = mat.astype(np.float32)
+    dmat = np.abs(np.gradient(m32, axis=0)) + np.abs(np.gradient(m32, axis=1))
+    rim = np.clip(blur(np.minimum(dmat * 1.4, 1.0), 0.85) * 2.9, 0.0, 1.0)
+    dv = (np.gradient(n[..., 0], axis=1) + np.gradient(n[..., 1], axis=0)
+          + np.gradient(n[..., 2], axis=1))
+    crease = np.clip(smoothstep(4.5, 16.0, np.abs(dv) * depth * 60.0), 0.0, 1.0)
+    wear = np.clip(np.maximum(rim, crease * 0.55) * is_shell
+                   * (0.40 + 0.95 * noise(rng, (h, w), 46, 3)), 0.0, 1.0)
 
-    face = (m[M_SKIN] & front & (np.abs(lx) < 0.140) & (ly > HEAD_Y - 0.150)
-            & (ly < HEAD_Y + 0.135) & (lz > 0.035))
-    albedo = paint_face(albedo, face, 1.0)
+    paint_m = (mat == M_PAINT).astype(np.float32)
+    cer_m = (mat == M_CERAMIC).astype(np.float32)
+    g = (albedo * np.array([0.25, 0.62, 0.13], np.float32)[None, None, :]).sum(axis=2, keepdims=True)
+    albedo = albedo + (g - albedo) * 0.16 * (paint_m + cer_m)[..., None]
+    albedo = albedo * (1.0 - (0.58 * wear * paint_m + 0.26 * wear * cer_m)[..., None])
+    albedo = albedo * (1.0 - 0.55 * grime[..., None] * is_shell[..., None])
+    worn = np.clip((wear - 0.35) * is_shell * 2.2, 0, 1)
+    albedo = albedo * (1.0 - 0.55 * worn[..., None]) + chrome[None, None, :] * (0.55 * worn)[..., None]
+    albedo = np.where(grime[..., None] * is_shell[..., None] > 0.28,
+                      0.60 * albedo + 0.40 * dirt_col[None, None, :], albedo)
+    rough = np.clip(rough + grime * 0.30 * is_shell, 0.02, 1.0)
+    seams *= is_shell
+    albedo = albedo * (1.0 - 0.55 * seams[..., None])
+    rough = np.clip(rough + 0.18 * seams, 0.02, 1.0)
 
-    # ---- hair + beard -----------------------------------------------------
-    strands = np.sin(ly * 190.0 + lx * 58.0 + broad * 26.0)
-    hairf = hair_c[None, None, :] * (0.78 + 0.44 * wear)[..., None] * (1.0 + 0.18 * strands)[..., None]
-    hairf = hairf + np.array([0.11, 0.11, 0.12], np.float32)[None, None, :] * (
-        smoothstep(-0.02, 0.10, up) * smoothstep(HEAD_Y + 0.02, HEAD_Y + 0.17, ly))[..., None] * 0.55
-    beard = np.ascontiguousarray((mat == M_HAIR) & (ly < HEAD_Y - 0.032) & (lz > -0.01))
-    hairf = np.where(beard[..., None], albedo * 0.60 + hairf * 0.40, hairf)
-    albedo = paint(albedo, m[M_HAIR], hairf)
-    rough = np.where(m[M_HAIR], 0.72, rough)
-    spec_k = np.where(m[M_HAIR], 0.20, spec_k)
+    # ── decals: unit stripes on the helm, chevrons on the pauldron ─────────
+    if decal > 0:
+        front = np.clip(n[..., 2] * 2.0 - 0.35, 0.0, 1.0)
+        helm_zone = ((ly > 1.560) & (ly < 1.80) & (np.abs(lx) < 0.14)).astype(np.float32)
+        if decal == 1:                     # twin crown stripes
+            pat = (np.abs(np.abs(lx) - 0.036) < 0.009).astype(np.float32)
+        elif decal == 2:                   # centre keel stripe
+            pat = (np.abs(lx) < 0.012).astype(np.float32)
+        else:                              # diagonal slash across the helm
+            pat = (np.abs((ly - 1.66) * 0.9 + lx * 1.5) < 0.011).astype(np.float32)
+        strip = np.clip(pat * helm_zone * front, 0, 1) * ((mat == M_CERAMIC) | (mat == M_PAINT))
+        albedo = albedo * (1.0 - strip[..., None]) + trim[None, None, :] * strip[..., None] * 0.85
+        emit = emit + trim[None, None, :] * (strip * 0.35)[..., None]
 
-    # ---- suit -------------------------------------------------------------
-    seam = np.minimum(smoothstep(0.024, 0.0, np.abs(np.mod(ly * 6.4 + 0.5, 1.0) - 0.5)),
-                     smoothstep(0.015, 0.0, np.abs(np.mod(lx * 9.0, 1.0) - 0.5)))
-    stripe = np.abs(np.abs(lx) - 0.205) < 0.011
-    suit = suit_c[None, None, :] * (0.70 + 0.34 * fine)[..., None]
-    suit = suit * (1.0 - 0.13 * seam)[..., None]
-    suit = suit + (suit_c * 1.55)[None, None, :] * (smoothstep(1.30, 1.42, ly) * 0.30)[..., None]
-    suit = suit + trim_c[None, None, :] * (stripe & (ly < 1.22))[..., None] * 0.5
-    suit = suit * (1.0 - 0.28 * grime)[..., None] + np.array([0.070, 0.058, 0.045], np.float32)[None, None, :] * grime[..., None]
-    albedo = paint(albedo, m[M_SUIT], suit)
-    rough = np.where(m[M_SUIT], 0.74 - 0.10 * broad, rough)
-    spec_k = np.where(m[M_SUIT], 0.10, spec_k)
+    # ── role sigil plate on the left pectoral ───────────────────────────────
+    su = (lx - 0.086) / 0.056
+    sv = (ly - (CHEST_Y + 0.062)) / 0.052
+    szone = (np.abs(su) < 1.0) & (np.abs(sv) < 1.0) & (lz > 0.130) & (n[..., 2] > 0.45) \
+        & ((mat == M_PAINT) | (mat == M_CERAMIC))
+    sg = np.clip(sigil(sigil_kind, np.where(szone, su, 2.0), np.where(szone, sv, 2.0)), 0, 1)
+    sg = np.where(szone, sg, 0.0).astype(np.float32)
+    badge = chrome if tier < 4 else gold
+    albedo = albedo * (1.0 - sg[..., None]) + badge[None, None, :] * sg[..., None]
+    rough = np.clip(rough * (1.0 - sg) + 0.16 * sg, 0.02, 1.0)
+    metal = np.clip(metal + sg * 0.85, 0.0, 1.0)
+    emit = emit + badge[None, None, :] * (np.clip(sg - 0.55, 0, 1) * 0.22)[..., None]
 
-    # ---- armour -----------------------------------------------------------
-    gap = np.maximum(smoothstep(0.011, 0.0, np.abs(np.mod(ly * 4.05 + 0.25, 1.0) - 0.5)),
-                    smoothstep(0.008, 0.0, np.abs(np.mod(np.arctan2(lz, lx) * 4.0, 1.0) - 0.5)))
-    edge = smoothstep(0.87, 1.0, ao) * smoothstep(0.28, 0.80, d1)
-    arm = armor_c[None, None, :] * (1.06 + 0.36 * wear)[..., None]
-    arm = arm * (1.0 - 0.26 * gap)[..., None] * (1.0 - 0.24 * grime)[..., None]
-    arm = arm + (np.array([0.640, 0.665, 0.700], np.float32)[None, None, :] - arm) * (0.50 * edge)[..., None]
-    arm = arm + trim_c[None, None, :] * (0.05 * (1.0 - gap))[..., None]
-    albedo = paint(albedo, m[M_ARMOR], arm)
-    rough = np.where(m[M_ARMOR], 0.30 - 0.15 * edge, rough)
-    spec_k = np.where(m[M_ARMOR], 0.50 + 0.40 * edge, spec_k)
+    # ── direct lighting: key (shadowed), cool fill, rarity-coloured rim ─────
+    lit = np.zeros((h, w, 3), np.float32)
+    shadowed = np.clip(shb, 0.0, 1.0)
+    f0 = 0.045 + 0.90 * metal
+    for ldir, lname, lint, _sw, _sh in LIGHTS:
+        L = _norm(ldir)
+        ndl = np.clip(n[..., 0] * L[0] + n[..., 1] * L[1] + n[..., 2] * L[2], 0.0, 1.0)
+        if lname == "key":
+            vis = shadowed
+        elif lname == "rim":
+            vis = np.clip(0.20 + 1.10 * (1.0 - nvv), 0.0, 1.0) * shadowed * 0.25 + \
+                np.clip(1.35 * (1.0 - nvv) - 0.25, 0.0, 1.0)
+        else:
+            vis = np.ones((h, w), np.float32)
+        if lname == "key":
+            lcol = np.array([1.00, 0.955, 0.885], np.float32) * lint
+        elif lname == "fill":
+            lcol = (trim * 0.55 + np.array([0.20, 0.26, 0.34], np.float32)) * lint
+        else:
+            lcol = (np.array(pal["rim"], np.float32) * 1.15
+                    + np.array([0.12, 0.12, 0.16], np.float32)) * lint
+        lit = lit + albedo * (1.0 - 0.86 * metal[..., None]) * (ndl * vis)[..., None] * lcol[None, None, :]
+        lit = lit + ggx(n, v, L, rough, f0) * (vis[..., None]) * lcol[None, None, :] * 1.35
+    # clear coat over the paint and glaze over the ceramic: one tight lobe
+    L0 = _norm(LIGHTS[0][0])
+    ndl0 = np.clip(n[..., 0] * L0[0] + n[..., 1] * L0[1] + n[..., 2] * L0[2], 0.0, 1.0)
+    coat_spec = ggx(n, v, L0, np.full((h, w), 0.075, np.float32),
+                    np.full((h, w), 0.045, np.float32))
+    lit = lit + coat_spec * (coat * ndl0 * shadowed * 2.10)[..., None] \
+        * np.array([1.0, 0.985, 0.96], np.float32)[None, None, :]
 
-    # ---- gear -------------------------------------------------------------
-    packm = m[M_GEAR] & (lz < 0.02)
-    haz = (np.abs(np.mod((lx + ly) * 12.0, 1.0)) < 0.40).astype(np.float32)
-    gearc = np.array([0.092, 0.096, 0.108], np.float32)[None, None, :] * (0.82 + 0.34 * fine)[..., None]
-    gearc = gearc + np.array([0.80, 0.40, 0.06], np.float32)[None, None, :] * (haz * packm)[..., None] * 0.5
-    gearc = gearc * (1.0 - 0.22 * grime)[..., None]
-    albedo = paint(albedo, m[M_GEAR], gearc)
-    rough = np.where(m[M_GEAR], 0.52, rough)
-    spec_k = np.where(m[M_GEAR], 0.26, spec_k)
+    # ── ambient: sky irradiance + environment reflection ─────────────────────
+    R = 2.0 * n * (n * v).sum(axis=2)[..., None] - v
+    R = R / np.maximum(np.sqrt(np.maximum((R * R).sum(axis=2), 1e-9))[..., None], 1e-6)
+    R[..., 1] = np.abs(R[..., 1])
+    refl = env(np.clip(R, -1.0, 1.0))
+    F = 0.030 + 0.97 * np.power(1.0 - nvv, 5.0)
+    amb = albedo * env(np.clip(n, -1.0, 1.0)) * (0.16 * (1.0 - metal[..., None]))
+    amb = amb * (0.35 + 0.65 * ao)[..., None]
+    refl_gain = (np.clip(F + metal * 0.92, 0.0, 1.0)
+                 * (1.0 - 0.55 * smoothstep(0.10, 0.60, rough))
+                 * (0.55 + 0.45 * ao) * (rough < 0.85)).astype(np.float32)
+    amb = amb + refl * refl_gain[..., None]
+    amb = amb * (1.0 - 0.35 * (rough > 0.5))[..., None]
 
-    # ---- visor glass ------------------------------------------------------
-    refl_y = np.clip(-n[..., 1] * 0.6 + 0.42, 0, 1)
-    skyr = (np.array(pal["sky_top"], np.float32)[None, None, :] * (1.0 - refl_y)[..., None]
-            + np.array(pal["nebula"], np.float32)[None, None, :] * refl_y[..., None]) * 2.2
-    streak = smoothstep(0.68, 0.99, -n[..., 0] * 0.72 + n[..., 1] * 0.68)
-    vis = np.array([0.026, 0.038, 0.054], np.float32)[None, None, :] + skyr * 0.26
-    vis = vis + np.array(pal["trim"], np.float32)[None, None, :] * (0.18 + 0.28 * np.clip(n[..., 2], 0, 1))[..., None]
-    vis = vis + np.array([0.86, 0.94, 1.00], np.float32)[None, None, :] * streak[..., None] * 0.46
-    albedo = paint(albedo, m[M_VISOR], vis)
-    emis = paint(emis, m[M_VISOR], vis * 0.30)
-    rough = np.where(m[M_VISOR], 0.06, rough)
-    spec_k = np.where(m[M_VISOR], 0.92, spec_k)
+    col = lit + amb
 
-    # sealed helmets: the face still has to read through the tinted glass
-    if helmet in (0, 4, 5):
-        band = m[M_VISOR] & (ly > HEAD_Y - 0.170) & (ly < HEAD_Y + 0.160) & (lz > -0.02)
-        if helmet != 5:
-            band = band & front
-        base = skin_c[None, None, :] * (0.34 + 0.52 * np.clip(d1, 0, 1))[..., None]
-        gf = paint_face(base, band, 0.86)
-        mix = 0.78 if helmet == 5 else 0.46
-        albedo = np.where(band[..., None], albedo * (1.0 - mix) + gf * mix, albedo)
-        emis = np.where(band[..., None], emis * (1.0 - 0.5 * mix), emis)
+    # ── emission, glow inside the lens, core pulse ──────────────────────────
+    pulse = 0.72 + 0.55 * np.clip(1.0 - np.abs((ly - CHEST_Y) * 8.0), 0, 1)
+    core = np.exp(-(((lx * lx + (ly - (CHEST_Y + 0.040)) ** 2) / 0.0045)))
+    emit = emit * (2.05 + 1.30 * pulse)[..., None]
+    # low tiers carry a dimmer reactor so the optic band stays the read;
+    # Mythic gold keeps its full punch
+    emit = emit + trim[None, None, :] * (core * (0.62 + 0.19 * tier) * (mat == M_CHROME))[..., None]
+    lens_glow = np.clip(1.0 - nvv * 1.35, 0, 1) * (mat == M_LENS).astype(np.float32)
+    emit = emit + trim[None, None, :] * (lens_glow * 0.55)[..., None]
 
-    # ---- lit trim ---------------------------------------------------------
-    albedo = paint(albedo, m[M_TRIM], trim_c * 0.55)
-    emis = paint(emis, m[M_TRIM], trim_c * 0.62)
-    rough = np.where(m[M_TRIM], 0.30, rough)
-    spec_k = np.where(m[M_TRIM], 0.45, spec_k)
-
-    # ---- rank bars + unit plaque -----------------------------------------
-    pauld = (np.abs(lx) > 0.198) & (np.abs(lx) < 0.296) & (ly > 1.298) & (ly < 1.452) & m[M_ARMOR]
-    bars = np.zeros((h, w), np.float32)
-    for i in range(rank):
-        bars = np.maximum(bars, smoothstep(0.0066, 0.0, np.abs(ly - (1.400 - 0.0245 * i))))
-    bm = pauld & (bars > 0.4) & (up > 0.25)
-    albedo = paint(albedo, bm, trim_c * 0.75)
-    emis = paint(emis, bm, trim_c * 0.42)
-
-    px0, py0 = 0.0, 1.322
-    plaque = (np.abs(lx - px0) < 0.031) & (np.abs(ly - py0) < 0.0215) & (lz > 0.140) & front & m[M_ARMOR]
-    pu = np.clip((lx - px0) / 0.031, -1.05, 1.05)
-    pv = np.clip((ly - py0) / 0.0215, -1.05, 1.05)
-    plate = (np.abs(pu) ** 2.6 + np.abs(pv) ** 2.6) < 1.0
-    sg = sigil(ROLE_SIGIL.get(role, 0), pu * 1.12, pv * 1.12) > 0.45
-    albedo = paint(albedo, plaque & plate, trim_c * 0.34 + np.array([0.03, 0.03, 0.035], np.float32))
-    albedo = paint(albedo, plaque & plate & sg, np.array([0.82, 0.85, 0.88], np.float32))
-    emis = paint(emis, plaque & plate & sg, np.array([0.14, 0.15, 0.17], np.float32))
-
-    # ---- synth crew -------------------------------------------------------
-    if synth > 0.5:
-        headm = m[M_SKIN] & (ly > HEAD_Y - 0.17)
-        chrome = np.array([0.50, 0.53, 0.58], np.float32)[None, None, :] * (0.74 + 0.46 * wear)[..., None]
-        albedo = paint(albedo, headm, chrome)
-        rough = np.where(headm, 0.24, rough)
-        spec_k = np.where(headm, 0.95, spec_k)
-        optics = m[M_TRIM] & (ly > HEAD_Y - 0.06)
-        emis = paint(emis, optics, trim_c * 2.6)
-
-    # ---- lighting ---------------------------------------------------------
-    sh = (0.40 + 0.60 * np.clip(ao, 0, 1))[..., None]
-    amb = (np.array([0.105, 0.125, 0.165], np.float32)[None, None, :] + sky_c[None, None, :] * 0.50)         * (0.44 + 0.56 * up)[..., None]
-    col = albedo * amb * sh
-    col = col + albedo * np.array([1.00, 0.965, 0.915], np.float32)[None, None, :] * (d1 * 1.22)[..., None] * sh
-    col = col + albedo * np.array([0.50, 0.60, 0.78], np.float32)[None, None, :] * (d2 * 0.42)[..., None] * sh
-    # portrait reflector: keeps the face and chest front readable
-    dl = np.clip(n[..., 2] * 0.88 + n[..., 1] * 0.34, 0, 1)
-    col = col + albedo * np.array([0.86, 0.90, 1.00], np.float32)[None, None, :] * (dl * 0.62)[..., None] * sh
-    col = col + albedo * rim_c[None, None, :] * (d3 * 1.18)[..., None] * (0.30 + 0.70 * ao)[..., None]
-    wrap = np.clip(np.einsum("ijk,k->ij", n, L1) + 0.45, 0, 1.45) / 1.45
-    col = col + np.array([0.26, 0.09, 0.045], np.float32)[None, None, :] * (wrap ** 2.4)[..., None] * m[M_SKIN][..., None] * 0.5
-    shin = np.where(m[M_ARMOR], 55.0, np.where(m[M_VISOR], 140.0, np.where(m[M_SKIN], 20.0, 24.0)))
-    sp = np.power(spec_ang[..., None], shin[..., None].astype(np.float32)) * spec_k[..., None]
-    col = col + sp * (0.50 + 0.80 * d1[..., None]) * np.where(m[M_ARMOR][..., None], albedo,
-                                                              np.array([0.94, 0.96, 1.00], np.float32))
-    col = np.maximum(col + emis, 0.0) * 1.88
-    return np.where(valid[..., None], col, 0.0).astype(np.float32)
+    col = col + emit
+    # occlusion of the emissive in deep crevices keeps the glow from leaking
+    col = np.where(valid[..., None], col, 0.0)
+    return np.clip(col, 0.0, 6.0)
 
 
-# ── backdrop ────────────────────────────────────────────────────────────────
 def make_sky(h, w, pal, rng, mode=0):
     top = np.array(pal["sky_top"], np.float32)
     bot = np.array(pal["sky_bot"], np.float32)
@@ -422,11 +483,11 @@ def make_sky(h, w, pal, rng, mode=0):
     xx = np.arange(w, dtype=np.float32)[None, :]
     d = np.sqrt((xx - cx) ** 2 + (np.arange(h, dtype=np.float32)[:, None] - cy) ** 2)
     inside = smoothstep(R, R - 1.6, d)
-    bands = noise(rng, (h, w), 9, 3)
+    bands_ = noise(rng, (h, w), 9, 3)
     nx_, ny_ = (xx - cx) / R, (np.arange(h, dtype=np.float32)[:, None] - cy) / R
     limb = np.clip(1.0 - np.clip(np.abs(nx_), 0, 1) ** 2 - np.clip(ny_, -1, 1) ** 2, 0, 1) ** 0.45
     lit = np.clip(0.30 + 0.95 * np.clip(-nx_ * (1.0 if side else -1.0), 0, 1) + 0.35 * np.clip(-ny_, 0, 1), 0, 1.25)
-    pcol = np.array(pal["planet"], np.float32)[None, None, :] * (0.62 + 0.70 * bands[..., None]) \
+    pcol = np.array(pal["planet"], np.float32)[None, None, :] * (0.62 + 0.70 * bands_[..., None]) \
         * (lit ** 1.7 * limb)[..., None]
     sky = sky * (1.0 - inside[..., None]) + pcol * inside[..., None]
     atm = smoothstep(0.10, 0.0, np.abs(d / R - 1.0)) * (1.0 - inside)
@@ -451,6 +512,9 @@ def make_sky(h, w, pal, rng, mode=0):
         dots = np.maximum(0, 1 - np.sqrt(gy ** 2 + gx2 ** 2) / 3.0) ** 2
         stars[y0:y1, x0:x1] += spk + dots
     sky += stars[..., None] * np.array([0.92, 0.95, 1.0], np.float32)[None, None, :] * 0.8
+    # hangar floor glow at the very bottom so the bust never floats on flat black
+    glow = smoothstep(0.72, 1.0, np.arange(h, dtype=np.float32)[:, None] / h)
+    sky += np.array(pal["rim"], np.float32)[None, None, :] * (glow ** 2.4 * 0.10)[..., None]
     return sky
 
 
@@ -476,121 +540,141 @@ def grade(col, rng, pal, h, w):
     col = np.clip(col, 0.0, 8.0)
     col = col / (1.0 + col * 0.36)
     col = col ** np.array([0.985, 1.0, 1.025], np.float32)
-    mean = np.array(col.mean(axis=(0, 1), keepdims=True), np.float32)
-    col = (col - mean) * 1.14 + mean * 0.99
+    # teal shadows / warm highlights, then a gentle S-curve for contrast
+    lum = (col * np.array([0.2126, 0.7152, 0.0722], np.float32)).sum(axis=2, keepdims=True)
+    shad = np.clip(1.0 - lum * 2.4, 0, 1)
+    high = np.clip((lum - 0.55) * 2.2, 0, 1)
+    col = col + shad * np.array([0.0, 0.030, 0.058], np.float32)[None, None, :]
+    col = col + high * np.array([0.052, 0.020, -0.030], np.float32)[None, None, :]
     lum = col.mean(axis=2, keepdims=True)
-    col = lum + (col - lum) * 1.16
-    col = col * 1.0 + 0.014
+    col = lum + (col - lum) * 1.14
+    mean = float(col.mean())
+    col = (col - mean) * 1.24 + mean * 0.965
+    col = col * (1.0 - 0.20 * np.clip(np.abs(col - 0.5) - 0.30, 0, 1))
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
     dx = (xx / w - 0.5) * 2.0
     dy = (yy / h - 0.5) * 2.0
-    vig = 1.0 - 0.34 * np.clip(dx * dx * 0.55 + dy * dy * 0.95, 0, 2.0) ** 1.4
-    col *= np.clip(vig, 0.52, 1.0)[..., None]
-    col += np.array(pal["rim"], np.float32)[None, None, :] * 0.022 * (1.0 - np.clip(vig, 0, 1))[..., None]
-    col += rng.standard_normal((h, w, 1)).astype(np.float32) * 0.012
-    fade = np.clip(smoothstep(1.0, 0.90, yy / h), 0, 1)
-    col *= (0.62 + 0.38 * fade)[..., None]
+    vig = 1.0 - 0.30 * np.clip(dx * dx * 0.55 + dy * dy * 0.95, 0, 2.0) ** 1.4
+    col *= np.clip(vig, 0.58, 1.0)[..., None]
+    col += rng.standard_normal((h, w, 1)).astype(np.float32) * 0.010
     return np.clip(col, 0, 1)
 
 
-def render_card(idx, rec, size=(FRAME_H, FRAME_W), seed=None):
+# (vertical half-extent, camera target height) windows per framing archetype.
+# Keep half <= 0.53 so the silhouette never reaches the SDF bounding box edge.
+FRAME_LOOK = {
+    0: (0.375, 0.415, 1.565, 1.610),   # tight bust, head and pauldrons fill the card
+    1: (0.430, 0.475, 1.470, 1.530),   # classic chest portrait
+    2: (0.480, 0.530, 1.330, 1.400),   # waist-up, tool arms and hips visible
+    3: (0.455, 0.520, 1.355, 1.435),   # three-quarter body shot
+    4: (0.420, 0.500, 1.380, 1.470),   # low hero angle
+}
+YAW_LO = {0: 6.0, 1: 10.0, 2: 14.0, 3: 24.0, 4: 8.0}
+YAW_HI = {0: 22.0, 1: 30.0, 2: 38.0, 3: 46.0, 4: 26.0}
+PITCH_LO = {0: -2.5, 1: -3.5, 2: -5.0, 3: -4.0, 4: -11.0}
+PITCH_HI = {0: 2.0, 1: 3.0, 2: 4.5, 3: 3.5, 4: 1.5}
+
+
+def render_card(idx, rec, size=(FRAME_H, FRAME_W), seed=None, ss=2):
     rng = np.random.default_rng(idx * 7919 + (0 if seed is None else seed))
     role, rarity = rec["role"], rec["rarity"]
     meta = RARITY[rarity]
-    synth = 1.0 if re.search(r"\bUnit\b|synth|Prime\b", rec["name"]) else 0.0
-    bulk, swing, head_s, shoulder, pack_off = ROLE_BUILD.get(role, (1.0, 0.25, 1.0, 1.0, 0.0))
-    bulk *= rng.uniform(0.93, 1.09)
-    chest = rng.uniform(0.92, 1.12)
-    head_s *= rng.uniform(0.93, 1.07)
-    shoulder *= rng.uniform(0.85, 1.22)
-    twist = np.radians(rng.uniform(-32.0, 32.0))
-    lean = np.radians(rng.uniform(-4.0, 9.0))
-    yaw = np.radians(rng.uniform(6.0, 21.0)) * (1.0 if rng.random() < 0.55 else -1.0)
-    pitch = np.radians(rng.uniform(-4.5, 5.5))
-    key_az = np.radians(rng.uniform(-42.0, 42.0))
+    tier = meta[0]
+    bulk, swing, head_s, shoulder, pack = ROLE_BUILD.get(role, (1.0, 0.25, 1.0, 1.0, 1))
+    bulk *= rng.uniform(0.94, 1.08)
+    chest = rng.uniform(0.94, 1.10) * (1.0 + 0.03 * tier)
+    head_s *= rng.uniform(0.95, 1.05)
+    shoulder *= rng.uniform(0.90, 1.14)
+
+    # Compose a framing archetype per card so the set does not read as one bust
+    # re-tinted 42 times: distance, crop height, angle and hero pitch all move.
+    frame = int(rng.integers(0, 5))
+    if tier >= 4:
+        frame = int(rng.integers(1, 5))  # high tiers never get the flat tight bust
+    half_lo, half_hi, tgt_lo, tgt_hi = FRAME_LOOK[frame]
+    twist = np.radians(rng.uniform(-30.0, 30.0))
+    lean = np.radians(rng.uniform(-4.0, 8.0))
+    yaw = np.radians(rng.uniform(YAW_LO[frame], YAW_HI[frame])) * (1.0 if rng.random() < 0.55 else -1.0)
+    pitch = np.radians(rng.uniform(PITCH_LO[frame], PITCH_HI[frame]))
     sky_mode = int(rng.integers(0, 3))
-    helmet = ROLE_HELMET.get(role, 0)
-    if synth < 0.5 and rng.random() < 0.32:
-        helmet = int(rng.integers(0, 8))
-    if synth > 0.5:
-        helmet = 6
-    hair_style = int(rng.integers(1, 6)) if helmet in (1, 6, 7) and synth < 0.5 else 0
-    beard = 0.0 if synth > 0.5 else float(rng.random() < 0.42) * rng.uniform(0.4, 1.0)
-    if helmet not in (1, 6, 7):
-        beard = 0.0
+
+    gear = ROLE_GEAR.get(role, 0)
+    if rng.random() < 0.30:
+        gear = int(rng.integers(0, 8))
+    crest = ROLE_CREST.get(role, 0)
+    if rng.random() < 0.34:
+        crest = int(rng.integers(0, 8))
+    optics = ROLE_OPTICS.get(role, 0)
+    if rng.random() < 0.28:
+        optics = int(rng.integers(0, 4))
+    chassis = ROLE_TOOL.get(role, 0)
+    if rng.random() < 0.22:
+        chassis = int(rng.integers(0, 8))
+    pauld = ROLE_PAULDRON.get(tier, 1)
+    if rng.random() < 0.25:
+        pauld = int(rng.integers(0, 4))
+    decal = 0 if tier < 2 else int(rng.integers(1, 4))
 
     P = np.zeros(16, np.float64)
-    P[0] = twist                      # torso twist
-    P[1] = chest                      # chest width
-    P[2] = bulk                       # overall bulk
-    P[3] = head_s                     # head scale
-    P[4] = rng.uniform(0.90, 1.12)    # arm/hand size
-    P[5] = shoulder                   # shoulder pad width
-    P[6] = swing + rng.uniform(-0.10, 0.20)   # left arm forward swing
-    P[7] = swing * 0.6 + rng.uniform(-0.12, 0.22)
-    P[8] = pack_off                   # >0.5 disables the life-support pack
-    P[9] = helmet
-    P[10] = hair_style
-    P[11] = beard
-    P[12] = synth
-    P[13] = rng.uniform(0.86, 1.16)        # jaw / lower-face width
+    P[0] = twist
+    P[1] = chest
+    P[2] = bulk
+    P[3] = head_s
+    P[4] = rng.uniform(0.92, 1.10)          # arm / hand size
+    P[5] = shoulder
+    P[6] = swing + rng.uniform(-0.08, 0.18)
+    P[7] = swing * 0.55 + rng.uniform(-0.10, 0.20)
+    P[8] = chassis
+    P[9] = gear
+    P[10] = crest
+    P[11] = optics
+    P[12] = pack if rng.random() < 0.80 else int(rng.integers(0, 4))
+    P[13] = pauld
+    P[14] = rng.uniform(0.88, 1.16)         # face width
+    P[15] = 1.0 if tier >= 4 else 0.0      # gold fittings on the high tiers
 
-    hue = rng.uniform(-0.10, 0.12)
+    hue = rng.uniform(-0.09, 0.11)
+
     def tint(c, k):
         a = np.array(c, np.float32) * k
         return tuple(np.clip(a * (1.0 + hue * np.array([1.0, 0.4, -0.5], np.float32)), 0.02, 1.0))
 
     _tr = np.array(meta[3], np.float32)
-    pal = {"suit": tint(tuple(np.array(meta[1], np.float32) * 0.70 + _tr * 0.30), rng.uniform(0.92, 1.16)),
-           "armor": tint(tuple(np.array(meta[2], np.float32) * 0.76 + _tr * 0.24), rng.uniform(0.88, 1.16)),
+    pal = {"paint": tint(tuple(np.array(meta[1], np.float32) * 0.92 + _tr * 0.30), rng.uniform(0.92, 1.16)),
+           "ceramic": tint(tuple(np.array(meta[2], np.float32) * 0.86 + np.array([0.10, 0.11, 0.13], np.float32)),
+                           rng.uniform(0.94, 1.10)),
            "trim": meta[3], "rim": meta[4],
            "sky_top": meta[5], "sky_bot": meta[6], "nebula": meta[7], "planet": meta[8],
-           "planet_rim": meta[9],
-           "skin": SKIN_TONES[(idx * 3 + int(rng.integers(0, 8))) % len(SKIN_TONES)],
-           "hair": HAIR_TONES[(idx * 5 + int(rng.integers(0, 8))) % len(HAIR_TONES)],
-           "eye": [(0.20, 0.34, 0.42), (0.13, 0.26, 0.20), (0.26, 0.17, 0.10),
-                   (0.16, 0.30, 0.32), (0.30, 0.36, 0.40)][int(rng.integers(0, 5))]}
-    rank = min(5, 2 + meta[0] // 2)
-    mood = rng.uniform(0.90, 1.12)          # per-card exposure for mood variety
+           "planet_rim": meta[9]}
 
     h, w = size
-    buf = np.zeros(h * w * 8, np.float32)
-    dep = np.full(h * w, -1.0, np.float32)
-    mb = np.zeros(h * w, np.int32)
-    dist = 1.32 * rng.uniform(0.95, 1.05)
-    tgt_y = 1.482 + rng.uniform(-0.016, 0.016)
-    half_extent = 0.345 * rng.uniform(0.96, 1.05)
-    tan_half = half_extent / dist          # kernel: |2v-1| <= 1 -> half-angle = tan_half
-    cx = np.sin(yaw) * np.cos(pitch) * dist
-    cz = np.cos(yaw) * np.cos(pitch) * dist
-    cy = tgt_y + np.sin(pitch) * dist
-    fx, fy, fz = -cx, tgt_y - cy, -cz
-    fn = float(np.sqrt(fx * fx + fy * fy + fz * fz))
-    cam = (float(cx), float(cy), float(cz), fx / fn, fy / fn, fz / fn, 0.0, 1.0, 0.0, tan_half)
-    render_char(w, h, P, float(np.cos(lean)), float(np.sin(lean)), cam, buf, dep, mb)
-
-    nv = buf.reshape(h, w, 8)
-    mat = mb.reshape(h, w)
-    valid = dep.reshape(h, w) > 0
-    col = shade_char(nv, mat, valid, pal, rng, role, rank, synth, head_s,
-                     float(np.cos(lean)), float(np.sin(lean)), twist, helmet, key_az)
-    col = col * mood
+    half = rng.uniform(half_lo, half_hi)
+    dist = rng.uniform(1.36, 1.62)
+    tgt = (0.0, rng.uniform(tgt_lo, tgt_hi), 0.02)
+    cam = make_camera(tgt, dist, math.degrees(yaw), math.degrees(pitch), half / dist, w, h)
+    out, dep, matb, shb = gbuffer(P, math.degrees(lean), math.degrees(twist), w, h, cam, ss=ss)
+    valid = dep > 0
+    col = shade_robot(out, matb, valid, shb, cam[0:3], pal, rng,
+                      ROLE_SIGIL.get(role, 0), float(np.cos(lean)), float(np.sin(lean)),
+                      twist, tier, decal)
 
     sky = make_sky(h, w, pal, rng, sky_mode)
     gy, gx = np.mgrid[0:h, 0:w].astype(np.float32)
-    halo = np.exp(-(((gx - w * (0.5 - 0.10 * np.sign(yaw))) / (w * 0.46)) ** 2
-                    + ((gy - h * 0.27) / (h * 0.30)) ** 2))
-    sky += np.array(pal["rim"], np.float32)[None, None, :] * halo[..., None] * 0.20
+    halo = np.exp(-(((gx - w * (0.5 - 0.12 * np.sign(yaw))) / (w * 0.46)) ** 2
+                    + ((gy - h * 0.30) / (h * 0.30)) ** 2))
+    sky += np.array(pal["rim"], np.float32)[None, None, :] * halo[..., None] * 0.22
     soft = blur(valid.astype(np.float32), 10.0)
-    sky = sky * (1.0 - 0.30 * np.clip(soft - valid.astype(np.float32), 0, 1)[..., None])
-    out = np.where(valid[..., None], np.clip(col, 0, 4.0), sky)
+    sky = sky * (1.0 - 0.34 * np.clip(soft - valid.astype(np.float32), 0, 1)[..., None])
 
-    bright = np.clip(out - 0.86, 0.0, None)
-    bl = np.stack([blur(bright[..., i], 7.0) for i in range(3)], axis=2)
-    out = out + bl * (0.30 + 0.26 * np.array(pal["rim"], np.float32)[None, None, :])
-    wrapm = np.clip(blur(valid.astype(np.float32), 2.8) - valid.astype(np.float32), 0, 1)
-    out = out + wrapm[..., None] * np.array(pal["rim"], np.float32)[None, None, :] * 0.40
-    return np.clip(grade(out, rng, pal, h, w), 0, 1)
+    out_img = np.where(valid[..., None], np.clip(col, 0, 4.0), sky)
+    # bloom: the emissive optics, the reactor core and every specular hot spot
+    bright = np.clip(out_img - 0.88, 0.0, None)
+    bl = np.stack([blur(bright[..., i], 6.0) for i in range(3)], axis=2)
+    out_img = out_img + bl * (0.22 + 0.24 * np.array(pal["rim"], np.float32)[None, None, :])
+    # atmospheric rim wrap so the silhouette separates from the backdrop
+    wrapm = np.clip(blur(valid.astype(np.float32), 2.6) - valid.astype(np.float32), 0, 1)
+    out_img = out_img + wrapm[..., None] * np.array(pal["trim"], np.float32)[None, None, :] * 0.32
+    return np.clip(grade(out_img, rng, pal, h, w), 0, 1)
 
 
 def to_png(arr, out_path, out_size=(OUT_W, OUT_H)):
@@ -604,6 +688,10 @@ def main():
     ap.add_argument("--only", default="")
     ap.add_argument("--montage", action="store_true")
     ap.add_argument("--preview-dir", default="/tmp/crew_preview")
+    ap.add_argument("--draft", action="store_true",
+                    help="half resolution, no supersampling - for fast art review only")
+    ap.add_argument("--ss", type=int, default=2, choices=(1, 2),
+                    help="supersampling factor of the ray marcher (1 is already 2x the card size)")
     args = ap.parse_args()
     roster = load_roster()
     only = {int(v) for v in args.only.split(",") if v.strip()} if args.only else None
@@ -611,26 +699,28 @@ def main():
     prev.mkdir(parents=True, exist_ok=True)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     imgs = []
+    size = (440, 360) if args.draft else (FRAME_H, FRAME_W)
     for rec in roster:
         if only and rec["idx"] not in only:
             continue
-        arr = render_card(rec["idx"], rec)
+        arr = render_card(rec["idx"], rec, size=size, ss=1 if args.draft else args.ss)
         full = prev / f"crew_{rec['idx']:02d}_full.png"
-        to_png(arr, full, (288, 352))
-        if not only:
+        to_png(arr, full, (360, 440))
+        if not only and not args.draft:
             to_png(arr, OUT_DIR / f"crew_{rec['idx']:02d}.png")
         print(f"crew_{rec['idx']:02d}  {rec['role']:10s} {rec['rarity']:10s} {rec['name']}", flush=True)
         if args.montage or only:
             imgs.append(Image.open(full))
     if imgs:
+        cw, ch = 360, 440
         cols = min(6, len(imgs))
         rows = (len(imgs) + cols - 1) // cols
-        m = Image.new("RGB", (cols * 292, rows * 356), (12, 14, 20))
+        m = Image.new("RGB", (cols * (cw + 4), rows * (ch + 4)), (12, 14, 20))
         d = ImageDraw.Draw(m)
         for i, im in enumerate(imgs):
-            x, y = (i % cols) * 292 + 2, (i // cols) * 356 + 2
+            x, y = (i % cols) * (cw + 4) + 2, (i // cols) * (ch + 4) + 2
             m.paste(im, (x, y))
-            d.rectangle([x, y, x + 287, y + 351], outline=(60, 70, 90))
+            d.rectangle([x, y, x + cw - 1, y + ch - 1], outline=(60, 70, 90))
         m.save(prev / "montage.png")
         print("montage ->", prev / "montage.png")
 

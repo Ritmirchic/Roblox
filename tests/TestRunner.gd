@@ -30,6 +30,7 @@ func _ready() -> void:
 	_test_expanded_settings_and_hall()
 	_test_ui_skin_kit()
 	_test_reactor_governor_and_market()
+	await _test_card_foils_and_lock_combat()
 	await _test_achievement_hall3d()
 
 	print("=== TEST SUMMARY: %d PASSED, %d FAILED ===" % [_passed, _failed])
@@ -1000,6 +1001,197 @@ func _test_reactor_governor_and_market() -> void:
 	payload["power_profile"] = "not_a_profile"
 	_check(not SaveManager.apply_loaded_payload(payload) or (ShipGrid.get_power_profile_id() == "balanced"
 		and ShipGrid.market_sector == "sector_1"), "tampered profile/market values are rejected on load")
+
+
+# 15. Foil Finishes (Card Mutations), Lock-Directed Fire, RMB-Only Mining & Sector Threat
+func _test_card_foils_and_lock_combat() -> void:
+	# --- finish table integrity -------------------------------------------------
+	_check(is_equal_approx(GameData.finish_weight_total(), 100.0), "FOIL finish weights sum to exactly 100")
+	var last_rank := -1
+	var table_ok := true
+	for fid in GameData.FINISH_ORDER:
+		var fdef: Dictionary = GameData.get_finish(str(fid))
+		var rk := int(fdef.get("rank", -1))
+		table_ok = table_ok and rk > last_rank and float(fdef.get("buff_mult", 0.0)) >= 1.0
+		for vk in ["tint", "sheen", "glow", "prism", "sparkle", "metal", "market_mult", "radar_mult", "repair_mult"]:
+			table_ok = table_ok and fdef.has(vk)
+		last_rank = rk
+	_check(table_ok, "Every FOIL finish ranks ascending with buff multiplier and full shader visual set")
+	_check(GameData.get_finish_buff_mult("glow") > GameData.get_finish_buff_mult("holo"), "Luminous foil out-buffs holographic")
+	_check(not GameData.is_valid_finish("chromium"), "Unknown foil finish name rejected")
+
+	# --- rolls honour the published odds ---------------------------------------
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20261026
+	var rare_hits := 0
+	for i in range(400):
+		var rolled: String = GameData.roll_finish(rng)
+		if not GameData.is_valid_finish(rolled):
+			_check(false, "roll_finish produced an invalid finish id")
+			break
+		if rolled != "plain":
+			rare_hits += 1
+	_check(rare_hits > 100 and rare_hits < 300, "Seeded foil rolls stay near the disclosed 42%% rare rate (%d/400)" % rare_hits)
+
+	# --- collection keeps the best print ---------------------------------------
+	SaveManager.reset_all_progress()
+	var g1: Dictionary = CrewManager.grant_card("crew_09", "silver")
+	_check(bool(g1["ok"]) and bool(g1["is_new"]) and str(g1["finish"]) == "silver", "grant_card stores the exact pulled foil")
+	var g2: Dictionary = CrewManager.grant_card("crew_09", "holo")
+	_check(bool(g2["upgraded"]) and CrewManager.get_finish("crew_09") == "holo", "A better foil upgrades the stored print")
+	var g3: Dictionary = CrewManager.grant_card("crew_09", "plain")
+	_check(not bool(g3["upgraded"]) and CrewManager.get_finish("crew_09") == "holo", "A plain copy never downgrades a holo print")
+	_check(absf(CrewManager.get_finish_multiplier("crew_09") - 1.25) < 0.001, "Holo print scales its buff by 1.25x")
+	_check(CrewManager.set_finish("crew_09", "glow"), "set_finish applies a valid finish")
+	_check(not CrewManager.set_finish("crew_09", "platinum"), "set_finish refuses an unknown finish")
+	_check(CrewManager.get_finest_owned() == "glow", "get_finest_owned reports the rarest print in the binder")
+
+	# --- foil buffs reach the ship --------------------------------------------
+	var before_buffs := CrewManager.get_combined_buffs()
+	CrewManager.equip_card("crew_09")
+	var after_buffs := CrewManager.get_combined_buffs()
+	var grew := false
+	for k in after_buffs.keys():
+		if float(after_buffs[k]) > float(before_buffs.get(k, 0.0)) + 0.0001:
+			grew = true
+	_check(grew, "Equipping a Luminous print raises the live ship buff sheet")
+	for cid in ["crew_01", "crew_02", "crew_03", "crew_04", "crew_05"]:
+		CrewManager.grant_card(cid, "glow")
+		CrewManager.equip_card(cid)
+	var perks: Dictionary = CrewManager.get_finish_perks()
+	var want_mk := 1.0
+	var want_rd := 1.0
+	for cid in CrewManager.equipped_crew:
+		var fd: Dictionary = GameData.get_finish(CrewManager.get_finish(cid))
+		want_mk += float(fd["market_mult"]) - 1.0
+		want_rd += float(fd["radar_mult"]) - 1.0
+	_check(absf(float(perks["market"]) - clampf(want_mk, 1.0, 1.45)) < 0.001, "Market perk equals the summed equipped foil bonuses")
+	_check(float(perks["market"]) <= 1.451 and float(perks["radar"]) <= 1.401, "Stacked foil perks respect the designed caps")
+	var probe := PlayerShip3D.new()
+	_check(probe.has_method("get_radar_range"), "PlayerShip3D resolves radar reach through the foil perk")
+	probe.free()
+
+	# --- pack odds are honest, per pack type -----------------------------------
+	var std_ch: Dictionary = PackManager.finish_chances("standard")
+	var el_ch: Dictionary = PackManager.finish_chances("elite")
+	var ch_sum := 0.0
+	for k in std_ch.keys():
+		ch_sum += float(std_ch[k])
+	_check(absf(ch_sum - 100.0) < 0.01, "Disclosed standard foil odds sum to 100 percent")
+	_check(float(el_ch["glow"]) > float(std_ch["glow"]), "Elite pack publishes better odds on the rarest foil")
+	ShipGrid.crystals = 400
+	var pack_res := PackManager.purchase_and_open_pack("standard")
+	_check(bool(pack_res["ok"]), "Pack opened for the foil draw test")
+	var foils_valid := true
+	for e in (pack_res["cards"] as Array):
+		var ed: Dictionary = e
+		foils_valid = foils_valid and GameData.is_valid_finish(str(ed.get("finish", "")))
+	_check(foils_valid, "Every drawn card carries a valid rolled foil in the reveal result")
+
+	# --- save integrity --------------------------------------------------------
+	var tmp_save := "user://__foil_roundtrip.save"
+	SaveManager.save_game(tmp_save)
+	var envelope: Variant = JSON.parse_string(FileAccess.get_file_as_string(tmp_save))
+	_check(envelope is Dictionary, "Foil save file parses as a JSON envelope")
+	if envelope is Dictionary:
+		var payload: Variant = JSON.parse_string(String((envelope as Dictionary)["payload"]))
+		_check(payload is Dictionary and (payload as Dictionary).has("crew_finish"), "Save payload persists the crew_finish map")
+	_check(CrewManager.card_finishes.size() > 0, "Foil map is populated before reset")
+	SaveManager.reset_all_progress()
+	_check(CrewManager.card_finishes.is_empty(), "A new game wipes foil prints clean")
+
+	# --- input ownership: LMB fires, RMB mines ---------------------------------
+	var exp_src := FileAccess.get_file_as_string("res://scripts/space/SpaceExpedition3D.gd")
+	_check(exp_src.contains("player_ship.firing_weapons = _mouse_captured and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)"), "LMB owns weapons fire only")
+	_check(exp_src.contains("player_ship.firing_mining = (_mouse_captured and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT))"), "RMB owns the mining beam")
+	var proj_src := FileAccess.get_file_as_string("res://scripts/space/Projectile3D.gd")
+	_check(not proj_src.contains("apply_mining_damage"), "Weapon rounds carry ZERO mining damage - meteoroids are RMB-only")
+	_check(FileAccess.get_file_as_string("res://scripts/ship/PlayerShip3D.gd").contains("LOCK_HOMING_TURN"), "Lock-directed guidance table is compiled into the ship")
+
+	# --- guidance behaviour ----------------------------------------------------
+	var host := Node3D.new()
+	add_child(host)
+	await get_tree().process_frame
+	var decoy := Node3D.new()
+	decoy.global_position = Vector3(18.0, 0.0, -42.0)
+	host.add_child(decoy)
+	var pr := Projectile3D.new()
+	host.add_child(pr)
+	pr.setup(true, "kinetic", 12.0, 55.0, Projectile3D.make_aim_transform(Vector3.ZERO, Vector3.RIGHT), 0.0, 5.0, decoy, Vector3.ZERO, false, 0.0, true)
+	_check(bool(pr.lock_homing), "Round fired on a locked target enables convergence guidance")
+	var dir0 := (-pr._velocity).normalized()
+	var ang0 := dir0.angle_to((decoy.global_position - pr.global_position).normalized())
+	_check(ang0 > 0.9, "Round starts visibly off-axis from its lock (%.2f rad)" % ang0)
+	for i in range(26):
+		pr._physics_process(1.0 / 60.0)
+	var ang1 := (-pr._velocity).normalized().angle_to((decoy.global_position - pr.global_position).normalized())
+	var dir1 := (-pr._velocity).normalized()
+	var to_tgt := (decoy.global_position - pr.global_position).normalized()
+	_check(ang1 < ang0 * 0.55, "Guided round curves onto the green lock (err %.2f -> %.2f rad)" % [ang0, ang1])
+	_check(dir1.dot(to_tgt) > 0.85, "Guided round converges hard on the locked hull (dot %.2f)" % dir1.dot(to_tgt))
+	var free_shot := Projectile3D.new()
+	host.add_child(free_shot)
+	free_shot.setup(true, "kinetic", 12.0, 55.0, Projectile3D.make_aim_transform(Vector3.ZERO, Vector3.RIGHT))
+	_check(not bool(free_shot.lock_homing), "Unlocked rounds stay ballistic")
+	pr.queue_free()
+	free_shot.queue_free()
+	host.queue_free()
+
+	# --- elite response wing ---------------------------------------------------
+	var exp2 := SpaceExpedition3D.new()
+	exp2.setup_sector(4)
+	add_child(exp2)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_check(is_instance_valid(exp2._threat_bar) and int(exp2._threat_bar.max_value) == 100, "Flight HUD builds a 0-100 threat meter")
+	exp2._threat = 0.0
+	exp2._add_threat(92.0)
+	_check(absf(exp2._threat - 92.0) < 0.01, "Threat accumulates from mining and kills")
+	exp2._response_cd = 0.0
+	var wings_before := exp2._wings_called
+	exp2._process_sector_spawns_and_hazards(0.016)
+	await get_tree().process_frame
+	var wing_total := exp2.enemies_root.get_child_count()
+	var elite_count := 0
+	for en in exp2.enemies_root.get_children():
+		if en is EnemyShip3D and bool((en as EnemyShip3D).elite):
+			elite_count += 1
+	_check(exp2._wings_called == wings_before + 1, "One response wing is called per escalation")
+	_check(wing_total >= 3 and elite_count >= 1, "Max threat calls in an elite wing with escorts (%d ships, %d elite)" % [wing_total, elite_count])
+	_check((exp2._bar_val_lbls["hud_threat"] as Label).text.contains("%"), "Threat meter prints a live percentage")
+	var base_e := EnemyShip3D.new()
+	base_e.setup("scout_drone", Vector3(4000, 0, 4000), null, null, null, false)
+	var elite_e := EnemyShip3D.new()
+	elite_e.setup("scout_drone", Vector3(4000, 0, 4040), null, null, null, true)
+	_check(bool(elite_e.elite) and elite_e.max_hp > base_e.max_hp * 2.0, "Elite hull more than doubles a base drone")
+	_check(elite_e.credit_reward == base_e.credit_reward * 4, "Elite pays 4x credits")
+	_check(not elite_e.is_dead(), "Fresh elite reports alive")
+	elite_e.set_lock_state(true)
+	await get_tree().process_frame
+	_check(is_instance_valid(elite_e._lock_ring), "Locked target builds the green hull bracket")
+	base_e.queue_free()
+	elite_e.queue_free()
+	var owned_before := CrewManager.get_unique_owned_count()
+	var copies_before := CrewManager.get_copies("crew_01")
+	exp2._grant_salvage_card(Vector3.ZERO)
+	_check(CrewManager.get_unique_owned_count() > owned_before or CrewManager.get_copies("crew_01") > copies_before, "Elite leaders drop collectible crew prints")
+	_check(GameData.get_finish_rank(exp2._roll_elite_finish()) >= 2, "Salvage rolls only holographic-or-better foils")
+	exp2._threat = 40.0
+	exp2._process_sector_spawns_and_hazards(1.0)
+	_check(exp2._threat < 39.9 and exp2._threat > 36.0, "Threat cools off while the sector is quiet (%.2f)" % exp2._threat)
+	for en in exp2.enemies_root.get_children():
+		en.queue_free()
+	exp2.queue_free()
+	await get_tree().process_frame
+
+
+func player_ship_radar_probe() -> float:
+	var probe := PlayerShip3D.new()
+	add_child(probe)
+	await get_tree().process_frame
+	var base_range := probe.get_radar_range()
+	probe.queue_free()
+	return base_range
 
 
 func _test_achievement_hall3d() -> void:

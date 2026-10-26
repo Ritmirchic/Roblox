@@ -14,6 +14,43 @@ const RARITY_COLORS: Dictionary = {
 	"Secret": Color(1.00, 0.22, 0.46),
 }
 
+# ── Card finish mutations ────────────────────────────────────────────────────
+# Every card a pack spits out is rolled a finish: a foil treatment on the
+# physical card (silvered frame, holographic prisms, glitter flecks, a glowing
+# core). Rarer finishes are strictly stronger, and the multiplier is applied to
+# the crew bonus the card contributes, so a finish is a real stat upgrade and
+# a reason to keep pulling. Extra "*_mult" entries are ship-wide perks granted
+# by equipped foils (see CrewManager.get_finish_perks).
+const FINISH_ORDER: Array[String] = ["plain", "silver", "holo", "glitter", "glow"]
+
+const CARD_FINISHES: Dictionary = {
+	"plain": {
+		"id": "plain", "label_key": "finish_plain", "rank": 0, "weight": 58.0,
+		"buff_mult": 1.0, "market_mult": 1.0, "radar_mult": 1.0, "repair_mult": 1.0,
+		"tint": Color(1.00, 1.00, 1.00), "sheen": 0.0, "glow": 0.0, "prism": 0.0, "sparkle": 0.0, "metal": 0.0,
+	},
+	"silver": {
+		"id": "silver", "label_key": "finish_silver", "rank": 1, "weight": 22.0,
+		"buff_mult": 1.15, "market_mult": 1.04, "radar_mult": 1.0, "repair_mult": 1.0,
+		"tint": Color(0.88, 0.92, 0.97), "sheen": 0.42, "glow": 0.0, "prism": 0.0, "sparkle": 0.18, "metal": 0.86,
+	},
+	"holo": {
+		"id": "holo", "label_key": "finish_holo", "rank": 2, "weight": 11.0,
+		"buff_mult": 1.25, "market_mult": 1.0, "radar_mult": 1.06, "repair_mult": 1.0,
+		"tint": Color(0.92, 1.00, 1.00), "sheen": 0.66, "glow": 0.0, "prism": 0.85, "sparkle": 0.10, "metal": 0.22,
+	},
+	"glitter": {
+		"id": "glitter", "label_key": "finish_glitter", "rank": 3, "weight": 6.0,
+		"buff_mult": 1.40, "market_mult": 1.02, "radar_mult": 1.0, "repair_mult": 1.05,
+		"tint": Color(1.00, 0.98, 0.92), "sheen": 0.55, "glow": 0.10, "prism": 0.35, "sparkle": 1.0, "metal": 0.30,
+	},
+	"glow": {
+		"id": "glow", "label_key": "finish_glow", "rank": 4, "weight": 3.0,
+		"buff_mult": 1.60, "market_mult": 1.08, "radar_mult": 1.05, "repair_mult": 1.06,
+		"tint": Color(0.86, 1.00, 0.96), "sheen": 0.30, "glow": 1.0, "prism": 0.25, "sparkle": 0.30, "metal": 0.14,
+	},
+}
+
 const RESOURCES: Dictionary = {
 	"iron": {
 		"id": "iron",
@@ -272,6 +309,44 @@ func _init_crew_cards() -> void:
 		}
 		crew_cards.append(card)
 		crew_by_id[cid] = card
+
+func is_valid_finish(fid: String) -> bool:
+	return CARD_FINISHES.has(fid)
+
+
+func get_finish(fid: String) -> Dictionary:
+	return CARD_FINISHES.get(fid, CARD_FINISHES["plain"])
+
+
+func get_finish_buff_mult(fid: String) -> float:
+	return float(get_finish(fid).get("buff_mult", 1.0))
+
+
+func get_finish_rank(fid: String) -> int:
+	return int(get_finish(fid).get("rank", 0))
+
+
+func finish_weight_total() -> float:
+	var total := 0.0
+	for fid in FINISH_ORDER:
+		total += maxf(0.0, float(CARD_FINISHES[fid]["weight"]))
+	return total
+
+
+func roll_finish(rng: RandomNumberGenerator) -> String:
+	## Weighted pull. rng may be null (fresh RandomNumberGenerator per call).
+	var r := rng if rng != null else RandomNumberGenerator.new()
+	var total := finish_weight_total()
+	if total <= 0.0:
+		return "plain"
+	var pick := r.randf() * total
+	var accum := 0.0
+	for fid in FINISH_ORDER:
+		accum += maxf(0.0, float(CARD_FINISHES[fid]["weight"]))
+		if pick <= accum:
+			return str(fid)
+	return "plain"
+
 
 func _init_active_upgrades() -> void:
 	active_upgrades.clear()

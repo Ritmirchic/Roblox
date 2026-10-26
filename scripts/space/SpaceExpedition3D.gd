@@ -61,6 +61,12 @@ var _eng_bar: ProgressBar
 var _heat_bar: ProgressBar
 var _cargo_bar: ProgressBar
 var _power_bar: ProgressBar
+var _threat_bar: ProgressBar
+# Sector threat: mining and killing pull response wings onto the player.
+var _threat: float = 0.0
+var _response_cd: float = 16.0
+var _wings_called: int = 0
+var _threat_hot: bool = false
 var _power_lbl: Label
 var _power_warn: Label
 var _bar_name_lbls: Dictionary = {}
@@ -250,6 +256,7 @@ func _spawn_single_asteroid(min_dist: float, max_dist: float) -> void:
 	var ast := Asteroid3D.new()
 	ast.setup(sector_def, pos, randf_range(0.85, 2.15))
 	ast.destroyed.connect(func(_a, _wp):
+		_add_threat(3.2)
 		if is_instance_valid(player_ship) and _wp.distance_to(player_ship.global_position) < 120.0:
 			add_camera_trauma(0.30)
 		if is_inside_tree() and asteroids_root.get_child_count() < int(sector_def.get("asteroid_count", 45)):
@@ -257,16 +264,98 @@ func _spawn_single_asteroid(min_dist: float, max_dist: float) -> void:
 	)
 	asteroids_root.add_child(ast)
 
-func _spawn_sector_enemy() -> void:
+func _spawn_sector_enemy(eid_override: String = "", as_elite: bool = false, at: Vector3 = Vector3.ZERO, use_pos: bool = false, guarantee_salvage: bool = false) -> void:
 	var pool: Array = sector_def.get("enemy_pool", ["scout_drone"])
 	if pool.is_empty() or not is_instance_valid(player_ship):
 		return
-	var eid: String = pool[randi() % pool.size()]
-	var ang := randf() * TAU
-	var spawn_pos := player_ship.global_position + Vector3(cos(ang) * 145.0, randf_range(-24.0, 24.0), sin(ang) * 145.0)
+	var eid: String = eid_override if pool.has(eid_override) else str(pool[randi() % pool.size()])
+	var spawn_pos: Vector3 = at if use_pos else player_ship.global_position + Vector3(
+		cos(randf() * TAU) * 145.0, randf_range(-24.0, 24.0), sin(randf() * TAU) * 145.0)
 	var en := EnemyShip3D.new()
-	en.setup(eid, spawn_pos, player_ship, projectiles_root, chunks_root)
+	en.setup(eid, spawn_pos, player_ship, projectiles_root, chunks_root, as_elite)
+	if as_elite:
+		en.set_meta("salvage_guaranteed", false)
+	en.set_meta("salvage_guaranteed", bool(as_elite) and guarantee_salvage)
+	en.defeated.connect(_on_enemy_defeated)
 	enemies_root.add_child(en)
+
+
+func _add_threat(amount: float) -> void:
+	_threat = clampf(_threat + amount, 0.0, 100.0)
+
+
+# Response wings: the sector answers back, escalating into elite formations.
+func _spawn_response_wing(tier: int) -> void:
+	var pool: Array = sector_def.get("enemy_pool", ["scout_drone"])
+	if pool.is_empty() or not is_instance_valid(player_ship):
+		return
+	var heavy: String = str(pool[pool.size() - 1])
+	var light: String = str(pool[0])
+	var base_ang := randf() * TAU
+	var orbit := 188.0 + 26.0 * float(tier)
+	var center := player_ship.global_position + Vector3(cos(base_ang) * orbit, randf_range(-18.0, 26.0), sin(base_ang) * orbit)
+	var escorts := 2 if tier == 1 else 3
+	for i in range(escorts):
+		var off := Vector3(cos(base_ang + TAU * float(i) / float(escorts)) * 42.0, float(i - 1) * 9.0, sin(base_ang + TAU * float(i) / float(escorts)) * 42.0)
+		_spawn_sector_enemy(light, false, center + off, true)
+	_spawn_sector_enemy(heavy, true, center, true, tier >= 2)
+	_wings_called += 1
+	if tier >= 2:
+		_hud_alert(L.tr_ui("threat_heavy_inbound"), Color(1.0, 0.46, 0.24))
+		add_camera_trauma(0.72)
+		AudioManager.play_sfx("ui_error", 0.03, 0.52)
+	else:
+		_hud_alert(L.tr_ui("threat_elite_inbound"), Color(1.0, 0.80, 0.32))
+		add_camera_trauma(0.42)
+		AudioManager.play_sfx("ui_error", 0.05, 0.72)
+
+
+func _on_enemy_defeated(en: EnemyShip3D, world_pos: Vector3) -> void:
+	if en == null:
+		return
+	_add_threat(15.0 if en.elite else 8.5)
+	add_camera_trauma(0.34 if en.elite else 0.18)
+	if not en.elite:
+		return
+	if bool(en.get_meta("salvage_guaranteed", false)) or randf() < 0.30:
+		_grant_salvage_card(world_pos)
+
+
+# Elite wing leaders carry collectible prints: combat feeds the card chase.
+func _grant_salvage_card(at: Vector3) -> void:
+	var pool: Array[Dictionary] = []
+	for c in GameData.crew_cards:
+		if GameData.RARITY_ORDER.find(str(c["rarity"])) >= 2:
+			pool.append(c)
+	if pool.is_empty():
+		return
+	var pick: Dictionary = pool[randi() % pool.size()]
+	var fid := _roll_elite_finish()
+	var res := CrewManager.grant_card(str(pick["id"]), fid)
+	var fcol: Color = GameData.get_finish(fid).get("tint", Color(0.7, 0.95, 1.0))
+	AudioManager.play_sfx("card_legendary", 0.03, 0.95)
+	VFXFactory.spawn_explosion(enemies_root, at, fcol, 1.1)
+	var salvage_msg := L.tr_ui("crew_salvage_card", [str(pick["name"]), L.foil_name(fid)])
+	if bool(res.get("upgraded", false)):
+		salvage_msg += "  •  " + L.tr_ui("foil_upgraded", [L.foil_name(fid)])
+	_hud_alert(salvage_msg, fcol)
+
+
+func _roll_elite_finish() -> String:
+	var total := 0.0
+	var ids: Array[String] = []
+	for fid in GameData.FINISH_ORDER:
+		if GameData.get_finish_rank(str(fid)) >= 2:
+			ids.append(str(fid))
+			total += float(GameData.CARD_FINISHES[str(fid)]["weight"])
+	if ids.is_empty() or total <= 0.0:
+		return "holo"
+	var roll := randf() * total
+	for fid in ids:
+		roll -= float(GameData.CARD_FINISHES[fid]["weight"])
+		if roll <= 0.0:
+			return fid
+	return ids[ids.size() - 1]
 
 # ==============================================================================
 # REBUILT NON-OVERLAPPING EXPEDITION HUD, SCANNER BRACKETS & TACTICAL RADAR
@@ -315,6 +404,8 @@ func _build_expedition_hud() -> void:
 	_eng_bar = _make_hud_bar(svb, "hud_power", Color(1.0, 0.84, 0.25))
 	_heat_bar = _make_hud_bar(svb, "hud_heat", Color(1.0, 0.45, 0.18))
 	_cargo_bar = _make_hud_bar(svb, "hud_cargo", Color(0.78, 0.52, 1.0))
+	_threat_bar = _make_hud_bar(svb, "hud_threat", Color(1.0, 0.42, 0.26))
+	_threat_bar.max_value = 100.0
 
 	# --- Reactor load governor readout (v2.2.0) ---
 	var prow := HBoxContainer.new()
@@ -808,7 +899,7 @@ func _draw_hud_world_overlays() -> void:
 						var rcol: Color = GameData.RESOURCES[ast3d.dominant_resource]["color"]
 						_overlay_canvas.draw_rect(Rect2(sp - Vector2(14, 14), Vector2(28, 28)), rcol, false, 1.8)
 
-	var radar_r := float(player_ship.stats.get("radar_range", 140.0))
+	var radar_r := player_ship.get_radar_range()
 	for en in enemies_root.get_children():
 		if en is EnemyShip3D:
 			var en3d := en as EnemyShip3D
@@ -816,11 +907,34 @@ func _draw_hud_world_overlays() -> void:
 			if de <= radar_r and not _cam.is_position_behind(en3d.global_position):
 				var ep: Vector2 = _cam.unproject_position(en3d.global_position)
 				var is_locked := (en3d == player_ship.locked_enemy)
-				var col := Color(1.0, 0.25, 0.28, 0.95) if is_locked else Color(1.0, 0.55, 0.22, 0.78)
-				var sz := 22.0 if is_locked else 15.0
-				_overlay_canvas.draw_rect(Rect2(ep - Vector2(sz, sz), Vector2(sz * 2.0, sz * 2.0)), col, false, 2.2 if is_locked else 1.4)
 				var hp_pct := clampf(en3d.hp / maxf(1.0, en3d.max_hp), 0.0, 1.0)
-				_overlay_canvas.draw_rect(Rect2(ep + Vector2(-20, -sz - 8), Vector2(40.0 * hp_pct, 4)), Color(1.0, 0.32, 0.28), true)
+				if is_locked:
+					# green lock: every LMB round on this screen converges here
+					var gcol := Color(0.34, 1.0, 0.58, 0.96)
+					var half := 26.0
+					var arm := 9.0
+					for cx in [-half, half]:
+						for cy in [-half, half]:
+							var hx := ep.x + cx
+							var hy := ep.y + cy
+							var dx: float = -signf(float(cx)) * arm
+							var dy: float = -signf(float(cy)) * arm
+							_overlay_canvas.draw_line(Vector2(hx, hy), Vector2(hx + dx, hy), gcol, 2.6)
+							_overlay_canvas.draw_line(Vector2(hx, hy), Vector2(hx, hy + dy), gcol, 2.6)
+					_overlay_canvas.draw_circle(ep, 2.6, Color(0.34, 1.0, 0.58, 0.9))
+					_overlay_canvas.draw_rect(Rect2(ep + Vector2(-26, -half - 12), Vector2(52.0, 4)), Color(0.06, 0.20, 0.12, 0.9), true)
+					_overlay_canvas.draw_rect(Rect2(ep + Vector2(-26, -half - 12), Vector2(52.0 * hp_pct, 4)), Color(0.36, 1.0, 0.60), true)
+					if ThemeHelper.font_bold:
+						_overlay_canvas.draw_string(ThemeHelper.font_bold, ep + Vector2(-26, -half - 18),
+							str(en3d.display_name).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, 52, 11, Color(0.62, 1.0, 0.78, 0.95))
+				else:
+					var col := Color(1.0, 0.55, 0.22, 0.78)
+					var sz := 15.0
+					_overlay_canvas.draw_rect(Rect2(ep - Vector2(sz, sz), Vector2(sz * 2.0, sz * 2.0)), col, false, 1.4)
+					_overlay_canvas.draw_rect(Rect2(ep + Vector2(-20, -sz - 8), Vector2(40.0 * hp_pct, 4)), Color(1.0, 0.32, 0.28), true)
+				if is_locked and en3d.elite and ThemeHelper.font_mono:
+					_overlay_canvas.draw_string(ThemeHelper.font_mono, ep + Vector2(-26, half + 16),
+						"ELITE", HORIZONTAL_ALIGNMENT_LEFT, 52, 11, Color(1.0, 0.82, 0.32, 0.95))
 
 func _draw_radar_minimap() -> void:
 	var c := _radar_canvas.size * 0.5
@@ -838,7 +952,7 @@ func _draw_radar_minimap() -> void:
 
 	if not is_instance_valid(player_ship):
 		return
-	var max_r := maxf(80.0, float(player_ship.stats.get("radar_range", 140.0)))
+	var max_r := maxf(80.0, player_ship.get_radar_range())
 	var inv_basis := player_ship.global_transform.basis.inverse()
 
 	if is_instance_valid(_warp_gate):
@@ -884,6 +998,10 @@ func _process(delta: float) -> void:
 	_update_third_person_camera(delta)
 	_update_aim_ray_and_lock()
 	_process_sector_spawns_and_hazards(delta)
+
+	for en in enemies_root.get_children():
+		if en is EnemyShip3D:
+			en.set_lock_state(en == player_ship.locked_enemy)
 
 	if is_instance_valid(_warp_gate) and player_ship.global_position.distance_to(_warp_gate.global_position) < 9.5:
 		_complete_expedition_and_return()
@@ -1052,10 +1170,33 @@ func _tick_achievement_toast(delta: float) -> void:
 		AudioManager.play_sfx("card_legendary", 0.0, 0.85)
 
 func _process_sector_spawns_and_hazards(delta: float) -> void:
+	# threat economy: cools off when you stop shooting and mining, escalates when you do not
+	_threat = maxf(0.0, _threat - delta * (1.55 if enemies_root.get_child_count() == 0 else 0.85))
+	var hot := _threat >= 42.0
+	if _threat_hot and not hot:
+		_threat_hot = false
+		_hud_alert(L.tr_ui("threat_standing_down"), Color(0.42, 0.92, 0.66))
+	var pressure := clampf(_threat / 100.0, 0.0, 1.0)
+	if is_instance_valid(_threat_bar):
+		_threat_bar.value = _threat
+		if _bar_val_lbls.has("hud_threat"):
+			(_bar_val_lbls["hud_threat"] as Label).text = "%d%%" % int(round(_threat))
+	_response_cd -= delta
+	if _response_cd <= 0.0:
+		if _threat >= 78.0:
+			_response_cd = 34.0
+			_spawn_response_wing(2)
+		elif _threat >= 42.0:
+			_response_cd = 26.0
+			_spawn_response_wing(1)
+		else:
+			_response_cd = 8.0
+
 	_enemy_spawn_cd -= delta
 	if _enemy_spawn_cd <= 0.0:
-		_enemy_spawn_cd = 11.0
-		if enemies_root.get_child_count() < int(sector_def.get("enemy_cap", 4)):
+		_enemy_spawn_cd = lerpf(12.0, 5.4, pressure)
+		var cap := int(sector_def.get("enemy_cap", 4)) + (2 if pressure > 0.62 else 0)
+		if enemies_root.get_child_count() < cap:
 			_spawn_sector_enemy()
 
 	if _hazard_flash_t > 0.0:

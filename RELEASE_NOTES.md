@@ -4,6 +4,64 @@ A complete standalone 3D space game: modular ship engineering on a real 3D grid,
 magnetic recovery, orbital combat, a collectible crew-card economy, a live sector market and UTC-rotating
 achievements. No external runtimes required.
 
+## v2.3.0 — Hard-Surface Robot Crew Art, Foil Mutations, Lock-Directed Combat
+
+### 1. The crew cards are re-sculpted as detailed robots
+All 42 portraits come from a new signed-distance-field **android kernel**: layered armour plating, a recessed
+sensor face with emissive optics (twin angled, visor band, cyclops, compound dots), temple fins, per-role
+headgear (miner hat, pilot helmet, weld mask, gunner booms, collector claws, navigator ring, officer crown,
+monocle), spine fins / mohawk / halo / antenna crests, ribbed neck pistons, a chest reactor core, riveted
+pauldrons, articulated arms carrying class tools (auger arm, rivet gun, manipulator claws) and a thruster
+backpack. `tools/crew_robot.py` sculpts, `tools/render_crew_portraits.py` shades and grades (8 materials,
+GGX specular, clearcoat, contact shadows, AO, rarity palettes, three backdrops, bloom, vignette, film grain);
+the v2.2 human kernel is deleted outright — nothing is cropped, mirrored or re-tinted from another card.
+Cards are ray-marched at 720x880 with a 2x box filter, then LANCZOS-resampled to the shipped 360x440.
+**Five framing archetypes** (tight bust, chest portrait, waist-up, three-quarter body, low hero angle) drive
+per-card camera yaw 6-46deg, pitch -11..+4.5deg, crop height, target height and distance, so the set reads as
+a squad of individuals instead of one bust re-tinted 42 times. CI keeps asserting 42 unique SHA-256 digests.
+
+### 2. Foil mutations: five collectible finishes that really change the ship
+`GameData.CARD_FINISHES` adds a print-quality tier to every pull - **Standard** (58%), **Silvered** (22%),
+**Holographic** (11%), **Glitter Foil** (6%) and **Luminous** (3%). A finish is not cosmetic only: it scales
+the card's own buff (x1.15 / x1.25 / x1.40 / x1.60) *and* grants ship-wide perks while equipped - silver +4%
+ore price, holo +6% radar reach, glitter +5% nano-repair, luminous +8% price / +5% radar / +6% repair -
+summed over the equipped bridge and clamped (1.45 / 1.40 / 1.40) so a full foil loadout is a boost, not an
+exploit. The hooks are real engine reads: `ShipGrid._cargo_ledger` sells into the `market` perk,
+`PlayerShip3D.get_radar_range()` scales the expedition radar, and the repair tick rate runs on `repair`.
+The binder keeps your **best** print of each member (a plain copy never downgrades a holo), duplicates pay
+x(1 + 0.35 x foil rank) credits, and `SaveManager` persists `crew_finish` behind the SHA-256 envelope, with
+pre-2.3 saves loading cleanly as all-standard.
+`shaders/card_foil.gdshader` grew five finish uniforms (`finish_sheen/prism/sparkle/glow/metal` + `finish_tint`)
+so silver brushed-metal, the moving holo prism that reacts to the pointer, glitter flecks and the luminous
+body+edge glow are animated on the live card - no baked overlay textures to ship. `CardWidget` prints the
+foil badge over the art, the localized effect line, the multiplied buff number and pulses the frame for
+Luminous prints; the pack ceremony reveals the foil and shouts FOIL UPGRADED; the station box discloses the
+per-pack foil odds as chips, and the elite pack genuinely pays better (1.9x on rank-2+ foils).
+
+### 3. LMB fights, RMB mines - and every round converges on the green lock
+Hull guns no longer carry mining damage at all: `Projectile3D` cannot call `apply_mining_damage` any more, so
+**meteoroids only break under the right-button (or F) mining beam** - a pytest and an engine check both fail
+the build if that regresses. Lock direction is now the firing rule: while an enemy is marked (auto-lock or T),
+`PlayerShip3D.LOCK_HOMING_TURN` gives *every* weapon class - kinetic, laser, plasma, railgun, rocket, missile -
+guidance authority onto that hull, and a round that clips a rock throws sparks and keeps hunting instead of
+mining it. The marked target is painted unmistakably green: a rotating world-space bracket ring on the hull
+plus four HUD corner brackets, name plate and hull bar.
+
+### 4. Sector threat and elite response wings
+Mining and kills build sector **threat** (0-100) that decays while you keep quiet. Above 42 the sector answers
+with an **elite response wing**: escorts plus a heavy leader with 2.65x hull, 2.2x shields, 1.45x damage, a
+3-round spread, a gold command halo and 4x credits; above 78 a second, larger wing arrives and the camera
+shakes it in. Base spawn cadence tightens from 12 s to 5.4 s and the enemy cap rises with pressure, and the
+flight HUD gains a live THREAT meter. Elite leaders drop **salvage crew prints** with a guaranteed
+Holographic-or-better finish, so combat feeds the card chase.
+
+### 5. Verification
+`tools/render_crew_portraits.py --montage` regenerates the whole art set deterministically per card index;
+31 pytest contracts (script parsing, 42 unique digests, foil table balance, localization coverage in the
+bundled font chain, shader-parameter contract, LMB/RMB ownership) plus the Godot runtime suite (all checks
+including foil grants, perks, pack odds, save round-trip, guidance convergence and elite wings) run in CI
+before the Windows build, Inno installer self-test and release publication.
+
 ## v2.2.0 — Visible Interface Rebuild, Full Crew Portraits, Ship Systems Logic
 
 ### 1. The GUI was rebuilt on its own machined skin kit

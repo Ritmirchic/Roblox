@@ -433,6 +433,8 @@ func market_unit_price(res_id: String, day: int = -1) -> int:
 func _cargo_ledger(day: int = -1) -> Dictionary:
 	var buffs := _collect_buffs()
 	var val_mult := 1.0 + float(buffs.get("credit_mult", 0.0)) + float(buffs.get("all_stats_mult", 0.0))
+	# silvered / luminous foils negotiate a better smelter rate
+	val_mult *= float(CrewManager.get_finish_perks().get("market", 1.0))
 	var rows: Array = []
 	var total_cr := 0
 	var total_units := 0

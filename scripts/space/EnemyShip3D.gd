@@ -15,6 +15,10 @@ var fire_rate: float = 1.2
 var engage_range: float = 110.0
 var credit_reward: int = 100
 var drop_resource: String = "iron"
+# Elite response wings (threat system): tougher, louder, better salvage.
+var elite: bool = false
+var _lock_ring: MeshInstance3D = null
+var _halo: MeshInstance3D = null
 
 var target_ship: Node3D = null
 var projectiles_root: Node = null
@@ -25,7 +29,14 @@ var _strafe_phase: float = 0.0
 var _strafe_dir: float = 1.0
 var _dead: bool = false
 
-func setup(eid: String, spawn_pos: Vector3, player_ref: Node3D, proj_parent: Node, chunk_parent: Node) -> void:
+func setup(
+	eid: String,
+	spawn_pos: Vector3,
+	player_ref: Node3D,
+	proj_parent: Node,
+	chunk_parent: Node,
+	as_elite: bool = false
+) -> void:
 	enemy_id = eid if GameData.enemies.has(eid) else "scout_drone"
 	var def: Dictionary = GameData.enemies[enemy_id]
 	display_name = str(def["name"])
@@ -39,6 +50,17 @@ func setup(eid: String, spawn_pos: Vector3, player_ref: Node3D, proj_parent: Nod
 	engage_range = float(def["range"])
 	credit_reward = int(def["credits"])
 	drop_resource = str(def["drop_resource"])
+	elite = as_elite
+	if elite:
+		max_hp *= 2.65
+		hp = max_hp
+		max_shield *= 2.2
+		shield = max_shield
+		attack_damage *= 1.45
+		fire_rate *= 1.28
+		move_speed *= 1.08
+		engage_range *= 1.22
+		credit_reward = int(round(credit_reward * 4.0))
 
 	position = spawn_pos
 	target_ship = player_ref
@@ -65,7 +87,65 @@ func setup(eid: String, spawn_pos: Vector3, player_ref: Node3D, proj_parent: Nod
 	plume.position = Vector3(0, 0, 1.8 * float(def.get("scale", 1.15)))
 	add_child(plume)
 
+	var body_scale := 2.0 * float(def.get("scale", 1.15)) * (1.34 if elite else 1.0)
+	if elite:
+		scale = Vector3.ONE * 1.26
+
+	# green soft-lock bracket drawn around the hull so the marked target is unmistakable
+	_lock_ring = MeshInstance3D.new()
+	var ring := TorusMesh.new()
+	ring.inner_radius = body_scale * 1.24
+	ring.outer_radius = body_scale * 1.40
+	ring.rings = 24
+	ring.ring_segments = 8
+	_lock_ring.mesh = ring
+	_lock_ring.rotation_degrees = Vector3(90, 0, 0)
+	var rmat := StandardMaterial3D.new()
+	rmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rmat.albedo_color = Color(0.30, 1.0, 0.60, 0.85)
+	rmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_lock_ring.material_override = rmat
+	_lock_ring.visible = false
+	_lock_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_lock_ring)
+
+	if elite:
+		# gold command halo so an elite reads as an elite at 300 m
+		_halo = MeshInstance3D.new()
+		var halo := TorusMesh.new()
+		halo.inner_radius = body_scale * 1.55
+		halo.outer_radius = body_scale * 1.66
+		halo.rings = 20
+		halo.ring_segments = 6
+		_halo.mesh = halo
+		_halo.rotation_degrees = Vector3(74, 0, 0)
+		_halo.position = Vector3(0, body_scale * 0.55, 0)
+		var hmat := StandardMaterial3D.new()
+		hmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		hmat.albedo_color = Color(1.0, 0.80, 0.28, 0.92)
+		hmat.emission_enabled = true
+		hmat.emission = Color(1.0, 0.72, 0.20)
+		hmat.emission_energy_multiplier = 1.8
+		hmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_halo.material_override = hmat
+		_halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(_halo)
+
 	add_to_group("enemies")
+
+
+func is_dead() -> bool:
+	return _dead
+
+
+func set_lock_state(on: bool) -> void:
+	if not is_instance_valid(_lock_ring) or _lock_ring.visible == on:
+		return
+	_lock_ring.visible = on
+	if on and not ThemeHelper.reduced_motion and is_inside_tree():
+		_lock_ring.scale = Vector3.ONE * 1.30
+		var tw := create_tween()
+		tw.tween_property(_lock_ring, "scale", Vector3.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func _physics_process(delta: float) -> void:
 	if _dead or not is_instance_valid(target_ship):
@@ -74,7 +154,11 @@ func _physics_process(delta: float) -> void:
 	if shield < max_shield:
 		shield = minf(max_shield, shield + max_shield * 0.04 * delta)
 
-	_strafe_phase += delta * 1.35
+	if is_instance_valid(_halo):
+		_halo.rotate_z(delta * 1.15)
+	if is_instance_valid(_lock_ring):
+		_lock_ring.rotate_z(-delta * 0.85)
+	_strafe_phase += delta * (1.35 if not elite else 1.75)
 	var to_player := target_ship.global_position - global_position
 	var dist := to_player.length()
 	var dir_to_player := to_player / maxf(0.01, dist)
@@ -108,11 +192,18 @@ func _physics_process(delta: float) -> void:
 		_fire_at_player(dir_to_player)
 
 func _fire_at_player(aim_dir: Vector3) -> void:
-	var p := Projectile3D.new()
-	projectiles_root.add_child(p)
-	var muzzle_pos := global_position - global_transform.basis.z * 2.4
-	var xform := Projectile3D.make_aim_transform(muzzle_pos, aim_dir)
-	p.setup(false, "plasma" if enemy_id in ["plasma_hunter", "void_sentinel"] else "laser", attack_damage, 125.0, xform)
+	var wtype := "plasma" if enemy_id in ["plasma_hunter", "void_sentinel"] else "laser"
+	var shots := 3 if elite else 1
+	for i in range(shots):
+		var p := Projectile3D.new()
+		projectiles_root.add_child(p)
+		var muzzle_pos := global_position - global_transform.basis.z * 2.4
+		if shots > 1:
+			# elite wings walk a short spread across the target
+			muzzle_pos += global_transform.basis.x * float(i - 1) * 1.15
+		var spread := aim_dir.rotated(Vector3.UP, float(i - 1) * 0.055)
+		var xform := Projectile3D.make_aim_transform(muzzle_pos, spread)
+		p.setup(false, wtype, attack_damage * (0.82 if elite else 1.0), 142.0 if elite else 125.0, xform)
 
 func take_weapon_damage(dmg: float) -> void:
 	if _dead or dmg <= 0.0:
@@ -133,16 +224,19 @@ func _die() -> void:
 	AudioManager.play_sfx("explosion", 0.08, 0.9)
 	VFXFactory.spawn_explosion(get_parent(), global_position, Color(1.0, 0.45, 0.16), 1.45)
 
+	if elite:
+		AudioManager.play_sfx("explosion", 0.06, 0.62)
+		VFXFactory.spawn_explosion(get_parent(), global_position, Color(1.0, 0.78, 0.30), 2.35)
 	ShipGrid.add_credits(credit_reward)
 	ShipGrid.stats_history["enemies_defeated"] = int(ShipGrid.stats_history.get("enemies_defeated", 0)) + 1
 	if AchievementManager:
 		AchievementManager.record_event("defeat_enemy", 1)
 
 	if chunks_root:
-		for _i in range(2):
+		for _i in range(4 if elite else 2):
 			var ch := ResourceChunk3D.new()
 			var d := Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)).normalized()
-			ch.setup(drop_resource, 2, global_position + d * 1.2, d * 8.0)
+			ch.setup(drop_resource, 3 if elite else 2, global_position + d * 1.2, d * 8.0)
 			chunks_root.add_child(ch)
 
 	defeated.emit(self, global_position)

@@ -758,3 +758,60 @@ def test_theme_helper_call_arity_matches_definitions():
                     gd.name, line, cls, fn, nargs, req, total))
     assert checked >= 400, "arity audit only inspected %d call sites" % checked
     assert not bad, "Autoload call arity problems: %s" % sorted(set(bad))[:12]
+
+
+def test_foil_finish_visual_contract():
+    """Every shader parameter the card UI pushes must be declared by the foil shader.
+
+    A typo'd `set_shader_parameter` name is silently ignored by Godot, so the
+    collectible finishes would ship visually dead.
+    """
+    shader = (ROOT / "shaders" / "card_foil.gdshader").read_text(encoding="utf-8")
+    declared = set(re.findall(r"uniform\s+\w+\s+(\w+)\s*(?::|=|;)", shader))
+    widget = (ROOT / "scripts" / "ui" / "CardWidget.gd").read_text(encoding="utf-8")
+    used = set(re.findall(r"_foil_mat\.set_shader_parameter\(\"(\w+)\"", widget))
+    assert used, "CardWidget drives no shader parameters at all"
+    missing = sorted(used - declared)
+    assert not missing, f"card_foil.gdshader does not declare: {missing}"
+    for key in ("finish_sheen", "finish_prism", "finish_sparkle", "finish_glow", "finish_metal"):
+        assert key in declared, f"foil shader lost the {key} uniform"
+    assert "finish_tint" in declared
+
+
+def test_foil_finish_table_is_balanced_and_localized():
+    """Foil weights, ranks and multipliers stay sane and every finish is named in 10 languages."""
+    game = (ROOT / "scripts" / "autoload" / "GameData.gd").read_text(encoding="utf-8")
+    block = game[game.index("const CARD_FINISHES: Dictionary = {"):]
+    block = block[: block.index("\n}\n")]
+    entries = re.findall(r'"(\w+)":\s*\{', block)
+    assert entries == ["plain", "silver", "holo", "glitter", "glow"], entries
+    weights = [float(w) for w in re.findall(r'"weight":\s*([\d.]+)', block)]
+    assert abs(sum(weights) - 100.0) < 1e-6, weights
+    mults = [float(m) for m in re.findall(r'"buff_mult":\s*([\d.]+)', block)]
+    assert mults == sorted(mults) and mults[0] == 1.0 and mults[-1] > 1.5
+    langs = ("ru", "en", "es", "de", "fr", "pt", "zh", "ja", "ko", "tr")
+    loc = (ROOT / "scripts" / "autoload" / "Localization.gd").read_text(encoding="utf-8")
+    for const in ("FOIL_NAMES", "FOIL_EFFECTS"):
+        seg = loc[loc.index(f"const {const}: Dictionary = {{"):]
+        seg = seg[: seg.index("\n}\n")]
+        for fid in entries:
+            chunk = seg[seg.index(f'"{fid}"'):]
+            chunk = chunk[: chunk.index("},")]
+            for code in langs:
+                assert f'"{code}":' in chunk, f"{const} is missing {code} for {fid}"
+
+
+def test_lmb_never_mines_and_lock_directs_fire():
+    """The control contract: RMB owns the mining beam, LMB only shoots the locked target."""
+    proj = (ROOT / "scripts" / "space" / "Projectile3D.gd").read_text(encoding="utf-8")
+    assert "apply_mining_damage" not in proj, "weapon rounds must not damage meteoroids"
+    assert "lock_homing" in proj and "_ricochet_grace" in proj
+    beam = (ROOT / "scripts" / "ship" / "PlayerShip3D.gd").read_text(encoding="utf-8")
+    assert "apply_mining_damage" in beam, "the mining beam must still break rocks"
+    assert "LOCK_HOMING_TURN" in beam and "lock_homing" in beam
+    exp = (ROOT / "scripts" / "space" / "SpaceExpedition3D.gd").read_text(encoding="utf-8")
+    assert "player_ship.firing_weapons = _mouse_captured and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)" in exp
+    assert "player_ship.firing_mining = (_mouse_captured and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT))" in exp
+    assert "set_lock_state(" in exp, "the locked enemy must be painted green"
+    enemy = (ROOT / "scripts" / "space" / "EnemyShip3D.gd").read_text(encoding="utf-8")
+    assert "func set_lock_state(" in enemy and "var elite: bool = false" in enemy

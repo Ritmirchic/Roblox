@@ -41,6 +41,7 @@ func build_save_payload() -> Dictionary:
 		"stats_history": ShipGrid.stats_history.duplicate(true),
 		"crew_owned": CrewManager.owned_cards.duplicate(true),
 		"crew_equipped": CrewManager.equipped_crew.duplicate(true),
+		"crew_finish": CrewManager.card_finishes.duplicate(true),
 		"upg_fourth": UpgradeManager.fourth_slot_unlocked,
 		"upg_fifth": UpgradeManager.fifth_slot_unlocked,
 		"upg_owned": UpgradeManager.owned_upgrades.duplicate(true),
@@ -219,6 +220,14 @@ func apply_loaded_payload(data: Dictionary) -> bool:
 		for cid in data["crew_equipped"]:
 			CrewManager.equipped_crew.append(str(cid))
 		CrewManager.enforce_capacity()
+	# foil finishes (pre-2.3.0 saves simply own plain cards)
+	CrewManager.card_finishes.clear()
+	if typeof(data.get("crew_finish")) == TYPE_DICTIONARY:
+		for cid in data["crew_finish"].keys():
+			var fid := str(data["crew_finish"][cid])
+			if GameData.crew_by_id.has(cid) and int(CrewManager.owned_cards.get(cid, 0)) > 0 \
+					and GameData.is_valid_finish(fid) and fid != "plain":
+				CrewManager.card_finishes[cid] = fid
 
 	# Active Upgrades
 	UpgradeManager.fourth_slot_unlocked = bool(data.get("upg_fourth", false))
@@ -268,6 +277,7 @@ func reset_all_progress() -> void:
 		ShipGrid.cargo[k] = 0
 	ShipGrid.reset_to_starter_ship()
 	CrewManager.owned_cards = {"crew_01": 1, "crew_02": 1}
+	CrewManager.card_finishes.clear()
 	CrewManager.equipped_crew.clear()
 	UpgradeManager.fourth_slot_unlocked = false
 	UpgradeManager.fifth_slot_unlocked = false

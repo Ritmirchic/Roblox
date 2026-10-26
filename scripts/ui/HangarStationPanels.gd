@@ -566,6 +566,22 @@ func _build_crew_tab() -> void:
 	slot_info.add_theme_color_override("font_color", ThemeHelper.COL_GOLD)
 	left_vb.add_child(slot_info)
 
+	# what the equipped foils actually do to the ship, in one honest line
+	var foil_perks: Dictionary = CrewManager.get_finish_perks()
+	var mk_pct := int(round((float(foil_perks["market"]) - 1.0) * 100.0))
+	var rd_pct := int(round((float(foil_perks["radar"]) - 1.0) * 100.0))
+	var rp_pct := int(round((float(foil_perks["repair"]) - 1.0) * 100.0))
+	if mk_pct > 0 or rd_pct > 0 or rp_pct > 0:
+		var perk_line := Label.new()
+		perk_line.text = L.tr_ui("crew_foil_perks", [mk_pct, rd_pct, rp_pct])
+		perk_line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		perk_line.clip_text = true
+		perk_line.add_theme_font_size_override("font_size", 12)
+		if ThemeHelper.font_bold:
+			perk_line.add_theme_font_override("font", ThemeHelper.font_bold)
+		perk_line.add_theme_color_override("font_color", Color(0.66, 1.0, 0.88))
+		left_vb.add_child(perk_line)
+
 	var sc := ScrollContainer.new()
 	sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -674,13 +690,44 @@ func _populate_crew_inspector(ivb: VBoxContainer, cid: String) -> void:
 	rtag.add_theme_color_override("font_color", ThemeHelper.COL_CYAN)
 	ivb.add_child(rtag)
 
+	# foil finish strip: name, real effect line, and the multiplied bonus below
+	var fid := CrewManager.get_finish(cid)
+	var frank := GameData.get_finish_rank(fid)
+	var fmult := GameData.get_finish_buff_mult(fid)
+	if owned and frank > 0:
+		var fdef: Dictionary = GameData.get_finish(fid)
+		var fcol: Color = fdef.get("tint", Color(0.85, 0.92, 1.0))
+		var foil_box := PanelContainer.new()
+		foil_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		foil_box.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(
+			Color(fcol.r * 0.10, fcol.g * 0.13, fcol.b * 0.18, 0.94), fcol, 8, 10, 5))
+		ivb.add_child(foil_box)
+		var foil_lbl := Label.new()
+		var base_pct := float(PackManager.finish_chances("standard").get(fid, 0.0))
+		foil_lbl.text = "%s: %s\n%s\n%s %d%%" % [
+			L.tr_ui("foil_label"), L.foil_name(fid), L.foil_effect(fid),
+			L.tr_ui("pack_drop_rates"), int(round(base_pct)),
+		]
+		foil_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		foil_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		foil_lbl.custom_minimum_size = Vector2(240, 44)
+		foil_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		foil_lbl.add_theme_font_size_override("font_size", 12)
+		foil_lbl.add_theme_color_override("font_color", fcol.lightened(0.20))
+		foil_box.add_child(foil_lbl)
+
+	var eff_card: Dictionary = c
+	if owned and frank > 0:
+		eff_card = c.duplicate()
+		eff_card["buff_value"] = float(c["buff_value"]) * fmult
+
 	var bonus_box := PanelContainer.new()
 	bonus_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bonus_box.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(Color(0.06, 0.11, 0.22, 0.95), rcol, 9, 12, 8))
 	ivb.add_child(bonus_box)
 
 	var btext := Label.new()
-	btext.text = L.crew_bonus(c)
+	btext.text = L.crew_bonus(eff_card)
 	btext.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	btext.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btext.custom_minimum_size = Vector2(240, 0)
@@ -766,7 +813,7 @@ func _build_packs_tab() -> void:
 		var accent := Color(1.0, 0.76, 0.24) if is_elite else Color(0.22, 0.82, 1.0)
 
 		var box := PanelContainer.new()
-		box.custom_minimum_size = Vector2(460, 500)
+		box.custom_minimum_size = Vector2(460, 522)
 		box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		box.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(Color(0.032, 0.058, 0.13, 0.96), accent, 16, 2, 18))
 		center_wrap.add_child(box)
@@ -844,6 +891,24 @@ func _build_packs_tab() -> void:
 			cl.add_theme_color_override("font_color", rcol.lightened(0.28))
 			chip.add_child(cl)
 			odds_flow.add_child(chip)
+
+		# foil finish pull odds sit right under the rarity chips: the chase is part of the pitch
+		var fch: Dictionary = PackManager.finish_chances(pid)
+		for fid in GameData.FINISH_ORDER:
+			var fpct := float(fch.get(fid, 0.0))
+			if fpct <= 0.001 or str(fid) == "plain":
+				continue
+			var fdef: Dictionary = GameData.get_finish(str(fid))
+			var fcol: Color = fdef.get("tint", Color(0.8, 0.9, 1.0))
+			var fchip := PanelContainer.new()
+			fchip.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(
+				Color(fcol.r * 0.14, fcol.g * 0.16, fcol.b * 0.20, 0.92), fcol, 6, 8, 3))
+			var fl := Label.new()
+			fl.text = "%s: %.1f%%" % [L.foil_name(str(fid)), fpct]
+			fl.add_theme_font_size_override("font_size", 12)
+			fl.add_theme_color_override("font_color", fcol.lightened(0.24))
+			fchip.add_child(fl)
+			odds_flow.add_child(fchip)
 
 		var slot_bonus := Label.new()
 		slot_bonus.text = L.tr_ui("pack_fifth_slot_bonus", [float(probs["fifth_upgrade_slot_any_pct"])])

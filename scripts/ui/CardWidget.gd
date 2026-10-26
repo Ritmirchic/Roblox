@@ -15,8 +15,12 @@ var _rarity_tier: int = 0
 var _base_border_col: Color = Color.WHITE
 var _outer_sb: StyleBoxFlat = null
 var _is_hovered: bool = false
+var _foil_id: String = "plain"
+var _foil_rank: int = 0
+var _foil_col: Color = Color.WHITE
+var _foil_glow: float = 0.0
 
-func setup_card(data: Dictionary, owned: bool, copies: int = 1, equipped: bool = false, compact: bool = false) -> void:
+func setup_card(data: Dictionary, owned: bool, copies: int = 1, equipped: bool = false, compact: bool = false, foil_id: String = "") -> void:
 	card_data = data
 	is_owned = owned
 	copies_count = copies
@@ -31,6 +35,15 @@ func setup_card(data: Dictionary, owned: bool, copies: int = 1, equipped: bool =
 
 	var rarity: String = str(data.get("rarity", "Common"))
 	var rcol: Color = GameData.RARITY_COLORS.get(rarity, Color(0.6, 0.68, 0.78))
+	# foil finish: callers may force one (pack reveal), otherwise the stored best copy wins
+	var fid := foil_id if GameData.is_valid_finish(foil_id) else CrewManager.get_finish(str(data.get("id", "")))
+	if not owned:
+		fid = "plain"
+	_foil_id = fid
+	var foil: Dictionary = GameData.get_finish(fid)
+	_foil_rank = int(foil.get("rank", 0))
+	_foil_col = foil.get("tint", Color.WHITE)
+	_foil_glow = float(foil.get("glow", 0.0))
 	_rarity_tier = maxi(0, GameData.RARITY_ORDER.find(rarity))
 	_base_border_col = rcol if owned else Color(0.28, 0.34, 0.44, 0.72)
 
@@ -116,6 +129,13 @@ func setup_card(data: Dictionary, owned: bool, copies: int = 1, equipped: bool =
 		_foil_mat.set_shader_parameter("rarity_tier", _rarity_tier)
 		_foil_mat.set_shader_parameter("reduced_motion", 1.0 if ThemeHelper.reduced_motion else 0.0)
 		_foil_mat.set_shader_parameter("hover_amount", 0.0)
+		_foil_mat.set_shader_parameter("finish_sheen", float(foil.get("sheen", 0.0)))
+		_foil_mat.set_shader_parameter("finish_prism", float(foil.get("prism", 0.0)))
+		_foil_mat.set_shader_parameter("finish_sparkle", float(foil.get("sparkle", 0.0)))
+		_foil_mat.set_shader_parameter("finish_glow", _foil_glow)
+		_foil_mat.set_shader_parameter("finish_metal", float(foil.get("metal", 0.0)))
+		var ft: Color = _foil_col
+		_foil_mat.set_shader_parameter("finish_tint", Vector3(ft.r, ft.g, ft.b))
 		tex_rect.material = _foil_mat
 	port_frame.add_child(tex_rect)
 
@@ -124,6 +144,23 @@ func setup_card(data: Dictionary, owned: bool, copies: int = 1, equipped: bool =
 	badge_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
 	badge_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	port_frame.add_child(badge_layer)
+
+	if owned and _foil_rank > 0:
+		var fo_pill := PanelContainer.new()
+		fo_pill.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		fo_pill.offset_left = 6
+		fo_pill.offset_top = 6
+		fo_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		fo_pill.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(
+			Color(0.03, 0.05, 0.10, 0.86), _foil_col.lightened(0.15), 6, 6, 2))
+		var fo_lbl := Label.new()
+		fo_lbl.text = L.foil_name(_foil_id).to_upper()
+		if ThemeHelper.font_bold:
+			fo_lbl.add_theme_font_override("font", ThemeHelper.font_bold)
+		fo_lbl.add_theme_font_size_override("font_size", 10)
+		fo_lbl.add_theme_color_override("font_color", _foil_col.lightened(0.35))
+		fo_pill.add_child(fo_lbl)
+		badge_layer.add_child(fo_pill)
 
 	if owned and copies > 1:
 		var cp_pill := PanelContainer.new()
@@ -181,7 +218,12 @@ func setup_card(data: Dictionary, owned: bool, copies: int = 1, equipped: bool =
 	vb.add_child(bonus_pill)
 
 	var bonus_lbl := Label.new()
-	bonus_lbl.text = L.crew_bonus(data)
+	# a foil finish multiplies the printed bonus, so show the number that is really applied
+	var shown_card: Dictionary = data
+	if owned and _foil_rank > 0:
+		shown_card = data.duplicate()
+		shown_card["buff_value"] = float(data["buff_value"]) * GameData.get_finish_buff_mult(_foil_id)
+	bonus_lbl.text = L.crew_bonus(shown_card)
 	bonus_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bonus_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	bonus_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -191,6 +233,16 @@ func setup_card(data: Dictionary, owned: bool, copies: int = 1, equipped: bool =
 	bonus_lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.36) if owned else Color(0.55, 0.62, 0.72))
 	bonus_pill.add_child(bonus_lbl)
 
+	if owned and _foil_rank > 0:
+		var fo_line := Label.new()
+		fo_line.text = L.foil_effect(_foil_id)
+		fo_line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		fo_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		fo_line.add_theme_font_size_override("font_size", 11 if compact else 12)
+		fo_line.add_theme_color_override("font_color", _foil_col.lightened(0.22))
+		fo_line.clip_text = true
+		vb.add_child(fo_line)
+
 	# Kit frame overlay: chamfered collector border with corner brackets, top tab
 	# and the etched info band, tinted by rarity. Drawn last so it sits on top.
 	var skin_frame := get_node_or_null("SkinFrame_card_frame") as TextureRect
@@ -199,6 +251,9 @@ func setup_card(data: Dictionary, owned: bool, copies: int = 1, equipped: bool =
 		if skin_frame != null:
 			add_child(skin_frame)
 			ThemeHelper.fill_full_rect(skin_frame, -3.0, -3.0, -3.0, -3.0)
+	if _foil_rank > 0:
+		# the footer grew one line: give the card the room instead of clipping
+		custom_minimum_size = custom_minimum_size + Vector2(0, 17)
 	if skin_frame != null:
 		skin_frame.visible = true
 		skin_frame.self_modulate = rcol.lightened(0.42) if owned else Color(0.46, 0.54, 0.66, 0.75)
@@ -211,11 +266,20 @@ func setup_card(data: Dictionary, owned: bool, copies: int = 1, equipped: bool =
 func _process(delta: float) -> void:
 	if ThemeHelper.reduced_motion or _outer_sb == null:
 		return
-	if is_owned and (_rarity_tier >= 4 or _is_hovered):
-		_pulse_time += delta * 2.8
+	if is_owned and (_rarity_tier >= 4 or _foil_glow > 0.0 or _is_hovered):
+		_pulse_time += delta * (2.8 if _foil_glow <= 0.0 else 1.9)
 		var glow_pulse := 0.5 + 0.5 * sin(_pulse_time)
-		if not is_equipped:
+		if _foil_glow > 0.0:
+			# a luminous foil breathes light through the whole frame
+			_outer_sb.shadow_color = Color(_foil_col.r, _foil_col.g, _foil_col.b, 0.30 + 0.34 * glow_pulse)
+			_outer_sb.shadow_size = int(12.0 + 10.0 * glow_pulse)
+			_outer_sb.border_color = _foil_col.lightened(0.10 + 0.30 * glow_pulse)
+		elif not is_equipped:
 			_outer_sb.border_color = _base_border_col.lightened(0.10 + 0.24 * glow_pulse)
+
+
+func get_foil_id() -> String:
+	return _foil_id
 
 func _on_hover_enter() -> void:
 	_is_hovered = true

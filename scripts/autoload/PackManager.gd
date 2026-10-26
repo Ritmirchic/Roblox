@@ -84,6 +84,45 @@ func _roll_rarity(weights: Dictionary) -> String:
 			return r
 	return "Common"
 
+const FINISH_ELITE_RARE_BOOST: float = 1.9
+
+func finish_weights(pack_id: String) -> Dictionary:
+	## Raw finish weights per pack type: the elite box pays noticeably better foils.
+	var w: Dictionary = {}
+	for fid in GameData.FINISH_ORDER:
+		var base_w := float(GameData.CARD_FINISHES[str(fid)]["weight"])
+		if pack_id == "elite" and GameData.get_finish_rank(str(fid)) >= 2:
+			base_w *= FINISH_ELITE_RARE_BOOST
+		w[str(fid)] = base_w
+	return w
+
+
+func roll_finish_for_pack(pack_id: String) -> String:
+	var w := finish_weights(pack_id)
+	var total := 0.0
+	for k in w.keys():
+		total += float(w[k])
+	var pick := _rng.randf() * maxf(0.0001, total)
+	var accum := 0.0
+	for fid in GameData.FINISH_ORDER:
+		accum += float(w[str(fid)])
+		if pick <= accum:
+			return str(fid)
+	return "plain"
+
+
+func finish_chances(pack_id: String = "standard") -> Dictionary:
+	## Pull odds for the foil finishes, shown next to the pack probabilities.
+	var w := finish_weights(pack_id)
+	var total := 0.0
+	for k in w.keys():
+		total += float(w[k])
+	var out: Dictionary = {}
+	for fid in GameData.FINISH_ORDER:
+		out[str(fid)] = (float(w[str(fid)]) / maxf(0.0001, total)) * 100.0
+	return out
+
+
 func _roll_card_of_rarity(rarity: String) -> Dictionary:
 	var pool: Array[Dictionary] = []
 	for c in GameData.crew_cards:
@@ -116,10 +155,15 @@ func purchase_and_open_pack(pack_id: String) -> Dictionary:
 	for _i in range(CARDS_PER_PACK):
 		var rar := _roll_rarity(weights)
 		var card_def := _roll_card_of_rarity(rar)
-		var is_new := CrewManager.add_card_to_collection(card_def["id"])
+		# every pull is also rolled a foil finish; the best copy of a card wins
+		var fid := roll_finish_for_pack(pack_id)
+		var grant: Dictionary = CrewManager.grant_card(str(card_def["id"]), fid)
+		var is_new := bool(grant["is_new"])
+		var drawn_finish := str(grant["finish"])
 		var dup_credits := 0
 		if not is_new:
-			dup_credits = int(DUPLICATE_CREDIT_BONUS.get(rar, 150))
+			var frank := GameData.get_finish_rank(drawn_finish)
+			dup_credits = int(round(float(DUPLICATE_CREDIT_BONUS.get(rar, 150)) * (1.0 + 0.35 * float(frank))))
 			ShipGrid.add_credits(dup_credits)
 
 		# Eligible roll for permanent 5th Active Upgrade Slot (1% per card roll if still locked)
@@ -131,6 +175,9 @@ func purchase_and_open_pack(pack_id: String) -> Dictionary:
 			"card": card_def,
 			"is_new": is_new,
 			"duplicate_credits": dup_credits,
+			"finish": drawn_finish,
+			"finish_rolled": fid,
+			"finish_upgraded": bool(grant["upgraded"]),
 		})
 
 	if AchievementManager:

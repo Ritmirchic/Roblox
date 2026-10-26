@@ -291,10 +291,13 @@ func _spawn_three_facedown_cards() -> void:
 		cw.name = "FaceCard"
 		cw.visible = false
 		cw.position = Vector2(5, 5)
-		cw.size = Vector2(216, 326)
-		cw.pivot_offset = Vector2(108, 163)
 		var cdata: Dictionary = _results[i]["card"]
-		cw.setup_card(cdata, true, CrewManager.get_copies(cdata["id"]), false)
+		var rolled_foil := str(_results[i].get("finish", "plain"))
+		# a foiled print carries one extra footer line, so the slot grows with it
+		var card_h := 326 + (17 if GameData.get_finish_rank(rolled_foil) > 0 else 0)
+		cw.size = Vector2(216, card_h)
+		cw.pivot_offset = Vector2(108, card_h * 0.5)
+		cw.setup_card(cdata, true, CrewManager.get_copies(cdata["id"]), false, false, rolled_foil)
 		slot_root.add_child(cw)
 
 		var tag_lbl := Label.new()
@@ -344,12 +347,20 @@ func reveal_card(idx: int) -> void:
 		back_btn.visible = false
 		face_card.visible = true
 		face_card.scale = Vector2(0.05, 1.10)
-		if bool(entry["is_new"]):
+		var frak := GameData.get_finish_rank(str(entry.get("finish", "plain")))
+		if bool(entry.get("finish_upgraded", false)):
+			# the rarest moment of a pack: the print itself got better
+			AudioManager.play_sfx("card_legendary", 0.02, 1.05)
+			tag_lbl.text = L.tr_ui("foil_upgraded", [L.foil_name(str(entry["finish"]))])
+			tag_lbl.add_theme_color_override("font_color", Color(0.62, 1.0, 0.90))
+		elif bool(entry["is_new"]):
 			tag_lbl.text = L.tr_ui("new_card_tag")
 			tag_lbl.add_theme_color_override("font_color", Color(0.32, 1.0, 0.66))
 		else:
 			tag_lbl.text = L.tr_ui("dup_card_tag", [int(entry["duplicate_credits"])])
 			tag_lbl.add_theme_color_override("font_color", Color(1.0, 0.84, 0.32))
+		if frak >= 3 and not bool(entry.get("finish_upgraded", false)):
+			tag_lbl.text += "  •  " + L.foil_name(str(entry["finish"])).to_upper()
 	)
 	var peak := 1.15 if r_tier >= 4 else 1.06
 	tw.tween_property(face_card, "scale", Vector2(peak, peak), 0.18 * fast).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)

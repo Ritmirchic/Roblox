@@ -12,6 +12,8 @@ var turn_rate: float = 0.0
 var target_node: Node3D = null
 var magnetic_homing: bool = false
 var magnetic_range: float = 0.0
+var lock_homing: bool = false
+var _ricochet_grace: float = 0.0
 var ignore_rid: RID = RID()
 var _lifetime: float = 4.0
 var _velocity: Vector3 = Vector3.FORWARD
@@ -38,7 +40,8 @@ func setup(
 	tgt: Node3D = null,
 	inherited_velocity: Vector3 = Vector3.ZERO,
 	is_magnetic: bool = false,
-	mag_range: float = 0.0
+	mag_range: float = 0.0,
+	seeks_lock_target: bool = false
 ) -> void:
 	from_player = is_player
 	weapon_type = wtype
@@ -49,6 +52,10 @@ func setup(
 	target_node = tgt
 	magnetic_homing = is_magnetic
 	magnetic_range = mag_range
+	# Fire-and-forget lock guidance: every LMB round converges on the marked target.
+	lock_homing = seeks_lock_target and is_player and tgt != null
+	if lock_homing and turn_rate <= 0.0:
+		turn_rate = 4.0
 	_start_xform = start_xform
 	_has_start_xform = true
 
@@ -149,8 +156,13 @@ func _physics_process(delta: float) -> void:
 		queue_free()
 		return
 
+	if _ricochet_grace > 0.0:
+		_ricochet_grace -= delta
+		global_position += _velocity * delta
+		return
+
 	# Dynamic enemy acquisition for Magnetic Homing Radar bullets (even if fired without manual lock!)
-	if magnetic_homing and from_player and magnetic_range > 0.0:
+	if magnetic_homing and not lock_homing and from_player and magnetic_range > 0.0:
 		if not is_instance_valid(target_node) or global_position.distance_to(target_node.global_position) > magnetic_range * 1.35:
 			target_node = _acquire_magnetic_enemy()
 
@@ -167,7 +179,7 @@ func _physics_process(delta: float) -> void:
 		if rem_d > 0.05 and cur_dir.length_squared() > 0.5:
 			var desired := to_tgt / rem_d
 			var eff_turn := turn_rate
-			if magnetic_homing:
+			if magnetic_homing or lock_homing:
 				# Speed-matched magnetic curvature + strong inverse-distance terminal attraction near hull
 				eff_turn = maxf(turn_rate, (speed / 20.0) * (turn_rate / 7.8))
 				eff_turn *= lerpf(2.6, 1.0, clampf(rem_d / 36.0, 0.0, 1.0))
@@ -196,6 +208,14 @@ func _physics_process(delta: float) -> void:
 	var hit := space_state.intersect_ray(query)
 	if not hit.is_empty():
 		var col: Object = hit["collider"]
+		if from_player and lock_homing and col is Asteroid3D:
+			# A locked round is not a mining tool: rock throws sparks and the round skips off,
+			# still hunting its target. Only the RMB beam can break meteoroids.
+			VFXFactory.spawn_explosion(get_parent(), hit["position"], Color(0.62, 0.94, 1.0), 0.28)
+			AudioManager.play_sfx("shield_hit", 0.04, 1.38)
+			_ricochet_grace = 0.16
+			global_position = hit["position"] + _velocity.normalized() * 1.1
+			return
 		if from_player and col is RigidBody3D and col.is_in_group("player_ship"):
 			global_position = next_pos
 			return
@@ -226,7 +246,8 @@ func _on_impact(hit_pos: Vector3, collider: Object) -> void:
 			if collider and collider.has_method("take_weapon_damage"):
 				collider.take_weapon_damage(damage)
 			elif collider is Asteroid3D:
-				collider.apply_mining_damage(damage * 0.45, 2, 1.0, 0.0, parent_scene.get_node_or_null("ChunksRoot") if parent_scene else null)
+				# hull guns cannot mine: meteoroids are RMB / mining-beam only
+				AudioManager.play_sfx("shield_hit", 0.03, 1.32)
 		else:
 			if collider and collider.has_method("receive_enemy_hit"):
 				var shape_idx: int = 0

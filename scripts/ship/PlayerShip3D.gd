@@ -61,6 +61,10 @@ var _mining_sec_accum: float = 0.0
 # Aimed point in world space updated by SpaceExpedition3D camera ray
 var aimed_world_point: Vector3 = Vector3(0, 0, -120)
 var locked_enemy: Node3D = null
+# Guidance authority (rad/s) per weapon class when a soft lock is on the target.
+const LOCK_HOMING_TURN: Dictionary = {
+	"kinetic": 4.6, "laser": 5.6, "plasma": 5.2, "railgun": 3.2, "rocket": 2.4, "missile": 3.4,
+}
 var firing_weapons: bool = false
 var firing_mining: bool = false
 var thrust_input: Vector3 = Vector3.ZERO # x=strafe, y=vertical, z=forward(+1)/reverse(-1)
@@ -259,7 +263,8 @@ func _physics_process(delta: float) -> void:
 		smat.set_shader_parameter("hit_flash", _shield_hit_flash)
 
 	# Nano-repair module active restoration (throttled by its power budget)
-	var rep_rate := float(stats.get("repair_rate", 0.0)) * power_factor("repair")
+	var rep_rate := float(stats.get("repair_rate", 0.0)) * power_factor("repair") \
+		* float(CrewManager.get_finish_perks().get("repair", 1.0))
 	if rep_rate > 0.0 and current_energy > 4.0:
 		var repaired_any := false
 		for uid in ShipGrid.placed_modules.keys():
@@ -303,6 +308,12 @@ func note_power_draw(sys_id: String, joules: float) -> void:
 	if joules <= 0.0:
 		return
 	_frame_draw[sys_id] = float(_frame_draw.get(sys_id, 0.0)) + joules
+
+
+func get_radar_range() -> float:
+	## Magnetic reach of the radar sweep, extended by holo / luminous foils.
+	var base := float(stats.get("radar_range", 140.0))
+	return base * float(CrewManager.get_finish_perks().get("radar", 1.0))
 
 
 func power_factor(sys_id: String) -> float:
@@ -756,6 +767,13 @@ func _process_weapons(delta: float) -> void:
 		var is_mag := mag_turn > 0.0 and mag_range > 0.0
 		var eff_turn := maxf(float(def.get("turn_rate", 0.0)), mag_turn) if is_mag else float(def.get("turn_rate", 0.0))
 		var tgt_node: Node3D = (sol["magnetic_target"] as Node3D) if is_mag else (locked_enemy if wtype == "missile" else null)
+		# Lock-directed fire: while a target is marked, every gun curves its rounds onto it.
+		var lock_homing := false
+		var lock_ship: EnemyShip3D = locked_enemy as EnemyShip3D
+		if is_instance_valid(lock_ship) and not lock_ship.is_dead() and lock_ship.hp > 0.0:
+			lock_homing = true
+			tgt_node = lock_ship
+			eff_turn = maxf(eff_turn, float(LOCK_HOMING_TURN.get(wtype, 3.8)))
 
 		var p := Projectile3D.new()
 		p.ignore_rid = get_rid()
@@ -772,7 +790,8 @@ func _process_weapons(delta: float) -> void:
 			tgt_node,
 			Vector3.ZERO,
 			is_mag,
-			mag_range
+			mag_range,
+			lock_homing
 		)
 
 		match wtype:
