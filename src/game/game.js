@@ -357,14 +357,14 @@ export class Game {
   setupFlashlight() {
     if (this.headless) return;
     if (this.flashlight) { this.scene.remove(this.flashlight); this.flashlight = null; }
-    const light = new THREE.SpotLight(0xfff0cf, 62, 34, 0.66, 0.55, 1.3);
+    const light = new THREE.SpotLight(0xfff0cf, 7.5, 34, 0.62, 0.72, 1.25);
     light.castShadow = false;
     this.scene.add(light);
     this.scene.add(light.target);
     this.flashlight = light;
     // a weak handheld lantern so unlit interiors never go fully black
     if (this.lantern) { this.scene.remove(this.lantern); this.lantern = null; }
-    const lantern = new THREE.PointLight(0xffc98a, 3.2, 11, 2);
+    const lantern = new THREE.PointLight(0xffc98a, 0.9, 9, 2);
     lantern.castShadow = false;
     this.scene.add(lantern);
     this.lantern = lantern;
@@ -1520,10 +1520,10 @@ export class Game {
     const dir = f.forward;
     this.flashlight.position.copy(eye);
     this.flashlight.target.position.copy(eye).addScaledVector(dir, 18);
-    if (this.lantern) this.lantern.position.copy(eye).addScaledVector(f.flatForward, 0.35).add(new THREE.Vector3(0, -0.25, 0));
+    if (this.lantern) this.lantern.position.copy(eye).addScaledVector(f.flatForward, 0.6).add(new THREE.Vector3(0, -0.35, 0));
     const on = f.flashlightOn && f.flashlightBattery > 0 && !f.dead;
     const flicker = f.flashlightBattery < 18 ? (0.6 + Math.random() * 0.4) : 1;
-    this.flashlight.intensity = on ? 62 * flicker : 0;
+    this.flashlight.intensity = on ? 7.5 * flicker : 0;
     if (f.flashlightOn && f.flashlightBattery <= 0) {
       this.notify('Flashlight dead', 'You need a battery cell.');
       f.flashlightOn = false;
