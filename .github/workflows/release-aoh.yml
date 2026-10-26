@@ -56,6 +56,12 @@ jobs:
           set -eux
           cd AshesOfHumanity
           mkdir -p dist/AshesOfHumanity/LICENSES
+          TPL_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}"
+          # Point the preset at explicit template paths (headless default-dir
+          # lookup proved unreliable on the runner).
+          sed -i "s|custom_template/debug=\"\"|custom_template/debug=\"${TPL_DIR}/windows_debug_x86_64.exe\"|" export_presets.cfg
+          sed -i "s|custom_template/release=\"\"|custom_template/release=\"${TPL_DIR}/windows_release_x86_64.exe\"|" export_presets.cfg
+          grep custom_template export_presets.cfg
           "$HOME/godot/Godot_v${GODOT_VERSION}_linux.x86_64" \
             --headless --verbose --export-release "Windows Desktop" 2>&1 | tee ../logs/04-export.log
           test -s dist/AshesOfHumanity/AshesOfHumanity.exe
