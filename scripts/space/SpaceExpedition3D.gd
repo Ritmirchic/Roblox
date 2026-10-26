@@ -941,10 +941,10 @@ func _draw_hud_world_overlays() -> void:
 				var ep: Vector2 = _cam.unproject_position(en3d.global_position)
 				var is_locked := (en3d == player_ship.locked_enemy)
 				var hp_pct := clampf(en3d.hp / maxf(1.0, en3d.max_hp), 0.0, 1.0)
+				var bracket_half := 26.0
 				if is_locked:
 					# green lock: every LMB round on this screen converges here
 					var gcol := Color(0.34, 1.0, 0.58, 0.96)
-					var bracket_half := 26.0
 					var arm_len := 9.0
 					for corner in range(4):
 						var sx := -1.0 if (corner == 0 or corner == 2) else 1.0
