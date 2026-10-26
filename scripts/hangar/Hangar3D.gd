@@ -386,7 +386,8 @@ func _build_hangar_ui() -> void:
 	_top_bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
 	_top_bar.offset_bottom = 56
 	_top_bar.mouse_filter = Control.MOUSE_FILTER_STOP
-	_top_bar.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(Color(0.022, 0.042, 0.095, 0.95), Color(0.20, 0.72, 1.0, 0.80), 0, 2, 10))
+	_top_bar.add_theme_stylebox_override("panel", ThemeHelper.make_hud_plate_style(
+		Color(0.022, 0.042, 0.095, 0.95), Color(0.20, 0.72, 1.0, 0.80)))
 	_ui_root.add_child(_top_bar)
 
 	var thb := HBoxContainer.new()
@@ -456,6 +457,10 @@ func _build_hangar_ui() -> void:
 	_left_panel.offset_top = 66
 	_left_panel.offset_bottom = -86
 	_left_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	# Anchored chrome: tight kit plate, so the chamfered frame never inflates the
+	# panel's minimum size into the docks beside it.
+	_left_panel.add_theme_stylebox_override("panel", ThemeHelper.make_hud_plate_style(
+		Color(0.020, 0.040, 0.092, 0.94), Color(0.20, 0.70, 0.98, 0.72)))
 	_ui_root.add_child(_left_panel)
 
 	var lvb := VBoxContainer.new()
@@ -614,6 +619,8 @@ func _build_hangar_ui() -> void:
 	_right_panel.offset_top = 66
 	_right_panel.offset_bottom = -86
 	_right_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	_right_panel.add_theme_stylebox_override("panel", ThemeHelper.make_hud_plate_style(
+		Color(0.020, 0.040, 0.092, 0.94), Color(0.20, 0.70, 0.98, 0.72)))
 	_ui_root.add_child(_right_panel)
 
 	var rvb := VBoxContainer.new()
@@ -663,7 +670,8 @@ func _build_hangar_ui() -> void:
 	_status_box.offset_top = -126
 	_status_box.offset_bottom = -88
 	_status_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_status_box.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(Color(0.02, 0.045, 0.105, 0.90), Color(0.22, 0.72, 1.0, 0.65), 10, 12, 5))
+	_status_box.add_theme_stylebox_override("panel", ThemeHelper.make_hud_pill_style(
+		Color(0.02, 0.045, 0.105, 0.90), Color(0.22, 0.72, 1.0, 0.65)))
 	_ui_root.add_child(_status_box)
 
 	_status_banner = Label.new()
@@ -686,7 +694,8 @@ func _build_hangar_ui() -> void:
 	_bottom_dock.offset_top = -72
 	_bottom_dock.offset_bottom = -8
 	_bottom_dock.mouse_filter = Control.MOUSE_FILTER_STOP
-	_bottom_dock.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(Color(0.022, 0.044, 0.10, 0.95), Color(0.22, 0.72, 1.0, 0.82), 13, 2, 8))
+	_bottom_dock.add_theme_stylebox_override("panel", ThemeHelper.make_hud_plate_style(
+		Color(0.022, 0.044, 0.10, 0.95), Color(0.22, 0.72, 1.0, 0.82)))
 	_ui_root.add_child(_bottom_dock)
 
 	var dock_hb := HBoxContainer.new()

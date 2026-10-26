@@ -637,3 +637,31 @@ def test_string_key_registries_have_no_typos():
                 missing["resources"].append("%s: market %s" % (gd.name, m.group(1)))
     dead = {k: sorted(set(v)) for k, v in missing.items() if v}
     assert not dead, "Unknown registry keys: %s" % dead
+
+
+def test_every_referenced_skin_key_has_a_texture():
+    """A skin key without a matching PNG silently falls back to flat chrome, so
+    the family names used in code must resolve to real kit textures."""
+    ui = ROOT / "assets" / "ui"
+    th = (ROOT / "scripts/autoload/ThemeHelper.gd").read_text(encoding="utf-8")
+    margin_src = th.split("const SKIN_MARGIN := {")[1].split("\n}")[0]
+    margin_keys = re.findall(r'"([a-z_0-9]+)":\s*\d+', margin_src)
+    assert len(margin_keys) >= 20
+    orphan = [k for k in margin_keys if not (ui / ("%s.png" % k)).is_file()]
+    assert not orphan, "SKIN_MARGIN entries without artwork: %s" % orphan
+
+    used = set()
+    for gd in sorted(list(ROOT.glob("scripts/**/*.gd")) + list(ROOT.glob("tests/*.gd"))):
+        txt = gd.read_text(encoding="utf-8", errors="replace")
+        for m in re.finditer(r'(?:make_skin_style|make_skin_overlay|skin_texture)\(\s*"([a-z_0-9]+)"', txt):
+            used.add(m.group(1))
+        for m in re.finditer(r'"(btn|tab|slider|bar|check)_(normal|hover|pressed|disabled|on|off|back|fill|grab)"', txt):
+            used.add(m.group(0).strip('"'))
+    assert used, "no skin keys referenced at all?"
+    missing = sorted(k for k in used if not (ui / ("%s.png" % k)).is_file())
+    assert not missing, "skin keys without a texture file (would render flat): %s" % missing
+    assert "main_theme.set_icon(\"checked\", cls5, ck_on)" in th, "checkbox icons not wired"
+    # every state of a family must exist, or hover/pressed would pop back to flat
+    for fam in ("btn", "tab", "slider", "bar"):
+        for f in ui.glob("%s_*.png" % fam):
+            assert f.stem in used or f.stem in margin_keys, "unused kit texture %s" % f.name

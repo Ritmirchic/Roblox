@@ -208,7 +208,7 @@ func _build_hud() -> void:
 	_counter_lbl.clip_text = true
 	_counter_lbl.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_counter_lbl.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	_counter_lbl.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(
+	_counter_lbl.add_theme_stylebox_override("panel", ThemeHelper.make_hud_pill_style(
 		Color(0.03, 0.06, 0.13, 0.9), Color(0.24, 0.78, 1.0, 0.7), 10, 12, 6))
 	if ThemeHelper.font_mono:
 		_counter_lbl.add_theme_font_override("font", ThemeHelper.font_mono)

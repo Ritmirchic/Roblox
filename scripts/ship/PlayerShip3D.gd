@@ -17,6 +17,11 @@ var engine_heat: float = 0.0
 # sheds mining and weapons first while engines keep enough to fly home.
 var _sys_load: Dictionary = {"mining": 0.0, "weapons": 0.0, "engines": 0.0, "repair": 0.0}
 var _frame_draw: Dictionary = {}
+# Sustained draw is what a budget is about, so energy is integrated over a
+# window and averaged: one loud shot must not look like a permanent overload.
+const POWER_WINDOW: float = 0.5
+var _win_draw: Dictionary = {"mining": 0.0, "weapons": 0.0, "engines": 0.0, "repair": 0.0}
+var _win_t: float = 0.0
 var power_brownout: bool = false
 var power_output_load: float = 0.0
 var power_throttle_events: int = 0
@@ -323,14 +328,20 @@ func power_shed(sys_id: String) -> bool:
 func _update_power_governor(delta: float) -> void:
 	var cap: float = maxf(20.0, float(stats.get("energy_cap", 120.0)))
 	var regen: float = maxf(12.0, float(stats.get("energy_regen", 25.0)))
-	var alpha: float = clampf(delta * 6.5, 0.02, 1.0)
-	var total: float = 0.0
-	for k in ShipGrid.POWER_SYSTEMS:
-		var inst: float = float(_frame_draw.get(k, 0.0)) / maxf(0.0005, delta)
-		_sys_load[k] = lerpf(float(_sys_load.get(k, 0.0)), inst, alpha)
-		total += float(_sys_load[k])
+	for k in _frame_draw.keys():
+		_win_draw[k] = float(_win_draw.get(k, 0.0)) + float(_frame_draw[k])
 	_frame_draw.clear()
-	power_output_load = clampf(total / regen, 0.0, 3.0)
+	_win_t += delta
+	if _win_t >= POWER_WINDOW:
+		var total: float = 0.0
+		var inv: float = 1.0 / maxf(0.05, _win_t)
+		for k in ShipGrid.POWER_SYSTEMS:
+			var sustained: float = float(_win_draw.get(k, 0.0)) * inv
+			_sys_load[k] = lerpf(float(_sys_load.get(k, 0.0)), sustained, 0.7)
+			total += float(_sys_load[k])
+			_win_draw[k] = 0.0
+		_win_t = 0.0
+		power_output_load = clampf(total / regen, 0.0, 3.0)
 	power_brownout = (current_energy / cap) < 0.12
 	if power_brownout and not _was_brownout:
 		power_throttle_events += 1

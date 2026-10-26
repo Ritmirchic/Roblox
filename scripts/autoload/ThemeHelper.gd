@@ -57,9 +57,13 @@ const SKIN_DIR := "res://assets/ui/"
 ## 9-slice corner size of every kit texture in px; also used as the base content
 ## padding so no text ever lands on a chamfered corner.
 const SKIN_MARGIN := {
-	"panel_main": 30, "panel_inset": 16, "header_bar": 16, "btn": 14, "tab": 14,
-	"slider": 7, "slider_grab": 12, "check": 10, "bar": 6, "pill": 11,
-	"card_frame": 30, "keycap": 13, "divider": 2, "backdrop": 34,
+	"panel_main": 30, "panel_inset": 16, "header_bar": 16,
+	"btn_normal": 14, "btn_hover": 14, "btn_pressed": 14, "btn_disabled": 14,
+	"tab_on": 14, "tab_off": 14,
+	"slider_back": 7, "slider_fill": 7, "slider_grab": 12,
+	"check_on": 10, "check_off": 10,
+	"bar_back": 6, "bar_fill": 6,
+	"pill": 11, "card_frame": 30, "keycap": 13, "divider": 2, "backdrop": 34,
 }
 var _skin_tex: Dictionary = {}
 var _skin_sb: Dictionary = {}
@@ -132,7 +136,7 @@ func make_divider(sep_color: Color = Color(0.22, 0.72, 1.0, 0.40)) -> Control:
 ## HUD gauge: the kit's chevron bar tinted to the gauge colour (hull/shield/...).
 func make_hud_bar_style(col: Color, for_fill: bool = true) -> StyleBox:
 	if skin_available():
-		var key := "bar"
+		var key := "bar_fill" if for_fill else "bar_back"
 		var tint := Color(1, 1, 1, 1.0) if for_fill else Color(0.42, 0.50, 0.62, 0.85)
 		if for_fill:
 			tint = Color(1, 1, 1, 1.0).lerp(col.lightened(0.30), 0.55)
@@ -174,6 +178,31 @@ func make_header_rail(accent: Color = COL_BORDER, pad: int = 8) -> PanelContaine
 	return box
 
 
+## Same kit artwork, minimal padding: for HUD chrome whose anchors are fixed,
+## so adding a plate never grows the panel into the one beside it.
+func make_hud_plate_style(bg: Color = COL_BG_DARK, border: Color = COL_BORDER) -> StyleBox:
+	var tight := _slim_skin("panel_inset", 0, _skin_tint(bg, border), 3.0, 0.30)
+	if tight != null:
+		return tight
+	var fb := StyleBoxFlat.new()
+	fb.bg_color = bg
+	fb.border_color = border
+	fb.set_border_width_all(2)
+	fb.set_corner_radius_all(11)
+	fb.content_margin_left = 6.0
+	fb.content_margin_right = 6.0
+	fb.content_margin_top = 3.0
+	fb.content_margin_bottom = 3.0
+	return fb
+
+
+func make_hud_pill_style(bg: Color, border: Color) -> StyleBox:
+	var tight := _slim_skin("pill", 0, _skin_tint(bg, border), 1.0, 0.55)
+	if tight != null:
+		return tight
+	return make_pill_style(bg, border, 10, 12, 5)
+
+
 ## Big atmospheric plate for modal backgrounds (kit "backdrop" texture).
 func make_modal_style(pad: int = 22, dark: float = 0.72) -> StyleBox:
 	if skin_available():
@@ -186,14 +215,16 @@ func make_modal_style(pad: int = 22, dark: float = 0.72) -> StyleBox:
 ## Tab-shaped styling for the station switcher strip.
 func style_nav_tab(btn: Button, selected: bool) -> void:
 	if skin_available():
-		var key := "tab"
+		var key := "tab_on" if selected else "tab_off"
 		var tint := Color(1, 1, 1, 1.0) if selected else Color(0.66, 0.76, 0.90, 0.92)
-		var sb := make_skin_style(key, 4, tint)
+		var sb := _slim_skin(key, 4, tint, 3.0)
+		var sb_hi := _slim_skin(key, 4, Color(0.90, 0.96, 1.0, 1.0), 3.0)
+		var sb_max := _slim_skin(key, 4, Color(1, 1, 1, 1.0), 3.0)
 		if sb != null:
 			btn.add_theme_stylebox_override("normal", sb)
-			btn.add_theme_stylebox_override("hover", make_skin_style(key, 4, Color(0.90, 0.96, 1.0, 1.0)))
-			btn.add_theme_stylebox_override("pressed", make_skin_style(key, 4, Color(1, 1, 1, 1.0)))
-			btn.add_theme_stylebox_override("focus", make_skin_style(key, 4, Color(1, 1, 1, 1.0)))
+			btn.add_theme_stylebox_override("hover", sb_hi if sb_hi != null else sb)
+			btn.add_theme_stylebox_override("pressed", sb_max if sb_max != null else sb)
+			btn.add_theme_stylebox_override("focus", sb_max if sb_max != null else sb)
 			btn.add_theme_stylebox_override("selected", sb)
 	btn.add_theme_color_override("font_color", Color(1, 1, 1) if selected else COL_MUTED)
 	btn.add_theme_color_override("font_hover_color", Color.WHITE)
@@ -333,52 +364,84 @@ func _has_skin() -> bool:
 func _apply_skin_kit() -> void:
 	if not skin_available():
 		return
-	var panel := make_skin_style("panel_main", 16)
+	# Document panels keep the full chamfer padding so text never sits on a cut
+	# corner; interactive rows below use slim copies so adding the skin can never
+	# grow a control into its neighbour.
+	var panel := make_skin_style("panel_main", 14)
 	if panel != null:
 		main_theme.set_stylebox("panel", "PanelContainer", panel)
-		main_theme.set_stylebox("panel", "Panel", make_skin_style("panel_inset", 10))
-	var b_norm := make_skin_style("btn", 8, Color(0.80, 0.88, 1.00, 0.96))
-	var b_hover := make_skin_style("btn", 8, Color(1.00, 1.00, 1.00, 1.00))
-	var b_press := make_skin_style("btn", 8, Color(1.00, 0.92, 0.72, 1.00))
-	var b_dis := make_skin_style("btn", 8, Color(0.42, 0.48, 0.56, 0.70))
-	for cls in ["Button", "MenuButton"]:
-		main_theme.set_stylebox("normal", cls, b_norm)
-		main_theme.set_stylebox("hover", cls, b_hover)
-		main_theme.set_stylebox("pressed", cls, b_press)
-		main_theme.set_stylebox("focus", cls, b_hover)
-		main_theme.set_stylebox("disabled", cls, b_dis)
-	var opt := make_skin_style("btn", 6, Color(0.80, 0.88, 1.00, 0.96))
-	for cls2 in ["OptionButton", "CheckButton"]:
-		main_theme.set_stylebox("normal", cls2, opt)
-		main_theme.set_stylebox("hover", cls2, b_hover)
-		main_theme.set_stylebox("pressed", cls2, b_press)
-		main_theme.set_stylebox("focus", cls2, b_hover)
-		main_theme.set_stylebox("disabled", cls2, b_dis)
-	var tab_on := make_skin_style("tab", 6, Color(1.00, 1.00, 1.00, 1.0))
-	var tab_off := make_skin_style("tab", 6, Color(0.62, 0.72, 0.86, 0.92))
-	for cls3 in ["TabBar", "TabContainer"]:
-		main_theme.set_stylebox("tab_selected", cls3, tab_on)
-		main_theme.set_stylebox("tab_hovered", cls3, tab_on)
-		main_theme.set_stylebox("tab_unselected", cls3, tab_off)
-		main_theme.set_stylebox("panel", cls3, make_skin_style("panel_inset", 12))
-		main_theme.set_color("font_selected_color", cls3, Color(1, 1, 1))
-		main_theme.set_color("font_color", cls3, COL_MUTED)
-	var sl_back := make_skin_style("slider", 2, Color(0.72, 0.84, 1.0, 1.0))
-	var sl_fill := make_skin_style("slider", 2, Color(1.0, 1.0, 1.0, 1.0))
-	var sl_grab := make_skin_style("slider_grab", -8, Color(1, 1, 1, 1.0))
-	for cls4 in ["HSlider", "VSlider"]:
-		main_theme.set_stylebox("slider", cls4, sl_back)
-		main_theme.set_stylebox("grabber_area", cls4, sl_fill)
-		main_theme.set_stylebox("grabber_area_highlight", cls4, sl_fill)
-		if sl_grab != null:
-			main_theme.set_stylebox("grabber", cls4, sl_grab)
-			main_theme.set_stylebox("grabber_highlight", cls4, sl_grab)
-	main_theme.set_stylebox("background", "ProgressBar", make_skin_style("bar", 0, Color(0.60, 0.74, 0.92, 1.0)))
-	main_theme.set_stylebox("fill", "ProgressBar", make_skin_style("bar", 0, Color(1, 1, 1, 1.0)))
-	main_theme.set_stylebox("normal", "LineEdit", make_skin_style("panel_inset", 2, Color(0.70, 0.80, 0.96, 0.98)))
-	main_theme.set_stylebox("focus", "LineEdit", make_skin_style("panel_inset", 2, Color(1, 1, 1, 1.0)))
-	main_theme.set_stylebox("panel", "PopupMenu", make_skin_style("panel_inset", 6))
-	main_theme.set_stylebox("panel", "TooltipPanel", make_skin_style("panel_inset", 6))
+		main_theme.set_stylebox("panel", "Panel", make_skin_style("panel_inset", 8))
+
+	var b_norm := _slim_skin("btn_normal", 4, Color(0.80, 0.88, 1.00, 0.96), 3.0)
+	var b_hover := _slim_skin("btn_hover", 4, Color(1.00, 1.00, 1.00, 1.00), 3.0)
+	var b_press := _slim_skin("btn_pressed", 4, Color(1.00, 0.92, 0.72, 1.00), 3.0)
+	var b_dis := _slim_skin("btn_disabled", 4, Color(0.42, 0.48, 0.56, 0.70), 3.0)
+	if b_norm != null:
+		for cls in ["Button", "MenuButton"]:
+			main_theme.set_stylebox("normal", cls, b_norm)
+			main_theme.set_stylebox("hover", cls, b_hover if b_hover != null else b_norm)
+			main_theme.set_stylebox("pressed", cls, b_press if b_press != null else b_norm)
+			main_theme.set_stylebox("focus", cls, b_hover if b_hover != null else b_norm)
+			main_theme.set_stylebox("disabled", cls, b_dis if b_dis != null else b_norm)
+	var opt := _slim_skin("btn_normal", 3, Color(0.80, 0.88, 1.00, 0.96), 2.0)
+	var opt_hi := _slim_skin("btn_hover", 3, Color(1.00, 1.00, 1.00, 1.00), 2.0)
+	var opt_pr := _slim_skin("btn_pressed", 3, Color(1.00, 0.92, 0.72, 1.00), 2.0)
+	if opt != null:
+		for cls2 in ["OptionButton", "CheckButton"]:
+			main_theme.set_stylebox("normal", cls2, opt)
+			main_theme.set_stylebox("hover", cls2, opt_hi)
+			main_theme.set_stylebox("pressed", cls2, opt_pr)
+			main_theme.set_stylebox("focus", cls2, opt_hi)
+			if b_dis != null:
+				main_theme.set_stylebox("disabled", cls2, b_dis)
+
+	var tab_on := _slim_skin("tab_on", 3, Color(1.00, 1.00, 1.00, 1.0), 2.0)
+	var tab_off := _slim_skin("tab_off", 3, Color(0.62, 0.72, 0.86, 0.92), 2.0)
+	if tab_on != null and tab_off != null:
+		for cls3 in ["TabBar", "TabContainer"]:
+			main_theme.set_stylebox("tab_selected", cls3, tab_on)
+			main_theme.set_stylebox("tab_hovered", cls3, tab_on)
+			main_theme.set_stylebox("tab_unselected", cls3, tab_off)
+			main_theme.set_stylebox("panel", cls3, make_skin_style("panel_inset", 10))
+			main_theme.set_color("font_selected_color", cls3, Color(1, 1, 1))
+			main_theme.set_color("font_color", cls3, COL_MUTED)
+
+	var sl_back := _slim_skin("slider_back", 0, Color(0.72, 0.84, 1.0, 1.0), 0.0, 0.0)
+	var sl_fill := _slim_skin("slider_fill", 0, Color(1.0, 1.0, 1.0, 1.0), 0.0, 0.0)
+	var sl_grab := _slim_skin("slider_grab", 0, Color(1, 1, 1, 1.0), 0.0, 0.0)
+	if sl_back != null and sl_fill != null:
+		for cls4 in ["HSlider", "VSlider"]:
+			main_theme.set_stylebox("slider", cls4, sl_back)
+			main_theme.set_stylebox("grabber_area", cls4, sl_fill)
+			main_theme.set_stylebox("grabber_area_highlight", cls4, sl_fill)
+			if sl_grab != null:
+				main_theme.set_stylebox("grabber", cls4, sl_grab)
+				main_theme.set_stylebox("grabber_highlight", cls4, sl_grab)
+
+	var bar_bg := _slim_skin("bar_back", 0, Color(0.60, 0.74, 0.92, 1.0), 0.0, 0.0)
+	var bar_fg := _slim_skin("bar_fill", 0, Color(1.0, 1.0, 1.0, 1.0), 0.0, 0.0)
+	if bar_bg != null and bar_fg != null:
+		main_theme.set_stylebox("background", "ProgressBar", bar_bg)
+		main_theme.set_stylebox("fill", "ProgressBar", bar_fg)
+
+	# Checkbox marks are icons, not styleboxes in Godot 4.
+	var ck_on := skin_texture("check_on")
+	var ck_off := skin_texture("check_off")
+	if ck_on != null and ck_off != null:
+		for cls5 in ["CheckButton", "CheckBox"]:
+			main_theme.set_icon("checked", cls5, ck_on)
+			main_theme.set_icon("unchecked", cls5, ck_off)
+
+	var le_sb := _slim_skin("panel_inset", 2, Color(0.70, 0.80, 0.96, 0.98), 1.0, 0.45)
+	if le_sb != null:
+		main_theme.set_stylebox("normal", "LineEdit", le_sb)
+		main_theme.set_stylebox("focus", "LineEdit",
+			_slim_skin("panel_inset", 2, Color(1, 1, 1, 1.0), 1.0, 0.45))
+	var pop_sb := _slim_skin("panel_inset", 3, Color(0.86, 0.92, 1.0, 1.0), 2.0, 0.5)
+	if pop_sb != null:
+		main_theme.set_stylebox("panel", "PopupMenu", pop_sb)
+		main_theme.set_stylebox("panel", "TooltipPanel", pop_sb)
+
 
 var _plaque_cache: Dictionary = {}
 
@@ -428,20 +491,40 @@ func fill_full_rect(ctrl: Control, margin_l: float = 0.0, margin_t: float = 0.0,
 	ctrl.offset_right = -margin_r
 	ctrl.offset_bottom = -margin_b
 
-## Button plate: the kit's chamfered button art, hue-pushed toward `accent`.
-func make_button_style(accent: Color, bright: bool = false) -> StyleBox:
+## Copy of a cached kit plate with explicit content margins. The cache must never
+## be mutated in place (other controls share it) and layout-critical chrome needs
+## tighter padding than a document panel, otherwise anchored panels grow into
+## their neighbours.
+func _slim_skin(key: String, pad: int, tint: Color, v_margin: float, h_scale: float = 0.62) -> StyleBoxTexture:
+	var src := make_skin_style(key, pad, tint)
+	if src == null:
+		return null
+	var out := src.duplicate() as StyleBoxTexture
+	if out == null:
+		return null
+	var m: float = float(SKIN_MARGIN.get(key, 12))
+	out.content_margin_left = m * h_scale + float(pad)
+	out.content_margin_right = m * h_scale + float(pad)
+	out.content_margin_top = v_margin + float(pad)
+	out.content_margin_bottom = v_margin + float(pad)
+	return out
+
+
+## Button plate: the kit's chamfered button art for one interaction state,
+## hue-pushed toward `accent`.
+func make_button_style(accent: Color, bright: bool = false, state: String = "normal") -> StyleBox:
 	if skin_available():
 		var base := Color(1, 1, 1, 1.0) if bright else Color(0.84, 0.90, 0.99, 0.96)
 		var tint := base.lerp(Color(1, 1, 1).lerp(accent.lightened(0.22), 0.55), 0.55)
-		var s := make_skin_style("btn", 6, tint)
+		var s := _slim_skin("btn_" + state, 4, tint, 3.0)
 		if s != null:
 			return s
 	return make_panel_style(accent.darkened(0.62 if bright else 0.52), accent.lightened(0.18), 9, 2, 12)
 
 func style_accent_button(btn: Button, accent: Color) -> void:
-	var n := make_button_style(accent.darkened(0.34))
-	var h := make_button_style(accent.lightened(0.16), true)
-	var p := make_button_style(accent.lightened(0.42), true)
+	var n := make_button_style(accent.darkened(0.34), false, "normal")
+	var h := make_button_style(accent.lightened(0.16), true, "hover")
+	var p := make_button_style(accent.lightened(0.42), true, "pressed")
 	btn.add_theme_stylebox_override("normal", n)
 	btn.add_theme_stylebox_override("hover", h)
 	btn.add_theme_stylebox_override("focus", h)

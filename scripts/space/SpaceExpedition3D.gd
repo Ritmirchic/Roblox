@@ -370,7 +370,8 @@ func _build_expedition_hud() -> void:
 	_min_task_pill.offset_top = 12
 	_min_task_pill.offset_bottom = 46
 	_min_task_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_min_task_pill.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(Color(0.02, 0.045, 0.105, 0.88), Color(0.22, 0.75, 1.0, 0.58), 10, 12, 5))
+	_min_task_pill.add_theme_stylebox_override("panel", ThemeHelper.make_hud_pill_style(
+		Color(0.02, 0.045, 0.105, 0.88), Color(0.22, 0.75, 1.0, 0.58)))
 	_hud_root.add_child(_min_task_pill)
 
 	_min_ach_lbl = Label.new()
@@ -485,7 +486,8 @@ func _build_expedition_hud() -> void:
 	_hint_pill.offset_top = -42
 	_hint_pill.offset_bottom = -10
 	_hint_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_hint_pill.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(Color(0.015, 0.035, 0.085, 0.84), Color(0.20, 0.62, 0.90, 0.45), 9, 14, 4))
+	_hint_pill.add_theme_stylebox_override("panel", ThemeHelper.make_hud_pill_style(
+		Color(0.015, 0.035, 0.085, 0.84), Color(0.20, 0.62, 0.90, 0.45)))
 	_hud_root.add_child(_hint_pill)
 
 	_hint_lbl = Label.new()
