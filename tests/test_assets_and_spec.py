@@ -266,10 +266,34 @@ def test_every_tr_ui_key_exists_in_all_ten_languages():
 # parser accepts them, so they must be banned statically or they only explode
 # inside the real engine (as Control.SIDE_* and Color(Color, float) did).
 GODOT4_BAD_SYMBOLS = [
+    "Color.ONE", "Color.ZERO", "Color.BLACK_TRANSPARENT",
     "Control.SIDE_LEFT", "Control.SIDE_TOP", "Control.SIDE_RIGHT", "Control.SIDE_BOTTOM",
     "set_content_margin_side", "ThemeType", "StyleBoxTexture.TEXTURE_MARGIN",
     "VP_RENDER_TARGET", "MainLoop.", "GDScript.NATIVE",
 ]
+
+
+GODOT4_COLOR_CONSTANTS = {
+    "WHITE", "BLACK", "TRANSPARENT", "RED", "GREEN", "BLUE", "CYAN", "MAGENTA", "YELLOW",
+    "ORANGE", "PURPLE", "GRAY", "GREY", "SILVER", "GOLD", "NAVY", "TEAL", "AQUA", "FUCHSIA",
+    "LIME", "MAROON", "OLIVE", "PINK", "SALMON", "TOMATO", "SKYBLUE", "ROYALBLUE", "SNOW",
+    "SEA_GREEN", "SLATE_GRAY", "STEEL_BLUE", "CORAL", "CRIMSON", "DARK_RED", "DODGER_BLUE",
+}
+
+
+def test_color_static_constants_exist():
+    """Godot 4 Color has no Color.ONE/Color.ZERO - typos there are parse errors
+    that kill every autoload, so only known constants may be referenced."""
+    bad = []
+    for gd in sorted(list(ROOT.glob("scripts/**/*.gd")) + list(ROOT.glob("tests/*.gd"))):
+        txt = gd.read_text(encoding="utf-8", errors="replace")
+        for m in re.finditer(r"Color\.([A-Z][A-Z_0-9]+)", txt):
+            name = m.group(1)
+            if name.startswith("HEX_"):
+                continue
+            if name not in GODOT4_COLOR_CONSTANTS:
+                bad.append("%s: Color.%s" % (gd.name, name))
+    assert not bad, "Non-existent Color constants: %s" % sorted(set(bad))
 
 
 def test_no_nonexistent_godot4_identifiers():

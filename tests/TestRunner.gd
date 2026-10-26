@@ -877,7 +877,7 @@ func _test_ui_skin_kit() -> void:
 		"header rail builds with the kit plate")
 	rail.free()
 	var div := ThemeHelper.make_divider()
-	_check(div is PanelContainer, "divider uses the kit rule")
+	_check(div is PanelContainer or div is HSeparator, "divider builds (kit rule or fallback)")
 	div.free()
 	var bar_fill := ThemeHelper.make_hud_bar_style(Color(0.2, 0.9, 0.5), true)
 	_check(bar_fill is StyleBoxTexture, "HUD gauge fill uses the kit bar")

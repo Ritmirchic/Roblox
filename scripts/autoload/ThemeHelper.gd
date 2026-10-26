@@ -80,7 +80,7 @@ func skin_available() -> bool:
 ## Chamfered plate style for the given kit texture. `pad` is extra inner padding on
 ## top of the corner margin; `tint` multiplies the artwork so rarity accents still
 ## drive the colour of a panel.
-func make_skin_style(key: String, pad: int = 10, tint: Color = Color.ONE) -> StyleBoxTexture:
+func make_skin_style(key: String, pad: int = 10, tint: Color = Color.WHITE) -> StyleBoxTexture:
 	var cache_key := "%s|%d|%s" % [key, pad, tint.to_html(true)]
 	if _skin_sb.has(cache_key):
 		return _skin_sb[cache_key]
@@ -138,9 +138,12 @@ func make_hud_bar_style(col: Color, for_fill: bool = true) -> StyleBox:
 			tint = Color(1, 1, 1, 1.0).lerp(col.lightened(0.30), 0.55)
 		var sb := make_skin_style(key, 0, tint)
 		if sb != null:
-			sb.content_margin_top = 0.0
-			sb.content_margin_bottom = 0.0
-			return sb
+			# Never mutate the cached plate: other gauges share the same artwork
+			# key and would inherit these margins.
+			var loose := sb.duplicate() as StyleBoxTexture
+			loose.content_margin_top = 0.0
+			loose.content_margin_bottom = 0.0
+			return loose
 	if for_fill:
 		var f := StyleBoxFlat.new()
 		f.bg_color = col
@@ -236,9 +239,11 @@ func make_pill_style(bg: Color, border: Color, corner: int = 9, pad_x: int = 12,
 	if skin_available() and pad_x >= 10 and pad_y >= 4:
 		var skin_pill := make_skin_style("pill", maxi(2, pad_y - 4), _skin_tint(bg, border))
 		if skin_pill != null:
-			skin_pill.content_margin_left = float(SKIN_MARGIN["pill"]) + float(pad_x)
-			skin_pill.content_margin_right = float(SKIN_MARGIN["pill"]) + float(maxi(4, pad_x - 8))
-			return skin_pill
+			# The cache key does not carry pad_x, so copy before re-padding.
+			var pill := skin_pill.duplicate() as StyleBoxTexture
+			pill.content_margin_left = float(SKIN_MARGIN["pill"]) + float(pad_x)
+			pill.content_margin_right = float(SKIN_MARGIN["pill"]) + float(maxi(4, pad_x - 8))
+			return pill
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
 	sb.border_color = border
