@@ -1,0 +1,9 @@
+# Godot
+AshesOfHumanity/.godot/
+AshesOfHumanity/export/
+*.tmp
+# Python
+__pycache__/
+*.pyc
+# OS
+.DS_Store
