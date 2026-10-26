@@ -29,6 +29,7 @@ func _ready() -> void:
 	await _test_multilingual_localization_and_gui_non_overlap()
 	_test_expanded_settings_and_hall()
 	_test_ui_skin_kit()
+	_test_reactor_governor_and_market()
 	await _test_achievement_hall3d()
 
 	print("=== TEST SUMMARY: %d PASSED, %d FAILED ===" % [_passed, _failed])
@@ -884,6 +885,121 @@ func _test_ui_skin_kit() -> void:
 	_check(frame != null, "card frame overlay builds")
 	if frame != null:
 		frame.free()
+
+
+func _test_reactor_governor_and_market() -> void:
+	# 14. v2.2.0 gameplay logic: dynamic sector market + reactor load governor.
+	var d: int = GameData.market_day()
+	_check(d > 20000, "market day counts UTC epochs since 1970 (%d)" % d)
+	var v1: float = GameData.market_index("iron", "sector_1", d)
+	var v2: float = GameData.market_index("iron", "sector_1", d)
+	_check(is_equal_approx(v1, v2), "price index is deterministic for (mineral, sector, day)")
+
+	var lo: float = 99.0
+	var hi: float = -99.0
+	var moved: bool = false
+	for rid in GameData.RESOURCES.keys():
+		for si in range(GameData.sectors.size()):
+			var sid: String = str(GameData.sectors[si]["id"])
+			for off in range(-40, 41, 7):
+				var v: float = GameData.market_index(str(rid), sid, d + off)
+				lo = minf(lo, v)
+				hi = maxf(hi, v)
+				if absf(v - 1.0) > 0.03:
+					moved = true
+	_check(lo >= GameData.MARKET_MIN_INDEX - 0.0001, "price index never drops below its floor")
+	_check(hi <= GameData.MARKET_MAX_INDEX + 0.0001, "price index never exceeds its ceiling")
+	_check(moved, "the market actually moves instead of sitting at 1.00")
+	var uniq: Dictionary = {}
+	for sd in GameData.sectors:
+		uniq[snappedf(GameData.market_index("iron", str(sd["id"]), d), 0.0001)] = true
+	_check(uniq.size() >= 2, "sectors do not all quote the same price")
+	_check(GameData.market_quotes("sector_1", d).size() == GameData.RESOURCES.size(),
+		"market board quotes every mineral")
+	_check(GameData.market_price("iron", "sector_1", d) > 0, "quoted price is positive")
+
+	ShipGrid.cargo["iron"] = 10
+	var quoted: int = ShipGrid.get_cargo_sale_value()
+	var per_unit: float = float(quoted) / 10.0
+	_check(quoted > 0, "cargo ledger prices the hold (%d CR)" % quoted)
+	_check(per_unit > 4.0 and per_unit < 120.0, "per-unit sale price stays in a sane band (%.1f CR)" % per_unit)
+	_check(ShipGrid.sell_all_cargo() == quoted, "selling pays exactly the quoted ledger value")
+	_check(int(ShipGrid.cargo["iron"]) == 0, "cargo bays are empty after selling")
+	_check(int(ShipGrid.credits) > 0, "sale credits landed in the account")
+
+	ShipGrid.cargo["iron"] = 20
+	ShipGrid.cargo["titanium"] = 4
+	var before_iron: int = int(ShipGrid.cargo["iron"])
+	var lost: Dictionary = ShipGrid.spill_cargo(0.25)
+	var lost_units: int = 0
+	for k in lost.keys():
+		lost_units += int(lost[k])
+	_check(lost_units > 0 and lost_units < 24, "hull shock spills a share of the haul (%d units)" % lost_units)
+	_check(int(ShipGrid.cargo["iron"]) + int(lost.get("iron", 0)) == before_iron, "spill accounting is exact")
+	_check(int(ShipGrid.stats_history.get("cargo_spilled", 0)) >= lost_units, "spillage is recorded in lifetime stats")
+	ShipGrid.cargo["iron"] = 0
+	ShipGrid.cargo["titanium"] = 0
+
+	for pid in ShipGrid.POWER_PROFILES.keys():
+		_check(ShipGrid.set_power_profile(str(pid), false), "power profile accepted: " + str(pid))
+		_check(ShipGrid.get_power_profile_id() == str(pid), "profile reported back: " + str(pid))
+		var smin: float = 1.0
+		var smax: float = 0.0
+		for sys_id in ShipGrid.POWER_SYSTEMS:
+			var sh: float = ShipGrid.power_share(sys_id)
+			smin = minf(smin, sh)
+			smax = maxf(smax, sh)
+		_check(smin > 0.05 and smax < 1.0, "shares bounded for %s (%.2f..%.2f)" % [pid, smin, smax])
+	_check(not ShipGrid.set_power_profile("reactor_yolo", false), "unknown power profile is rejected")
+	_check(ShipGrid.set_power_profile("nope", false) == false, "rejected profile leaves state unchanged")
+	_check(ShipGrid.get_power_profile_id() != "nope", "invalid profile never becomes active")
+
+	var stats_now: Dictionary = ShipGrid.compute_ship_stats()
+	for sys_id in ShipGrid.POWER_SYSTEMS:
+		_check(ShipGrid.power_budget(sys_id, stats_now) >= 4.0, "reactor budget positive for " + sys_id)
+
+	var ship_probe := PlayerShip3D.new()
+	add_child(ship_probe)
+	ship_probe.stats = ShipGrid.compute_ship_stats()
+	ship_probe.current_energy = 200.0
+	var idle_factor: float = ship_probe.power_factor("mining")
+	ship_probe._sys_load["mining"] = 99999.0
+	var starved_factor: float = ship_probe.power_factor("mining")
+	_check(starved_factor < idle_factor, "over-budget measured draw throttles that subsystem (%.2f -> %.2f)" % [idle_factor, starved_factor])
+	_check(ship_probe.power_shed("mining"), "a saturated mining beam is shed entirely")
+	ship_probe._sys_load["mining"] = 0.0
+	ship_probe.current_energy = 0.5
+	ship_probe._update_power_governor(0.0166)
+	_check(ship_probe.power_brownout, "near-empty capacitor raises the brown-out flag")
+	_check(ship_probe.power_shed("mining") and ship_probe.power_shed("weapons"),
+		"brown-out sheds mining and guns first")
+	_check(not ship_probe.power_shed("engines"), "brown-out never sheds the engines (fly home safely)")
+	_check(ship_probe.power_throttle_events == 1, "brown-out is counted once per episode")
+	var rep: Dictionary = ship_probe.get_power_report()
+	_check(rep.has("rows") and (rep["rows"] as Array).size() == ShipGrid.POWER_SYSTEMS.size(),
+		"power report carries one row per subsystem")
+	_check(str(rep["profile"]) == ShipGrid.get_power_profile_id(), "report names the live profile")
+	ship_probe.queue_free()
+
+	ShipGrid.set_power_profile("sustain", false)
+	ShipGrid.market_sector = "sector_2"
+	if not ShipGrid.unlocked_sectors.has(1):
+		ShipGrid.unlocked_sectors.append(1)
+	var logic_path := "user://test_logic_save.json"
+	_check(SaveManager.save_game(logic_path), "wrote save with reactor + market state")
+	ShipGrid.power_profile = "balanced"
+	ShipGrid.market_sector = "sector_1"
+	_check(SaveManager.load_game(logic_path), "reloaded reactor + market state")
+	_check(ShipGrid.get_power_profile_id() == "sustain", "power profile persisted through the save system")
+	_check(ShipGrid.market_sector == "sector_2", "chosen market sector persisted")
+	ShipGrid.unlocked_sectors = [0]
+	ShipGrid.market_sector = "sector_1"
+	# A locked sector must never survive a load (crash/exploit guard).
+	var payload: Dictionary = SaveManager.build_save_payload()
+	payload["market_sector"] = "sector_5"
+	payload["power_profile"] = "not_a_profile"
+	_check(not SaveManager.apply_loaded_payload(payload) or (ShipGrid.get_power_profile_id() == "balanced"
+		and ShipGrid.market_sector == "sector_1"), "tampered profile/market values are rejected on load")
 
 
 func _test_achievement_hall3d() -> void:

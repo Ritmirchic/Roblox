@@ -35,6 +35,8 @@ func build_save_payload() -> Dictionary:
 		"ship_layout": ShipGrid.serialize_ship(),
 		"saved_layouts": ShipGrid.saved_layouts.duplicate(true),
 		"cargo": ShipGrid.cargo.duplicate(true),
+		"power_profile": ShipGrid.power_profile,
+		"market_sector": ShipGrid.market_sector,
 		"unlocked_sectors": ShipGrid.unlocked_sectors.duplicate(true),
 		"stats_history": ShipGrid.stats_history.duplicate(true),
 		"crew_owned": CrewManager.owned_cards.duplicate(true),
@@ -196,6 +198,16 @@ func apply_loaded_payload(data: Dictionary) -> bool:
 			if data["stats_history"].has(sk):
 				ShipGrid.stats_history[sk] = data["stats_history"][sk]
 
+	# Reactor allocation + market buyer (v2.2.0)
+	var pp := str(data.get("power_profile", "balanced"))
+	ShipGrid.power_profile = pp if ShipGrid.POWER_PROFILES.has(pp) else "balanced"
+	var ms := str(data.get("market_sector", "sector_1"))
+	var ms_ok := false
+	for sd in GameData.sectors:
+		if str(sd["id"]) == ms and ShipGrid.unlocked_sectors.has(int(sd["index"])):
+			ms_ok = true
+	ShipGrid.market_sector = ms if ms_ok else "sector_1"
+
 	# Crew
 	if typeof(data.get("crew_owned")) == TYPE_DICTIONARY:
 		CrewManager.owned_cards.clear()
@@ -250,6 +262,8 @@ func reset_all_progress() -> void:
 	ShipGrid.purchased_expansion_cells = 0
 	ShipGrid.unplaced_expansion_cells = 0
 	ShipGrid.unlocked_sectors = [0]
+	ShipGrid.power_profile = "balanced"
+	ShipGrid.market_sector = "sector_1"
 	for k in ShipGrid.cargo.keys():
 		ShipGrid.cargo[k] = 0
 	ShipGrid.reset_to_starter_ship()

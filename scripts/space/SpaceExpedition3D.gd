@@ -33,6 +33,9 @@ var _shake_seed: float = 0.0
 var _ach_toast: PanelContainer
 var _ach_toast_lbl: Label
 var _ach_toast_time: float = 0.0
+var _alert_lbl: Label
+var _alert_time: float = 0.0
+var _brownout_hud: bool = false
 var _ach_toast_queue: Array[String] = []
 const STEER_RING_RADIUS_PX: float = 165.0
 
@@ -57,6 +60,9 @@ var _shld_bar: ProgressBar
 var _eng_bar: ProgressBar
 var _heat_bar: ProgressBar
 var _cargo_bar: ProgressBar
+var _power_bar: ProgressBar
+var _power_lbl: Label
+var _power_warn: Label
 var _bar_name_lbls: Dictionary = {}
 var _bar_val_lbls: Dictionary = {}
 
@@ -181,6 +187,7 @@ func _spawn_player_and_containers() -> void:
 	player_ship.rebuild_from_grid()
 	player_ship.global_position = Vector3.ZERO
 	player_ship.cockpit_destroyed.connect(_on_ship_destroyed)
+	player_ship.cargo_spilled.connect(_on_cargo_spilled)
 	player_ship.ship_telemetry_updated.connect(_on_ship_telemetry)
 
 	_cam_pivot = Node3D.new()
@@ -309,6 +316,40 @@ func _build_expedition_hud() -> void:
 	_heat_bar = _make_hud_bar(svb, "hud_heat", Color(1.0, 0.45, 0.18))
 	_cargo_bar = _make_hud_bar(svb, "hud_cargo", Color(0.78, 0.52, 1.0))
 
+	# --- Reactor load governor readout (v2.2.0) ---
+	var prow := HBoxContainer.new()
+	prow.add_theme_constant_override("separation", 6)
+	svb.add_child(prow)
+	var plbl := Label.new()
+	plbl.custom_minimum_size = Vector2(78, 0)
+	plbl.clip_text = true
+	plbl.add_theme_font_size_override("font_size", 12)
+	plbl.add_theme_color_override("font_color", ThemeHelper.COL_MUTED)
+	plbl.text = L.tr_ui("hud_reactor")
+	prow.add_child(plbl)
+	_power_bar = ProgressBar.new()
+	_power_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_power_bar.custom_minimum_size = Vector2(0, 12)
+	_power_bar.max_value = 100.0
+	_power_bar.show_percentage = false
+	_power_bar.add_theme_stylebox_override("fill", ThemeHelper.make_hud_bar_style(Color(1.0, 0.62, 0.20), true))
+	_power_bar.add_theme_stylebox_override("background", ThemeHelper.make_hud_bar_style(Color(1.0, 0.62, 0.20), false))
+	prow.add_child(_power_bar)
+	_power_lbl = Label.new()
+	_power_lbl.custom_minimum_size = Vector2(68, 0)
+	_power_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	if ThemeHelper.font_mono:
+		_power_lbl.add_theme_font_override("font", ThemeHelper.font_mono)
+	_power_lbl.add_theme_font_size_override("font_size", 11)
+	_power_lbl.add_theme_color_override("font_color", Color(1.0, 0.78, 0.35))
+	prow.add_child(_power_lbl)
+	_power_warn = Label.new()
+	_power_warn.clip_text = true
+	_power_warn.add_theme_font_size_override("font_size", 11)
+	_power_warn.add_theme_color_override("font_color", Color(1.0, 0.36, 0.28))
+	_power_warn.visible = false
+	prow.add_child(_power_warn)
+
 	_telemetry_lbl = Label.new()
 	_telemetry_lbl.clip_text = true
 	if ThemeHelper.font_mono:
@@ -368,6 +409,27 @@ func _build_expedition_hud() -> void:
 	_ach_toast.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(
 		Color(0.035, 0.075, 0.14, 0.95), Color(1.0, 0.78, 0.25, 0.92), 12, 14, 6))
 	_hud_root.add_child(_ach_toast)
+
+	# Transient flight alert (cargo spill, reactor shed, market receipts)
+	_alert_lbl = Label.new()
+	_alert_lbl.name = "HudAlert"
+	_alert_lbl.anchor_left = 0.0
+	_alert_lbl.anchor_right = 1.0
+	_alert_lbl.offset_left = 340
+	_alert_lbl.offset_right = -340
+	_alert_lbl.offset_top = 306
+	_alert_lbl.height_for_width = 40
+	_alert_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_alert_lbl.clip_text = true
+	_alert_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_alert_lbl.visible = false
+	if ThemeHelper.font_bold:
+		_alert_lbl.add_theme_font_override("font", ThemeHelper.font_bold)
+	_alert_lbl.add_theme_font_size_override("font_size", 16)
+	_alert_lbl.add_theme_color_override("font_color", ThemeHelper.COL_GOLD)
+	_alert_lbl.add_theme_color_override("font_outline_color", Color(0.012, 0.03, 0.07, 0.92))
+	_alert_lbl.add_theme_constant_override("outline_size", 4)
+	_hud_root.add_child(_alert_lbl)
 
 	_ach_toast_lbl = Label.new()
 	_ach_toast_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -542,6 +604,59 @@ func _apply_hud_localization() -> void:
 	if is_instance_valid(_gate_lbl_3d):
 		_gate_lbl_3d.text = L.tr_ui("warp_gate_3d")
 
+func _hud_alert(msg: String, col: Color = ThemeHelper.COL_GOLD) -> void:
+	if not is_instance_valid(_alert_lbl):
+		return
+	_alert_lbl.text = msg
+	_alert_lbl.add_theme_color_override("font_color", col)
+	_alert_lbl.visible = true
+	_alert_time = 3.6
+	ThemeHelper.animate_entry(_alert_lbl, 0.0, Vector2(0.94, 0.94))
+
+
+func _tick_hud_alert(delta: float) -> void:
+	if _alert_time <= 0.0 or not is_instance_valid(_alert_lbl):
+		return
+	_alert_time -= delta
+	if _alert_time <= 1.0:
+		_alert_lbl.modulate.a = clampf(_alert_time, 0.0, 1.0)
+	if _alert_time <= 0.0:
+		_alert_lbl.visible = false
+		_alert_lbl.modulate.a = 1.0
+
+
+func _on_cargo_spilled(lost: Dictionary, at_pos: Vector3) -> void:
+	# Spilled ore is not destroyed: it scatters as real recoverable chunks, so a
+	# magnet rig can pull the haul back in while a bare hull loses it outright.
+	var units := 0
+	for k in lost.keys():
+		units += int(lost[k])
+	if units <= 0:
+		return
+	var parent: Node = chunks_root if chunks_root != null else self
+	var budget := 4
+	for k in lost.keys():
+		var qty := int(lost[k])
+		if qty <= 0:
+			continue
+		var per := maxi(1, int(ceil(float(qty) / float(maxi(1, budget)))))
+		var made := 0
+		while qty > 0 and made < maxi(1, budget):
+			var this_qty := mini(per, qty)
+			qty -= this_qty
+			made += 1
+			var chunk := ResourceChunk3D.new()
+			var dir := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0))
+			if dir.length_squared() < 0.01:
+				dir = Vector3.UP
+			dir = dir.normalized()
+			chunk.setup(str(k), this_qty, at_pos + dir * 2.4, dir * randf_range(3.0, 9.0))
+			parent.add_child(chunk)
+		budget = maxi(1, budget - made)
+	AudioManager.play_sfx("pickup_resource", -0.10, 0.58)
+	_hud_alert(L.tr_ui("cargo_spill", [units]), Color(1.0, 0.45, 0.32))
+
+
 func _on_ship_telemetry(tel: Dictionary) -> void:
 	if not is_instance_valid(_hp_bar):
 		return
@@ -561,6 +676,40 @@ func _on_ship_telemetry(tel: Dictionary) -> void:
 	_eng_bar.value = en
 	_heat_bar.max_value = 100.0
 	_heat_bar.value = ht
+
+	var pw: Dictionary = tel.get("power", {})
+	if not pw.is_empty() and is_instance_valid(_power_bar):
+		var load_pct: float = clampf(float(pw.get("load_pct", 0.0)) * 100.0, 0.0, 199.0)
+		_power_bar.value = minf(100.0, load_pct)
+		var rows: Array = pw.get("rows", [])
+		var tag := ""
+		var shed := false
+		for r in rows:
+			var rr: Dictionary = r
+			var pre := "M"
+			if str(rr["id"]) == "weapons":
+				pre = "G"
+			elif str(rr["id"]) == "engines":
+				pre = "E"
+			elif str(rr["id"]) == "repair":
+				pre = "R"
+			if bool(rr["shed"]):
+				shed = true
+				tag += "%s-" % pre
+			else:
+				tag += "%s%d " % [pre, int(round(float(rr["factor"]) * 100.0))]
+		_power_lbl.text = ("%d%%" % int(round(load_pct))) if tag.is_empty() else tag.strip_edges()
+		_power_lbl.add_theme_color_override("font_color",
+			Color(1.0, 0.40, 0.30) if shed else Color(1.0, 0.78, 0.35))
+		var bo: bool = bool(pw.get("brownout", false))
+		_power_warn.text = L.tr_ui("hud_brownout")
+		_power_warn.visible = bo
+		if bo and not _brownout_hud:
+			_brownout_hud = true
+			AudioManager.play_sfx("ui_error", 0.02, 0.72)
+			_hud_alert(L.tr_ui("hud_brownout"), Color(1.0, 0.40, 0.28))
+		elif not bo:
+			_brownout_hud = false
 
 	var cap := maxi(1, int(player_ship.stats.get("cargo_capacity", 40)))
 	var used := ShipGrid.get_current_cargo_units()
@@ -718,6 +867,7 @@ func _draw_radar_minimap() -> void:
 # ==============================================================================
 func _process(delta: float) -> void:
 	_tick_achievement_toast(delta)
+	_tick_hud_alert(delta)
 	if not is_instance_valid(player_ship) or _extracting:
 		return
 

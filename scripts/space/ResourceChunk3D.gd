@@ -61,6 +61,6 @@ func try_collect() -> bool:
 	if stored <= 0:
 		return false
 	_collected = true
-	AudioManager.play_sfx("pickup", 0.08, 0.65)
+	AudioManager.play_sfx("pickup_resource", 0.08, 0.65)
 	queue_free()
 	return true

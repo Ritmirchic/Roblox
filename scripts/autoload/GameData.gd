@@ -492,3 +492,75 @@ func _init_enemies() -> void:
 			"scale": 1.55,
 		},
 	}
+
+
+# ---------------------------------------------------------------------------
+# Dynamic Sector Market (v2.2.0)
+# ---------------------------------------------------------------------------
+# Every mineral carries a live price index per sector, built from three
+# overlapping cycles (fast speculation, medium supply shocks, slow sector
+# demand) plus a stable per-sector bias. It is a pure deterministic function of
+# (mineral, sector, UTC day): the same inputs always give the same board, so the
+# station ledger, the HUD ticker and a reloaded save can never disagree, and no
+# RNG state has to be persisted.
+const MARKET_CYCLES: Array[float] = [2.0, 9.0, 31.0]
+const MARKET_WEIGHTS: Array[float] = [1.0, 0.5, 0.3333]
+const MARKET_AMPLITUDE: float = 0.36
+const MARKET_MIN_INDEX: float = 0.62
+const MARKET_MAX_INDEX: float = 1.52
+
+func market_day() -> int:
+	## Market re-indexes on UTC midnight, exactly like the daily contracts.
+	return int(floor(Time.get_unix_time_from_system() / 86400.0))
+
+func market_seed(res_id: String, sector_id: String) -> int:
+	# FNV-1a, kept inside int32 so shifts and modulo stay stable on every platform.
+	var h: int = 2166136261
+	var s: String = res_id.to_lower() + "|" + sector_id.to_lower()
+	for i in s.length():
+		h ^= s.unicode_at(i)
+		h = (h * 16777619) & 0x7FFFFFFF
+	return h
+
+func market_index(res_id: String, sector_id: String, day: int) -> float:
+	var h: int = market_seed(res_id, sector_id)
+	var w: float = 0.0
+	var norm: float = 0.0
+	for i in MARKET_CYCLES.size():
+		var weight: float = MARKET_WEIGHTS[i]
+		var phase: float = float((h >> (i * 5)) % 628) / 100.0
+		w += weight * sin((float(day) / MARKET_CYCLES[i]) * TAU + phase)
+		norm += weight
+	w /= maxf(0.001, norm)
+	var bias: float = float((h % 21) - 10) / 100.0
+	return clampf(1.0 + MARKET_AMPLITUDE * w + bias, MARKET_MIN_INDEX, MARKET_MAX_INDEX)
+
+func market_price(res_id: String, sector_id: String, day: int) -> int:
+	if not RESOURCES.has(res_id):
+		return 0
+	var base: float = float(RESOURCES[res_id]["value"])
+	return int(round(base * market_index(res_id, sector_id, day)))
+
+func market_quote(res_id: String, sector_id: String, day: int = -1) -> Dictionary:
+	var d: int = market_day() if day < 0 else day
+	var base: int = int(RESOURCES[res_id]["value"]) if RESOURCES.has(res_id) else 0
+	var idx: float = market_index(res_id, sector_id, d)
+	var prev: float = market_index(res_id, sector_id, maxi(0, d - 1))
+	var rel: float = (idx / maxf(0.001, prev)) - 1.0
+	return {
+		"id": res_id,
+		"sector": sector_id,
+		"day": d,
+		"base": base,
+		"index": idx,
+		"price": int(round(float(base) * idx)),
+		"trend": 1 if rel > 0.004 else (-1 if rel < -0.004 else 0),
+		"delta_pct": int(round(rel * 100.0)),
+	}
+
+func market_quotes(sector_id: String, day: int = -1) -> Array:
+	var out: Array = []
+	for rid in RESOURCES.keys():
+		out.append(market_quote(str(rid), sector_id, day))
+	out.sort_custom(func(a, b): return float(a["index"]) > float(b["index"]))
+	return out

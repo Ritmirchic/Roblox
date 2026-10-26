@@ -2,12 +2,25 @@ class_name PlayerShip3D
 extends RigidBody3D
 
 signal cockpit_destroyed
+signal cargo_spilled(lost: Dictionary, at_position: Vector3)
 signal ship_telemetry_updated(telemetry: Dictionary)
 
 var stats: Dictionary = {}
 var current_energy: float = 120.0
 var current_shield: float = 0.0
 var engine_heat: float = 0.0
+
+# --- Reactor load governor (v2.2.0) -----------------------------------------
+# Real power management: every subsystem is metered against the share of reactor
+# output its profile allows. Sustained over-draw droops that subsystem (mining
+# slows, turret cycle time stretches), and when the capacitor collapses the ship
+# sheds mining and weapons first while engines keep enough to fly home.
+var _sys_load: Dictionary = {"mining": 0.0, "weapons": 0.0, "engines": 0.0, "repair": 0.0}
+var _frame_draw: Dictionary = {}
+var power_brownout: bool = false
+var power_output_load: float = 0.0
+var power_throttle_events: int = 0
+var _was_brownout: bool = false
 var stabilizer_enabled: bool = true
 var controls_enabled: bool = true
 
@@ -240,8 +253,8 @@ func _physics_process(delta: float) -> void:
 		smat.set_shader_parameter("shield_ratio", sh_ratio)
 		smat.set_shader_parameter("hit_flash", _shield_hit_flash)
 
-	# Nano-repair module active restoration
-	var rep_rate := float(stats.get("repair_rate", 0.0))
+	# Nano-repair module active restoration (throttled by its power budget)
+	var rep_rate := float(stats.get("repair_rate", 0.0)) * power_factor("repair")
 	if rep_rate > 0.0 and current_energy > 4.0:
 		var repaired_any := false
 		for uid in ShipGrid.placed_modules.keys():
@@ -253,6 +266,7 @@ func _physics_process(delta: float) -> void:
 					_sparks_by_uid[uid].emitting = false
 		if repaired_any:
 			current_energy = maxf(0.0, current_energy - 3.0 * delta)
+			note_power_draw("repair", 3.0 * delta)
 			stats = ShipGrid.compute_ship_stats()
 
 	_apply_flight_physics(delta)
@@ -264,9 +278,11 @@ func _physics_process(delta: float) -> void:
 
 	_curr_phys_xform = global_transform
 	_phys_interp_ready = true
+	_update_power_governor(delta)
 
 	ship_telemetry_updated.emit({
 		"speed": linear_velocity.length(),
+		"power": get_power_report(),
 		"energy": current_energy,
 		"max_energy": max_e,
 		"shield": current_shield,
@@ -277,13 +293,85 @@ func _physics_process(delta: float) -> void:
 		"stabilizer": stabilizer_enabled,
 	})
 
+func note_power_draw(sys_id: String, joules: float) -> void:
+	## Called by each subsystem with the energy it just spent this physics tick.
+	if joules <= 0.0:
+		return
+	_frame_draw[sys_id] = float(_frame_draw.get(sys_id, 0.0)) + joules
+
+
+func power_factor(sys_id: String) -> float:
+	## 0.0..1.0 throughput multiplier for a subsystem, from its measured draw
+	## against the budget the reactor profile allows it (droop governor).
+	var budget: float = ShipGrid.power_budget(sys_id, stats)
+	var used: float = float(_sys_load.get(sys_id, 0.0))
+	var headroom: float = clampf((budget - used) / maxf(1.0, budget * 0.55), 0.0, 1.0)
+	var f: float = 0.30 + 0.70 * headroom
+	if power_brownout:
+		# Capacitor collapse: engines keep the most, mining and guns the least.
+		f *= 0.86 if sys_id == "engines" else (0.34 if sys_id == "repair" else 0.18)
+	return clampf(f, 0.0, 1.0)
+
+
+func power_shed(sys_id: String) -> bool:
+	## True when a subsystem must be dropped entirely (priority shed order).
+	if power_brownout and (sys_id == "mining" or sys_id == "weapons"):
+		return true
+	return power_factor(sys_id) <= 0.32
+
+
+func _update_power_governor(delta: float) -> void:
+	var cap: float = maxf(20.0, float(stats.get("energy_cap", 120.0)))
+	var regen: float = maxf(12.0, float(stats.get("energy_regen", 25.0)))
+	var alpha: float = clampf(delta * 6.5, 0.02, 1.0)
+	var total: float = 0.0
+	for k in ShipGrid.POWER_SYSTEMS:
+		var inst: float = float(_frame_draw.get(k, 0.0)) / maxf(0.0005, delta)
+		_sys_load[k] = lerpf(float(_sys_load.get(k, 0.0)), inst, alpha)
+		total += float(_sys_load[k])
+	_frame_draw.clear()
+	power_output_load = clampf(total / regen, 0.0, 3.0)
+	power_brownout = (current_energy / cap) < 0.12
+	if power_brownout and not _was_brownout:
+		power_throttle_events += 1
+	_was_brownout = power_brownout
+
+
+func get_power_report() -> Dictionary:
+	var rows: Array = []
+	for k in ShipGrid.POWER_SYSTEMS:
+		var b: float = ShipGrid.power_budget(k, stats)
+		var l: float = float(_sys_load.get(k, 0.0))
+		rows.append({
+			"id": k,
+			"share": ShipGrid.power_share(k),
+			"budget": b,
+			"load": l,
+			"pct": clampf(l / maxf(1.0, b), 0.0, 1.6),
+			"factor": power_factor(k),
+			"shed": power_shed(k),
+		})
+	return {
+		"profile": ShipGrid.get_power_profile_id(),
+		"rows": rows,
+		"brownout": power_brownout,
+		"load_pct": power_output_load,
+		"events": power_throttle_events,
+		"energy": current_energy,
+		"max_energy": maxf(20.0, float(stats.get("energy_cap", 120.0))),
+	}
+
+
 func _apply_flight_physics(delta: float) -> void:
 	var total_thrust := float(stats.get("total_thrust", 180.0))
 	var boost_mult := 1.0
-	if boost_active and thrust_input.length_squared() > 0.01 and engine_heat < 95.0 and current_energy > 8.0:
+	var eng_pow := power_factor("engines")
+	if boost_active and thrust_input.length_squared() > 0.01 and engine_heat < 95.0 \
+			and current_energy > 8.0 and not power_shed("engines"):
 		boost_mult = 1.65
 		engine_heat = minf(100.0, engine_heat + 22.0 * delta)
 		current_energy = maxf(0.0, current_energy - 14.0 * delta)
+		note_power_draw("engines", 14.0 * delta)
 	else:
 		engine_heat = maxf(0.0, engine_heat - 18.0 * delta)
 
@@ -294,7 +382,8 @@ func _apply_flight_physics(delta: float) -> void:
 
 	var world_thrust_dir := (fwd * thrust_input.z + right * (thrust_input.x * 0.82) + up * (thrust_input.y * 0.82))
 	if world_thrust_dir.length_squared() > 0.001 and total_thrust > 0.0:
-		var force := world_thrust_dir.limit_length(1.0) * total_thrust * boost_mult * overheat_penalty
+		var force := world_thrust_dir.limit_length(1.0) * total_thrust * boost_mult \
+			* overheat_penalty * (0.45 + 0.55 * eng_pow)
 		apply_central_force(force)
 		# Subtle physical off-center CoM torque effect (mitigated partly when stabilizer is on)
 		var com_offset: Vector3 = stats.get("center_of_mass", Vector3.ZERO) - stats.get("thrust_center", Vector3.ZERO)
@@ -457,7 +546,8 @@ func get_weapon_fire_solution(uid: int) -> Dictionary:
 				hit_kind = "prop"
 
 	# When Magnetic Homing Radar is active and an enemy is within magnetic lock range (without immediate muzzle obstruction),
-	# the magnetized bullet curves onto the enemy — show that exact enemy impact point on Crosshair #2!
+	# the magnetized bullet curves onto the enemy — that impact point is what the
+	# reticle readout reports (the ballistic pipper overlay was removed in v2.2.0).
 	var mag_tgt: Node3D = find_magnetic_target(m_pos, barrel_dir) if is_mag else null
 	if is_instance_valid(mag_tgt):
 		var d_mag := m_pos.distance_to(mag_tgt.global_position)
@@ -575,11 +665,13 @@ func _process_mining_beams(delta: float) -> void:
 		var mod_id: String = entry["mod_id"]
 		var def: Dictionary = GameData.modules[mod_id]
 		var edraw := float(def.get("energy_draw", 6.0)) * delta
-		if eff <= 0.0 or current_energy < edraw:
+		var mine_pow := power_factor("mining")
+		if eff <= 0.0 or current_energy < edraw or power_shed("mining"):
 			bm.visible = false
 			continue
 
 		current_energy -= edraw
+		note_power_draw("mining", edraw)
 		any_beam_active = true
 		var muzzle: Marker3D = _muzzles_by_uid[uid]
 		var m_pos := muzzle.global_position
@@ -595,7 +687,7 @@ func _process_mining_beams(delta: float) -> void:
 		if not hit.is_empty():
 			end_pos = hit["position"]
 			var col: Object = hit["collider"]
-			var dps := GameData.get_module_scaled_stat(mod_id, "mining_dps", int(entry["level"])) * eff * mine_mult
+			var dps := GameData.get_module_scaled_stat(mod_id, "mining_dps", int(entry["level"])) * eff * mine_mult * (0.35 + 0.65 * mine_pow)
 			if col is Asteroid3D:
 				var y_bonus := 1.0 + float(def.get("yield_bonus", 0.0))
 				col.apply_mining_damage(dps * delta, int(def.get("hardness_pierce", 1)), loot_mult * y_bonus, rare_ch, chunks_root)
@@ -632,11 +724,13 @@ func _process_weapons(delta: float) -> void:
 			continue
 		var eff := ShipGrid.get_module_efficiency(entry)
 		var shot_e := float(def.get("energy_draw", 5.0)) * 0.35
-		if eff <= 0.0 or current_energy < shot_e:
+		var wep_pow := power_factor("weapons")
+		if eff <= 0.0 or current_energy < shot_e or power_shed("weapons"):
 			continue
 
 		current_energy -= shot_e
-		var rate := maxf(0.15, float(def["fire_rate"]) * fr_mult * eff)
+		note_power_draw("weapons", shot_e)
+		var rate := maxf(0.15, float(def["fire_rate"]) * fr_mult * eff * (0.40 + 0.60 * wep_pow))
 		_weapon_cooldowns[uid] = 1.0 / rate
 
 		var sol := get_weapon_fire_solution(uid)
@@ -779,6 +873,16 @@ func receive_enemy_hit(raw_damage: float, hit_world_pos: Vector3, shape_idx: int
 	var entry: Dictionary = ShipGrid.placed_modules[hit_uid]
 	var prev_hp := float(entry["hp"])
 	entry["hp"] = maxf(0.0, prev_hp - remaining)
+
+	# Unsecured cargo shakes loose when a hit gets past shields and armour:
+	# the harder the shock relative to the total hull, the more ore spills out
+	# of the bays, so a full haul is genuinely riskier to fly through a fight.
+	var max_hp_total: float = maxf(40.0, float(stats.get("total_hp", 100.0)))
+	var shock: float = clampf((prev_hp - float(entry["hp"])) / max_hp_total, 0.0, 0.30)
+	if shock > 0.035:
+		var lost: Dictionary = ShipGrid.spill_cargo(shock)
+		if not lost.is_empty():
+			cargo_spilled.emit(lost, hit_world_pos)
 	var ratio := float(entry["hp"]) / maxf(1.0, float(entry["max_hp"]))
 
 	if ratio < 0.5 and ratio > 0.0 and _sparks_by_uid.has(hit_uid):

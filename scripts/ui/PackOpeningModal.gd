@@ -59,13 +59,22 @@ func _build_ui() -> void:
 	main_vb.alignment = BoxContainer.ALIGNMENT_CENTER
 	main_vb.add_theme_constant_override("separation", 18)
 
+	# Machined header rail in the kit's plate language. The ceremony stage below
+	# stays frameless so the pack silhouette keeps its transparent edges.
+	var title_rail := ThemeHelper.make_header_rail(ThemeHelper.COL_CYAN, 8)
+	title_rail.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	main_vb.add_child(title_rail)
+	var title_vb := VBoxContainer.new()
+	title_vb.add_theme_constant_override("separation", 3)
+	title_rail.add_child(title_vb)
+
 	_title_lbl = Label.new()
 	_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if ThemeHelper.font_display:
 		_title_lbl.add_theme_font_override("font", ThemeHelper.font_display)
 	_title_lbl.add_theme_font_size_override("font_size", 28)
 	_title_lbl.add_theme_color_override("font_color", ThemeHelper.COL_CYAN)
-	main_vb.add_child(_title_lbl)
+	title_vb.add_child(_title_lbl)
 
 	_fifth_banner = Label.new()
 	_fifth_banner.visible = false
@@ -74,7 +83,7 @@ func _build_ui() -> void:
 		_fifth_banner.add_theme_font_override("font", ThemeHelper.font_display)
 	_fifth_banner.add_theme_font_size_override("font_size", 22)
 	_fifth_banner.add_theme_color_override("font_color", Color(0.24, 1.0, 0.92))
-	main_vb.add_child(_fifth_banner)
+	title_vb.add_child(_fifth_banner)
 
 	var stage_area := Control.new()
 	stage_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -245,6 +254,10 @@ func _spawn_three_facedown_cards() -> void:
 		bp_sb.shadow_color = Color(0.15, 0.65, 1.0, 0.35)
 		bp_sb.shadow_size = 14
 		back_panel.add_theme_stylebox_override("panel", bp_sb)
+		var bp_frame := ThemeHelper.make_skin_overlay("card_frame", Color(0.52, 0.80, 1.0, 0.95))
+		if bp_frame != null:
+			back_panel.add_child(bp_frame)
+			ThemeHelper.fill_full_rect(bp_frame, -4.0, -4.0, -4.0, -4.0)
 
 		var back_img := TextureRect.new()
 		back_img.custom_minimum_size = Vector2(222, 332)

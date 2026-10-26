@@ -43,6 +43,25 @@ var cargo: Dictionary = {
 # Unlocked space sectors (0..4)
 var unlocked_sectors: Array[int] = [0]
 
+# --- Reactor power allocation (v2.2.0) -------------------------------------
+# Every subsystem may draw at most this share of the reactor's *continuous*
+# output. The capacitor still absorbs bursts, but sustained demand above a
+# subsystem budget is throttled live by PlayerShip3D.power_factor(), so the
+# profile you pick before launch genuinely changes mining speed, turret cycle
+# time, boost availability and repair throughput.
+const POWER_PROFILES: Dictionary = {
+	"balanced": {"mining": 0.42, "weapons": 0.34, "engines": 0.30, "repair": 0.28},
+	"mine_focus": {"mining": 0.78, "weapons": 0.14, "engines": 0.20, "repair": 0.14},
+	"combat_focus": {"mining": 0.14, "weapons": 0.74, "engines": 0.24, "repair": 0.14},
+	"sustain": {"mining": 0.22, "weapons": 0.18, "engines": 0.26, "repair": 0.72},
+	"burst_drive": {"mining": 0.30, "weapons": 0.42, "engines": 0.74, "repair": 0.20},
+}
+const POWER_SYSTEMS: Array[String] = ["mining", "weapons", "engines", "repair"]
+var power_profile: String = "balanced"
+
+# Which sector's market the hangar sells into (prices follow your last haul).
+var market_sector: String = "sector_1"
+
 # Lifetime statistics
 var stats_history: Dictionary = {
 	"asteroids_mined": 0,
@@ -53,6 +72,8 @@ var stats_history: Dictionary = {
 	"packs_opened": 0,
 	"modules_upgraded": 0,
 	"distance_traveled": 0.0,
+	"cargo_spilled": 0,
+	"market_credits": 0,
 }
 
 func _ready() -> void:
@@ -402,33 +423,104 @@ func add_cargo_resource(res_id: String, amount: int) -> int:
 		cargo_changed.emit()
 	return added
 
-func get_cargo_sale_value() -> int:
-	var buffs := _collect_buffs()
-	var val_mult := 1.0 + float(buffs.get("credit_mult", 0.0)) + float(buffs.get("all_stats_mult", 0.0))
-	var total_cr := 0
-	for k in cargo.keys():
-		var cnt := maxi(0, int(cargo[k]))
-		if cnt > 0 and GameData.RESOURCES.has(k):
-			total_cr += int(round(float(cnt * int(GameData.RESOURCES[k]["value"])) * val_mult))
-	return total_cr
+## Per-unit price currently paid by the hangar's buyer for one mineral.
+func market_unit_price(res_id: String, day: int = -1) -> int:
+	var d: int = GameData.market_day() if day < 0 else day
+	var base: int = int(GameData.RESOURCES[res_id]["value"]) if GameData.RESOURCES.has(res_id) else 0
+	return maxi(1, GameData.market_price(res_id, market_sector, d))
 
-func sell_all_cargo() -> int:
+## Full sale ledger for the cargo bays (market indices + crew multipliers).
+func _cargo_ledger(day: int = -1) -> Dictionary:
 	var buffs := _collect_buffs()
 	var val_mult := 1.0 + float(buffs.get("credit_mult", 0.0)) + float(buffs.get("all_stats_mult", 0.0))
+	var rows: Array = []
 	var total_cr := 0
 	var total_units := 0
 	for k in cargo.keys():
 		var cnt := maxi(0, int(cargo[k]))
-		if cnt > 0 and GameData.RESOURCES.has(k):
-			total_cr += int(round(float(cnt * int(GameData.RESOURCES[k]["value"])) * val_mult))
-			total_units += cnt
-			cargo[k] = 0
+		if cnt <= 0 or not GameData.RESOURCES.has(k):
+			continue
+		var q: Dictionary = GameData.market_quote(str(k), market_sector, day)
+		var unit_cr := int(round(float(q["price"]) * val_mult))
+		total_cr += unit_cr * cnt
+		total_units += cnt
+		rows.append({
+			"id": str(k), "units": cnt, "base": int(q["base"]), "price": unit_cr,
+			"index": float(q["index"]), "trend": int(q["trend"]), "delta_pct": int(q["delta_pct"]),
+		})
+	return {"rows": rows, "credits": total_cr, "units": total_units, "mult": val_mult}
+
+func get_cargo_sale_value(day: int = -1) -> int:
+	return int(_cargo_ledger(day)["credits"])
+
+func sell_all_cargo() -> int:
+	var rec := _cargo_ledger(GameData.market_day())
+	var total_cr: int = int(rec["credits"])
+	var total_units: int = int(rec["units"])
+	for k in cargo.keys():
+		cargo[k] = 0
+	if total_units > 0:
+		stats_history["market_credits"] = int(stats_history.get("market_credits", 0)) + total_cr
 	if total_cr > 0:
 		add_credits(total_cr)
 		if AchievementManager and total_units > 0:
 			AchievementManager.record_event("sell_minerals", total_units)
 		cargo_changed.emit()
 	return total_cr
+
+# --- Reactor profile API ----------------------------------------------------
+func get_power_profile_id() -> String:
+	return power_profile if POWER_PROFILES.has(power_profile) else "balanced"
+
+func get_power_profile() -> Dictionary:
+	return POWER_PROFILES[get_power_profile_id()]
+
+func power_share(system_id: String) -> float:
+	return float(get_power_profile().get(system_id, 0.35))
+
+func power_budget(system_id: String, stats: Dictionary) -> float:
+	# Continuous wattage a subsystem is allowed to hold; the reactor output is
+	# its regen rate, so a bigger reactor raises every ceiling.
+	var out: float = maxf(12.0, float(stats.get("energy_regen", 25.0)))
+	return maxf(4.0, out * power_share(system_id))
+
+func set_power_profile(profile_id: String, persist: bool = true) -> bool:
+	if not POWER_PROFILES.has(profile_id):
+		return false
+	if power_profile == profile_id:
+		return true
+	power_profile = profile_id
+	ship_changed.emit()
+	if persist:
+		SaveManager.save_game()
+	return true
+
+func set_market_sector(sector_id: String, persist: bool = true) -> void:
+	market_sector = sector_id
+	if persist:
+		SaveManager.save_game()
+
+## Impact spillage: a hard hit shakes a share of unsecured cargo out of the bays.
+func spill_cargo(frac: float) -> Dictionary:
+	var f: float = clampf(frac, 0.0, 1.0)
+	var lost: Dictionary = {}
+	if f <= 0.0:
+		return lost
+	for rk in cargo.keys():
+		var have := int(cargo[rk])
+		if have <= 0:
+			continue
+		var gone: int = mini(have, maxi(1, int(floor(float(have) * f))))
+		cargo[rk] = have - gone
+		lost[rk] = gone
+	if not lost.is_empty():
+		var units := 0
+		for rk in lost.keys():
+			units += int(lost[rk])
+		stats_history["cargo_spilled"] = int(stats_history.get("cargo_spilled", 0)) + units
+		cargo_changed.emit()
+	return lost
+
 
 func _collect_buffs() -> Dictionary:
 	var combined: Dictionary = {}

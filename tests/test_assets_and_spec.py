@@ -451,7 +451,162 @@ def test_hangar_and_cards_consume_the_skin():
     card = (ROOT / "scripts" / "ui" / "CardWidget.gd").read_text(encoding="utf-8")
     assert 'ThemeHelper.make_skin_overlay("card_frame"' in card, "cards must paint the kit frame"
     assert "skin_available() else (3 if" in card, "card border must yield to the kit frame"
+    pack = (ROOT / "scripts" / "ui" / "PackOpeningModal.gd").read_text(encoding="utf-8")
+    assert 'ThemeHelper.make_skin_overlay("card_frame"' in pack, "pack card backs must wear the kit frame"
+    assert "ThemeHelper.make_header_rail(" in pack
+    assert "bp_sb.set_corner_radius_all(14)" in pack
     space = (ROOT / "scripts" / "space" / "SpaceExpedition3D.gd").read_text(encoding="utf-8")
     assert 'ThemeHelper.make_hud_bar_style(col, true)' in space
     assert 'ThemeHelper.make_hud_bar_style(col, false)' in space
     assert "ThemeHelper.make_modal_style(" in space, "pause panel must use the kit plate"
+
+
+BUILTIN_STATICS = {"new", "free", "instantiate", "duplicate", "load", "preload"}
+
+AUTOLOAD_SRC = {
+    "ShipGrid": "scripts/autoload/ShipGrid.gd",
+    "GameData": "scripts/autoload/GameData.gd",
+    "CrewManager": "scripts/autoload/CrewManager.gd",
+    "UpgradeManager": "scripts/autoload/UpgradeManager.gd",
+    "AchievementManager": "scripts/autoload/AchievementManager.gd",
+    "SaveManager": "scripts/autoload/SaveManager.gd",
+    "AudioManager": "scripts/autoload/AudioManager.gd",
+    "ThemeHelper": "scripts/autoload/ThemeHelper.gd",
+    "L": "scripts/autoload/Localization.gd",
+    "VFXFactory": "scripts/vfx/VFXFactory.gd",
+    "Projectile3D": "scripts/space/Projectile3D.gd",
+    "ResourceChunk3D": "scripts/space/ResourceChunk3D.gd",
+    "PlayerShip3D": "scripts/ship/PlayerShip3D.gd",
+}
+
+
+def test_cross_file_symbols_resolve():
+    """Every call into another script must name a member that actually exists.
+
+    Typos such as ThemeHelper.wire_button_flash() or a sound name that is not in
+    AudioManager.AUDIO_FILES are silent at parse time and only blow up (or play
+    nothing) inside the real engine, so they are checked statically here.
+    """
+    members = {}
+    for cls, rel in AUTOLOAD_SRC.items():
+        src = (ROOT / rel).read_text(encoding="utf-8")
+        names = set(re.findall(r"^(?:static\s+)?func\s+([A-Za-z_][A-Za-z_0-9]*)", src, re.M))
+        names |= set(re.findall(r"^(?:const|var|signal)\s+([A-Za-z_][A-Za-z_0-9]*)", src, re.M))
+        members[cls] = names
+
+    call_re = re.compile(r"\b(%s)\.([a-z_][a-z_0-9]*)\(" % "|".join(AUTOLOAD_SRC))
+    problems = []
+    for gd in sorted(list(ROOT.glob("scripts/**/*.gd")) + list(ROOT.glob("tests/*.gd"))):
+        txt = gd.read_text(encoding="utf-8", errors="replace")
+        for m in call_re.finditer(txt):
+            cls, fn = m.group(1), m.group(2)
+            if fn in BUILTIN_STATICS:
+                continue
+            if fn not in members[cls]:
+                problems.append("%s: %s.%s()" % (gd.name, cls, fn))
+    assert not problems, "Calls to members that do not exist: %s" % sorted(set(problems))[:12]
+
+    sfx_src = (ROOT / "scripts/autoload/AudioManager.gd").read_text(encoding="utf-8")
+    block = sfx_src.split("const AUDIO_FILES: Dictionary = {")[1].split("\n}")[0]
+    known = set(re.findall(r'"([a-z_0-9]+)":\s*"res://', block))
+    assert len(known) >= 20
+    used_sfx = set()
+    for gd in sorted(ROOT.glob("scripts/**/*.gd")):
+        for m in re.finditer(r'play_sfx\(\s*"([a-z_0-9]+)"', gd.read_text(encoding="utf-8", errors="replace")):
+            used_sfx.add(m.group(1))
+    unknown = sorted(used_sfx - known)
+    assert not unknown, "play_sfx() names missing from AUDIO_FILES: %s" % unknown
+    assert len(used_sfx) >= 12, "the game should be using its full sfx set"
+
+
+def test_market_and_power_logic_is_wired_end_to_end():
+    """v2.2.0 gameplay logic: reactor load governor + dynamic sector market."""
+    game = (ROOT / "scripts/autoload/GameData.gd").read_text(encoding="utf-8")
+    for fn in ("func market_day", "func market_index", "func market_price",
+               "func market_quote", "func market_quotes", "func market_seed"):
+        assert fn + "(" in game, "market logic missing: " + fn
+    body = game.split("func market_index(")[1].split("\nfunc ")[0]
+    assert "clampf(" in body and "MARKET_AMPLITUDE" in body and "sin(" in body, \
+        "market index must be a bounded trigonometric cycle"
+
+    grid = (ROOT / "scripts/autoload/ShipGrid.gd").read_text(encoding="utf-8")
+    assert "const POWER_PROFILES" in grid
+    prof = grid.split("const POWER_PROFILES: Dictionary = {")[1].split("\n}")[0]
+    assert prof.count("\"mining\"") == prof.count("\"weapons\"") == prof.count("\"repair\"") == 5
+    for pid in ["balanced", "mine_focus", "combat_focus", "sustain", "burst_drive"]:
+        assert '"%s"' % pid in prof, "power profile missing: " + pid
+    shares = [float(x) for x in re.findall(r":\s*([01]\.\d+)[,}]", prof)]
+    assert len(shares) == 20 and max(shares) < 1.0 and min(shares) > 0.1, shares
+    assert "func set_power_profile" in grid and "func power_budget" in grid
+    assert "func spill_cargo" in grid and "func _cargo_ledger" in grid
+    assert "market_quote(" in grid.split("func _cargo_ledger")[1].split("\nfunc ")[0], \
+        "the sale ledger must price cargo on the live market index"
+
+    ship = (ROOT / "scripts/ship/PlayerShip3D.gd").read_text(encoding="utf-8")
+    assert "func power_factor" in ship and "func power_shed" in ship
+    assert "func get_power_report" in ship and "_update_power_governor(delta)" in ship
+    assert 'note_power_draw("mining"' in ship and 'note_power_draw("weapons"' in ship
+    assert 'note_power_draw("engines"' in ship and 'note_power_draw("repair"' in ship
+    assert "0.35 + 0.65 * mine_pow" in ship, "mining throughput must droop with power"
+    assert "0.40 + 0.60 * wep_pow" in ship, "turret cycle time must droop with power"
+    assert 'power_shed("mining")' in ship and 'power_shed("weapons")' in ship
+    assert "cargo_spilled.emit" in ship and "func _on_cargo_spilled" in (
+        ROOT / "scripts/space/SpaceExpedition3D.gd").read_text(encoding="utf-8")
+    assert 'player_ship.cargo_spilled.connect' in (ROOT / "scripts/space/SpaceExpedition3D.gd").read_text(encoding="utf-8")
+
+    save = (ROOT / "scripts/autoload/SaveManager.gd").read_text(encoding="utf-8")
+    assert '"power_profile": ShipGrid.power_profile' in save and '"market_sector": ShipGrid.market_sector' in save
+    assert "ShipGrid.POWER_PROFILES.has(pp)" in save, "loaded power profile must be validated"
+    assert "ms_ok" in save, "loaded market sector must be validated against unlocked sectors"
+
+    station = (ROOT / "scripts/ui/HangarStationPanels.gd").read_text(encoding="utf-8")
+    assert "ShipGrid.set_power_profile(" in station and "GameData.market_quotes(" in station
+    assert "ShipGrid.set_market_sector(" in station, "the market board must let the player pick a buyer"
+    assert 'L.tr_ui("pwr_hint")' in station and 'L.tr_ui("mkt_hint")' in station
+
+    space = (ROOT / "scripts/space/SpaceExpedition3D.gd").read_text(encoding="utf-8")
+    assert 'tel.get("power", {})' in space and "_power_bar" in space and "_brownout_hud" in space
+
+
+def test_string_key_registries_have_no_typos():
+    """Literal registry keys used across the code must exist in their tables.
+
+    Wrong ids in GameData.modules["..."], a mistaked achievement event name or an
+    unknown sfx key are all silent failures in Godot, so they are resolved here.
+    """
+    game = (ROOT / "scripts/autoload/GameData.gd").read_text(encoding="utf-8")
+    mods = set(re.findall(r'_add_mod\("(\w+)"', game))
+    res_block = game.split("const RESOURCES: Dictionary = {")[1].split("\n}")[0]
+    res = set(re.findall(r'\t"([a-z_0-9]+)": \{', res_block, re.M))
+    sectors = set(re.findall(r'"id": "(sector_\d+)"', game))
+    assert len(mods) >= 20 and len(res) == 5 and len(sectors) == 5
+
+    audio = (ROOT / "scripts/autoload/AudioManager.gd").read_text(encoding="utf-8")
+    am = (ROOT / "scripts/autoload/AchievementManager.gd").read_text(encoding="utf-8")
+    am_strings = set(re.findall(r'"([a-z_]{3,})"', am))
+    loc = (ROOT / "scripts/autoload/Localization.gd").read_text(encoding="utf-8")
+    ui_keys = set(re.findall(r'^\t"([a-z_0-9]+)": \{', loc, re.M)) | set(
+        re.findall(r'^\t"([a-z_0-9]+)": \{"ru"', loc, re.M))
+    assert len(ui_keys) >= 100, "localization table looks too small: %d" % len(ui_keys)
+
+    module_ids = set(mods)
+    missing = {"modules": [], "resources": [], "sectors": [], "events": [], "ui": []}
+    for gd in sorted(ROOT.glob("scripts/**/*.gd")):
+        txt = gd.read_text(encoding="utf-8", errors="replace")
+        for m in re.finditer(r'GameData\.modules(?:\.has\(|\[|\.get\()"([a-z_0-9]+)"', txt):
+            if m.group(1) not in module_ids:
+                missing["modules"].append("%s: %s" % (gd.name, m.group(1)))
+        for m in re.finditer(r'GameData\.RESOURCES(?:\.has|\[|\.get)\("([a-z_]+)"', txt):
+            if m.group(1) not in res:
+                missing["resources"].append("%s: %s" % (gd.name, m.group(1)))
+        for m in re.finditer(r'record_event\(\s*"([a-z_]+)"', txt):
+            if m.group(1) not in am_strings:
+                missing["events"].append("%s: %s" % (gd.name, m.group(1)))
+        for m in re.finditer(r'tr_ui\("([a-z_0-9]+)"', txt):
+            if m.group(1) not in ui_keys:
+                missing["ui"].append("%s: %s" % (gd.name, m.group(1)))
+        for m in re.finditer(r'market(?:_quote|_price|_index)\(\s*"([a-z_]+)"', txt):
+            if m.group(1) not in res:
+                missing["resources"].append("%s: market %s" % (gd.name, m.group(1)))
+    dead = {k: sorted(set(v)) for k, v in missing.items() if v}
+    assert not dead, "Unknown registry keys: %s" % dead

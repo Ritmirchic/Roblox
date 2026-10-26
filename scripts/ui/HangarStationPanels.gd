@@ -1281,6 +1281,20 @@ func _build_achievements_tab() -> void:
 # ==============================================================================
 # 6. SECTOR SELECTOR & MINERAL REFINERY
 # ==============================================================================
+func _power_profile_label(profile_id: String) -> String:
+	match profile_id:
+		"mine_focus":
+			return L.tr_ui("pwr_mine_focus")
+		"combat_focus":
+			return L.tr_ui("pwr_combat_focus")
+		"sustain":
+			return L.tr_ui("pwr_sustain")
+		"burst_drive":
+			return L.tr_ui("pwr_burst_drive")
+		_:
+			return L.tr_ui("pwr_balanced")
+
+
 func _build_launch_tab() -> void:
 	var vb := VBoxContainer.new()
 	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1349,6 +1363,168 @@ func _build_launch_tab() -> void:
 		rl.add_theme_color_override("font_color", rcol.lightened(0.25))
 		chip.add_child(rl)
 		min_flow.add_child(chip)
+
+	# --- v2.2.0: reactor load allocation + live sector market ---------------
+	var dual := HBoxContainer.new()
+	dual.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dual.add_theme_constant_override("separation", 12)
+	vb.add_child(dual)
+
+	var pwr_box := PanelContainer.new()
+	pwr_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pwr_box.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(
+		ThemeHelper.COL_BG_CARD, ThemeHelper.COL_CYAN, 12, 2, 14))
+	dual.add_child(pwr_box)
+	var pvb := VBoxContainer.new()
+	pvb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pvb.add_theme_constant_override("separation", 7)
+	pwr_box.add_child(pvb)
+
+	var phdr := Label.new()
+	phdr.text = L.tr_ui("pwr_title").to_upper()
+	if ThemeHelper.font_bold:
+		phdr.add_theme_font_override("font", ThemeHelper.font_bold)
+	phdr.add_theme_font_size_override("font_size", 15)
+	phdr.add_theme_color_override("font_color", ThemeHelper.COL_CYAN)
+	pvb.add_child(phdr)
+
+	var pshare: Dictionary = ShipGrid.get_power_profile()
+	var pvals := Label.new()
+	pvals.text = L.tr_ui("pwr_share", [
+		int(round(float(pshare.get("mining", 0.0)) * 100.0)),
+		int(round(float(pshare.get("weapons", 0.0)) * 100.0)),
+		int(round(float(pshare.get("engines", 0.0)) * 100.0)),
+		int(round(float(pshare.get("repair", 0.0)) * 100.0)),
+	])
+	pvals.add_theme_font_size_override("font_size", 13)
+	pvals.add_theme_color_override("font_color", ThemeHelper.COL_GOLD)
+	if ThemeHelper.font_mono:
+		pvals.add_theme_font_override("font", ThemeHelper.font_mono)
+	pvb.add_child(pvals)
+
+	var pflow := HFlowContainer.new()
+	pflow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pflow.add_theme_constant_override("h_separation", 8)
+	pflow.add_theme_constant_override("v_separation", 6)
+	pvb.add_child(pflow)
+	for pid in ["balanced", "mine_focus", "combat_focus", "sustain", "burst_drive"]:
+		var pbtn := Button.new()
+		pbtn.text = _power_profile_label(str(pid))
+		pbtn.custom_minimum_size = Vector2(150, 34)
+		ThemeHelper.style_nav_tab(pbtn, ShipGrid.get_power_profile_id() == str(pid))
+		pbtn.pressed.connect(func():
+			if ShipGrid.set_power_profile(str(pid)):
+				AudioManager.play_sfx("ui_click", 0.02, 1.06)
+				open_tab("launch")
+		)
+		pflow.add_child(pbtn)
+
+	var phint := Label.new()
+	phint.text = L.tr_ui("pwr_hint")
+	phint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	phint.add_theme_font_size_override("font_size", 12)
+	phint.add_theme_color_override("font_color", ThemeHelper.COL_MUTED)
+	pvb.add_child(phint)
+
+	# Sector market board: prices are a deterministic function of
+	# (mineral, sector, UTC day), so the ledger here always matches the sale.
+	var mkt_box := PanelContainer.new()
+	mkt_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mkt_box.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(
+		ThemeHelper.COL_BG_CARD, ThemeHelper.COL_GOLD, 12, 2, 14))
+	dual.add_child(mkt_box)
+	var mvb := VBoxContainer.new()
+	mvb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mvb.add_theme_constant_override("separation", 6)
+	mkt_box.add_child(mvb)
+
+	var mhdr := Label.new()
+	mhdr.text = L.tr_ui("mkt_title").to_upper()
+	if ThemeHelper.font_bold:
+		mhdr.add_theme_font_override("font", ThemeHelper.font_bold)
+	mhdr.add_theme_font_size_override("font_size", 15)
+	mhdr.add_theme_color_override("font_color", ThemeHelper.COL_GOLD)
+	mvb.add_child(mhdr)
+
+	var mgrid := GridContainer.new()
+	mgrid.columns = 4
+	mgrid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mgrid.add_theme_constant_override("h_separation", 10)
+	mgrid.add_theme_constant_override("v_separation", 3)
+	mvb.add_child(mgrid)
+
+	var mres := Label.new()
+	mres.text = L.tr_ui("mkt_col_mineral")
+	var mbas := Label.new()
+	mbas.text = L.tr_ui("mkt_col_base")
+	var mprc := Label.new()
+	mprc.text = L.tr_ui("mkt_col_price")
+	var mind := Label.new()
+	mind.text = L.tr_ui("mkt_col_index")
+	for hl in [mres, mbas, mprc, mind]:
+		hl.add_theme_font_size_override("font_size", 11)
+		hl.add_theme_color_override("font_color", ThemeHelper.COL_MUTED)
+		mgrid.add_child(hl)
+
+	for q in GameData.market_quotes(ShipGrid.market_sector):
+		var row: Dictionary = q
+		var rcol: Color = GameData.RESOURCES[row["id"]]["color"]
+		var name_lbl := Label.new()
+		name_lbl.text = L.resource_name(str(row["id"]))
+		name_lbl.add_theme_font_size_override("font_size", 13)
+		name_lbl.add_theme_color_override("font_color", rcol.lightened(0.18))
+		mgrid.add_child(name_lbl)
+		var base_lbl := Label.new()
+		base_lbl.text = "%d" % int(row["base"])
+		base_lbl.add_theme_font_size_override("font_size", 13)
+		base_lbl.add_theme_color_override("font_color", Color(0.60, 0.68, 0.78))
+		mgrid.add_child(base_lbl)
+		var px_lbl := Label.new()
+		var trend := int(row["trend"])
+		px_lbl.text = "%d  %+d%%" % [int(row["price"]), int(row["delta_pct"])]
+		px_lbl.add_theme_font_size_override("font_size", 13)
+		px_lbl.add_theme_color_override("font_color",
+			Color(0.35, 0.95, 0.62) if trend > 0 else (Color(1.0, 0.42, 0.34) if trend < 0 else Color(0.86, 0.90, 0.96)))
+		if ThemeHelper.font_mono:
+			px_lbl.add_theme_font_override("font", ThemeHelper.font_mono)
+		mgrid.add_child(px_lbl)
+		var idx_lbl := Label.new()
+		idx_lbl.text = "x%.2f" % float(row["index"])
+		idx_lbl.add_theme_font_size_override("font_size", 12)
+		idx_lbl.add_theme_color_override("font_color", Color(0.72, 0.80, 0.92))
+		mgrid.add_child(idx_lbl)
+
+	var mflow := HFlowContainer.new()
+	mflow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mflow.add_theme_constant_override("h_separation", 7)
+	mflow.add_theme_constant_override("v_separation", 5)
+	mvb.add_child(mflow)
+	for sd in GameData.sectors:
+		var sidx: int = int(sd["index"])
+		if not ShipGrid.unlocked_sectors.has(sidx):
+			continue
+		var sbtn := Button.new()
+		sbtn.text = str(L.sector_name(sd)).to_upper()
+		sbtn.custom_minimum_size = Vector2(112, 30)
+		ThemeHelper.style_nav_tab(sbtn, ShipGrid.market_sector == str(sd["id"]))
+		sbtn.pressed.connect(func():
+			ShipGrid.set_market_sector(str(sd["id"]))
+			AudioManager.play_sfx("ui_click", 0.02, 0.9)
+			open_tab("launch")
+		)
+		mflow.add_child(sbtn)
+
+	var mhint := Label.new()
+	var mkt_name := ShipGrid.market_sector.to_upper()
+	for sd2 in GameData.sectors:
+		if str(sd2["id"]) == ShipGrid.market_sector:
+			mkt_name = str(L.sector_name(sd2)).to_upper()
+			break
+	mhint.text = "%s %s\n%s" % [L.tr_ui("mkt_sell_into").split("%s")[0], mkt_name, L.tr_ui("mkt_hint")]
+	mhint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	mhint.add_theme_font_size_override("font_size", 12)
+	mhint.add_theme_color_override("font_color", ThemeHelper.COL_MUTED)
+	mvb.add_child(mhint)
 
 	var sc := ScrollContainer.new()
 	sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
