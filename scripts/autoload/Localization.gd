@@ -45,6 +45,18 @@ const UI_STRINGS: Dictionary = {
 		"tr": "KÖPRÜ FOLYOLARI: PAZAR +%d%% • RADAR +%d%% • ONARIM +%d%%",
 	},
 
+	"hud_return_guidance": {
+		"ru": "Возврат только через warp-портал — цель обозначена на экране",
+		"en": "Return is portal-only — the gate is marked on screen",
+		"es": "El regreso es solo por portal: la puerta está marcada en pantalla",
+		"de": "Rückkehr nur per Warp-Portal — das Tor ist auf dem Bildschirm markiert",
+		"fr": "Retour uniquement par le portail warp — la porte est marquée à l'écran",
+		"pt": "Retorno somente pelo portal warp — o portão está marcado na tela",
+		"zh": "只能通过跃迁门返航 — 已在屏幕上标出",
+		"ja": "帰還はワープ門のみ — 画面上に目標を表示",
+		"ko": "귀환은 워프 포털로만 — 화면에 표시됨",
+		"tr": "Dönüş yalnızca warp kapısıyla — kapı ekranda işaretlendi",
+	},
 	"hud_threat": {
 		"ru": "УГРОЗА",
 		"en": "THREAT",
@@ -646,17 +658,18 @@ const UI_STRINGS: Dictionary = {
 		"tr": "ENERJİ",
 	},
 	"hud_flight_hint": {
-		"ru": "WASD/Space/Ctrl: 6-ДОФ • Мышь: Прицел 360° (C: Центр) • Q/E: Бочка • ЛКМ: Огонь ТОЛЬКО по зелёной захваченной цели (T) • ПКМ/F: Бур по астероидам • H: В ангар",
-		"en": "WASD/Space/Ctrl: 6-DOF • Mouse: 360 Steer (C: Center) • Q/E: Roll • LMB: fire ONLY at the green locked target (T) • RMB/F: mining beam on rocks • H: Hangar",
-		"es": "WASD/Espacio/Ctrl: 6-DOF • Ratón: Giro 360° • Q/E: Tonel • Clic Izq.: fuego SOLO al objetivo marcado en verde (T) • Clic Der./F: Rayo minero • H: Hangar",
-		"de": "WASD/Space/Strg: 6-DOF • Maus: 360° Steuern • Q/E: Rollen • LMT: Feuer NUR auf das grün markierte Ziel (T) • RMT/F: Bohrstrahl • H: Hangar",
-		"fr": "WASD/Espace/Ctrl : 6-DOF • Souris : 360° • Q/E : Tonneau • Clic G : tir UNIQUEMENT sur la cible verrouillée verte (T) • Clic D/F : foreuse • H : Hangar",
-		"pt": "WASD/Espaço/Ctrl: 6-DOF • Mouse: Giro 360° • Q/E: Rolagem • BEM: fogo SOMENTE no alvo travado verde (T) • BDM/F: raio de mineração • H: Hangar",
-		"zh": "WASD/空格/Ctrl：六自由度机动 • 鼠标：360°转向 (C归中) • Q/E：翻滚 • 左键：只攻击绿色锁定目标 (T) • 右键/F：采矿光束 • H：返航",
-		"ja": "WASD/Space/Ctrl: 6軸移動 • マウス: 360°旋回 (C:中央) • Q/E: ロール • 左クリック: 緑のロック目標のみへ射撃 (T) • 右/F: 採掘ビーム • 帰還: H",
-		"ko": "WASD/Space/Ctrl: 6자유도 이동 • 마우스: 360° 조종 (C:중앙) • Q/E: 롤링 • 좌클릭: 초록 잠금 대상에게만 사격 (T) • 우클릭/F: 채굴 빔 • H: 귀환",
-		"tr": "WASD/Space/Ctrl: 6-DOF • Fare: 360° Yön (C: Merkez) • Q/E: Yatış • Sol Tık: YALNIZ yeşil kilitli hedefe ateş (T) • Sağ/F: Maden ışını • H: Hangar",
+		"ru": "WASD/Space/Ctrl: 6-ДОФ • Shift: разгон • Мышь: прицел 360° (C — центр) • Q/E: бочка • ЛКМ: огонь ПО ЗЕЛЁНОЙ ЗАХВАЧЕННОЙ ЦЕЛИ (T) • ПКМ/F: бур по астероидам • Z: стабилизатор • Esc/Tab: пауза • Выход: warp-портал",
+		"en": "WASD/Space/Ctrl: 6-DOF • Shift: boost • Mouse: 360 steer (C: center) • Q/E: roll • LMB: fire at the GREEN locked target (T) • RMB/F: mining beam on rocks • Z: stabilizer • Esc/Tab: pause • Exit: warp portal",
+		"es": "WASD/Espacio/Ctrl: 6-DOF • Shift: impulso • Ratón: giro 360° (C: centro) • Q/E: tonel • Clic Izq.: fuego al objetivo VERD (T) • Clic Der./F: rayo minero • Z: estabilizador • Esc/Tab: pausa • Salida: portal warp",
+		"de": "WASD/Space/Strg: 6-DOF • Shift: Schub • Maus: 360° Steuern (C: Mitte) • Q/E: Rollen • LMT: Feuer auf das GRÜNE Ziel (T) • RMT/F: Bohrstrahl • Z: Stabilisator • Esc/Tab: Pause • Ausgang: Warp-Portal",
+		"fr": "WASD/Espace/Ctrl : 6-DOF • Shift : boost • Souris : 360° (C : centre) • Q/E : tonneau • Clic G : tir sur la cible VERTE (T) • Clic D/F : foreuse • Z : stabilisateur • Esc/Tab : pause • Sortie : portail warp",
+		"pt": "WASD/Espaço/Ctrl: 6-DOF • Shift: impulso • Mouse: giro 360° (C: centro) • Q/E: rolagem • BEM: fogo no alvo VERDE travado (T) • BDM/F: raio de mineração • Z: estabilizador • Esc/Tab: pausa • Saída: portal warp",
+		"zh": "WASD/空格/Ctrl：六自由度机动 • Shift：加速 • 鼠标：360°转向 (C 归中) • Q/E：翻滚 • 左键：攻击绿色锁定目标 (T) • 右键/F：采矿光束 • Z：稳定器 • Esc/Tab：暂停 • 出口：跃迁门",
+		"ja": "WASD/Space/Ctrl: 6軸移動 • Shift: ブースト • マウス: 360°旋回 (C: 中央) • Q/E: ロール • 左クリック: 緑のロック目標へ射撃 (T) • 右/F: 採掘ビーム • Z: 安定化 • Esc/Tab: 一時停止 • 出口: ワープ門",
+		"ko": "WASD/Space/Ctrl: 6자유도 • Shift: 부스트 • 마우스: 360° 조종 (C: 중앙) • Q/E: 롤링 • 좌클릭: 초록 잠금 대상 사격 (T) • 우클릭/F: 채굴 빔 • Z: 안정화 • Esc/Tab: 일시정지 • 출구: 워프 포털",
+		"tr": "WASD/Space/Ctrl: 6-DOF • Shift: ivme • Fare: 360° yön (C: merkez) • Q/E: yatış • Sol Tık: YEŞİL kilitli hedefe ateş (T) • Sağ/F: maden ışını • Z: dengeleyici • Esc/Tab: duraklat • Çıkış: warp kapısı",
 	},
+
 
 	"hud_minute_task": {
 		"ru": "МИНУТНАЯ ЦЕЛЬ (%dс): %s (%d/%d)  •  +%d КРИСТ",

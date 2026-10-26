@@ -62,6 +62,8 @@ var _heat_bar: ProgressBar
 var _cargo_bar: ProgressBar
 var _power_bar: ProgressBar
 var _threat_bar: ProgressBar
+# "Return to hangar" is a portal action, not a teleport: the button paints guidance.
+var _return_guidance_t: float = 0.0
 # Sector threat: mining and killing pull response wings onto the player.
 var _threat: float = 0.0
 var _response_cd: float = 16.0
@@ -595,6 +597,9 @@ func _build_expedition_hud() -> void:
 	_ret_btn.pressed.connect(func():
 		_pause_panel.visible = false
 		_set_mouse_flight_mode(true)
+		_return_guidance_t = 12.0
+		_hud_alert(L.tr_ui("hud_return_guidance"), Color(0.36, 0.98, 0.86))
+		AudioManager.play_sfx("ui_click", 0.04, 0.7)
 )
 	rvb.add_child(_ret_btn)
 
@@ -920,6 +925,22 @@ func _draw_hud_world_overlays() -> void:
 			_overlay_canvas.draw_string(ThemeHelper.font_mono, aim_screen_pos + Vector2(28, 36),
 				"LOCKED", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1.0, 0.78, 0.25, 0.9 * xh_a))
 
+	# Portal guidance: chevrons from the crosshair to the warp gate, with live range.
+	if _return_guidance_t > 0.0 and is_instance_valid(_warp_gate):
+		var gpos: Vector2 = _cam.unproject_position(_warp_gate.global_position)
+		var gdist: float = player_ship.global_position.distance_to(_warp_gate.global_position)
+		var gvec: Vector2 = gpos - center
+		if gvec.length_squared() > 1.0:
+			var gdir: Vector2 = gvec.normalized()
+			var gc := Color(0.36, 0.98, 0.86, 0.86)
+			for si in range(1, 5):
+				var p0: Vector2 = center + gdir * (34.0 + float(si) * 24.0)
+				_overlay_canvas.draw_line(p0, p0 + gdir.rotated(2.55) * 10.0, gc, 2.2)
+				_overlay_canvas.draw_line(p0, p0 + gdir.rotated(-2.55) * 10.0, gc, 2.2)
+			if ThemeHelper.font_mono:
+				_overlay_canvas.draw_string(ThemeHelper.font_mono, gpos + Vector2(-46, 36),
+					"WARP %dm" % int(round(gdist)), HORIZONTAL_ALIGNMENT_CENTER, 92, 12, gc)
+
 	var scan_range := float(player_ship.stats.get("scanner_range", 0.0))
 	if scan_range > 1.0:
 		for ast in asteroids_root.get_children():
@@ -1020,6 +1041,8 @@ func _process(delta: float) -> void:
 	if not is_instance_valid(player_ship) or _extracting:
 		return
 
+	if _return_guidance_t > 0.0:
+		_return_guidance_t = maxf(0.0, _return_guidance_t - delta)
 	_radar_sweep_angle = fmod(_radar_sweep_angle + delta * 2.1, TAU)
 
 	var neb := get_node_or_null("NebulaParticles")

@@ -1201,6 +1201,16 @@ func _test_card_foils_and_lock_combat() -> void:
 	exp2._threat = 40.0
 	exp2._process_sector_spawns_and_hazards(1.0)
 	_check(exp2._threat < 39.9 and exp2._threat > 36.0, "Threat cools off while the sector is quiet (%.2f)" % exp2._threat)
+	exp2._return_guidance_t = 0.0
+	exp2._ret_btn.pressed.emit()
+	_check(exp2._return_guidance_t > 11.0, "HUD Return button arms portal guidance instead of teleporting the ship")
+	exp2._return_guidance_t = 6.0
+	exp2._draw_hud_world_overlays()
+	_check(exp2._return_guidance_t > 0.0, "Portal guidance overlay renders cleanly")
+	var loc_src := FileAccess.get_file_as_string("res://scripts/autoload/Localization.gd")
+	_check(loc_src.contains("LMB: fire at the GREEN locked target (T)"), "Flight hint documents lock-directed LMB fire")
+	_check(loc_src.contains("RMB/F: mining beam on rocks"), "Flight hint documents RMB-only mining")
+	_check(not loc_src.contains("H: Hangar"), "Flight hint no longer advertises an unbound hangar key")
 	for en in exp2.enemies_root.get_children():
 		en.queue_free()
 	exp2.queue_free()

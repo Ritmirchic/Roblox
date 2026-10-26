@@ -129,5 +129,7 @@ v2.1.0 (GUI skin pass, hangar 3D polish, warp-portal-only exit) and v1.1.0 (10-l
 - **`SHA256SUMS.txt`** — checksums of all three archives (also reproduced in the release body below).
 
 ## Controls
-`W A S D` thrust · `Shift` boost · `Space` fire · `E` mining beam · `Q`/`R` roll · mouse look ·
-`T` stabiliser · `Tab` target lock · `Esc` pause/station · `F` hall-of-achievements step-through.
+`W A S D` 6-DOF translation · `Space`/`Ctrl` up-down · `Shift` boost · mouse steer (click to capture, `C` recenter) ·
+`Q`/`E` roll · `LMB` fire at the GREEN locked target (`T` re-locks manually) · `RMB`/`F` mining beam (the only way
+to break a meteoroid) · `Z` stabiliser · `Esc`/`Tab` pause and station · extraction is portal-only: the hangar
+`Return` button paints chevrons to the warp gate with live range, it does not teleport the ship.
