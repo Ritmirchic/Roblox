@@ -18,7 +18,7 @@ downloadable directly:
 
 | File | Size | Direct download |
 |---|---|---|
-| `ASHES_OF_HUMANITY_SETUP.exe` | 27 309 961 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_SETUP.exe |
+| `ASHES_OF_HUMANITY_SETUP.exe` | 27 312 557 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_SETUP.exe |
 | `ASHES_OF_HUMANITY_WINDOWS.zip` | 26 870 943 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_WINDOWS.zip |
 | `ASHES_OF_HUMANITY_SOURCE.zip` | 34 906 371 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_SOURCE.zip |
 
