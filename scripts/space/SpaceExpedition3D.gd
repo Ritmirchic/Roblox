@@ -944,21 +944,20 @@ func _draw_hud_world_overlays() -> void:
 				if is_locked:
 					# green lock: every LMB round on this screen converges here
 					var gcol := Color(0.34, 1.0, 0.58, 0.96)
-					var half := 26.0
-					var arm := 9.0
-					for cx in [-half, half]:
-						for cy in [-half, half]:
-							var hx := ep.x + cx
-							var hy := ep.y + cy
-							var dx: float = -signf(float(cx)) * arm
-							var dy: float = -signf(float(cy)) * arm
-							_overlay_canvas.draw_line(Vector2(hx, hy), Vector2(hx + dx, hy), gcol, 2.6)
-							_overlay_canvas.draw_line(Vector2(hx, hy), Vector2(hx, hy + dy), gcol, 2.6)
+					var bracket_half := 26.0
+					var arm_len := 9.0
+					for corner in range(4):
+						var sx := -1.0 if (corner == 0 or corner == 2) else 1.0
+						var sy := -1.0 if corner < 2 else 1.0
+						var hx: float = ep.x + sx * bracket_half
+						var hy: float = ep.y + sy * bracket_half
+						_overlay_canvas.draw_line(Vector2(hx, hy), Vector2(hx - sx * arm_len, hy), gcol, 2.6)
+						_overlay_canvas.draw_line(Vector2(hx, hy), Vector2(hx, hy - sy * arm_len), gcol, 2.6)
 					_overlay_canvas.draw_circle(ep, 2.6, Color(0.34, 1.0, 0.58, 0.9))
-					_overlay_canvas.draw_rect(Rect2(ep + Vector2(-26, -half - 12), Vector2(52.0, 4)), Color(0.06, 0.20, 0.12, 0.9), true)
-					_overlay_canvas.draw_rect(Rect2(ep + Vector2(-26, -half - 12), Vector2(52.0 * hp_pct, 4)), Color(0.36, 1.0, 0.60), true)
+					_overlay_canvas.draw_rect(Rect2(ep + Vector2(-26, -bracket_half - 12), Vector2(52.0, 4)), Color(0.06, 0.20, 0.12, 0.9), true)
+					_overlay_canvas.draw_rect(Rect2(ep + Vector2(-26, -bracket_half - 12), Vector2(52.0 * hp_pct, 4)), Color(0.36, 1.0, 0.60), true)
 					if ThemeHelper.font_bold:
-						_overlay_canvas.draw_string(ThemeHelper.font_bold, ep + Vector2(-26, -half - 18),
+						_overlay_canvas.draw_string(ThemeHelper.font_bold, ep + Vector2(-26, -bracket_half - 18),
 							str(en3d.display_name).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, 52, 11, Color(0.62, 1.0, 0.78, 0.95))
 				else:
 					var col := Color(1.0, 0.55, 0.22, 0.78)
@@ -966,7 +965,7 @@ func _draw_hud_world_overlays() -> void:
 					_overlay_canvas.draw_rect(Rect2(ep - Vector2(sz, sz), Vector2(sz * 2.0, sz * 2.0)), col, false, 1.4)
 					_overlay_canvas.draw_rect(Rect2(ep + Vector2(-20, -sz - 8), Vector2(40.0 * hp_pct, 4)), Color(1.0, 0.32, 0.28), true)
 				if is_locked and en3d.elite and ThemeHelper.font_mono:
-					_overlay_canvas.draw_string(ThemeHelper.font_mono, ep + Vector2(-26, half + 16),
+					_overlay_canvas.draw_string(ThemeHelper.font_mono, ep + Vector2(-26, bracket_half + 16),
 						"ELITE", HORIZONTAL_ALIGNMENT_LEFT, 52, 11, Color(1.0, 0.82, 0.32, 0.95))
 
 func _draw_radar_minimap() -> void:
