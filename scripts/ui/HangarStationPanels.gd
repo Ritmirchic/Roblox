@@ -35,6 +35,14 @@ const NAV_TABS: Array[Array] = [
 ]
 
 func _ready() -> void:
+	AchievementManager.achievement_completed.connect(_on_achievement_completed)
+
+func _on_achievement_completed(task: Dictionary) -> void:
+	if not ThemeHelper.achievement_toasts:
+		return
+	show_toast("\u25c6 " + L.ach_name(task))
+	AudioManager.play_sfx("card_legendary", 0.0, 0.85)
+
 	ThemeHelper.fill_full_rect(self)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	visible = false
@@ -96,7 +104,7 @@ func _build_shell() -> void:
 	_modal_box.mouse_filter = Control.MOUSE_FILTER_STOP
 	_modal_box.add_theme_stylebox_override(
 		"panel",
-		ThemeHelper.make_panel_style(Color(0.024, 0.046, 0.105, 0.97), Color(0.22, 0.78, 1.0, 0.88), 16, 2, 16)
+		ThemeHelper.make_plaque_style("rare", 0.42, 22)
 	)
 
 	var main_vb := VBoxContainer.new()
@@ -391,7 +399,7 @@ func _build_shop_tab() -> void:
 			var res: Dictionary = ShipGrid.buy_equipment(mid_cap)
 			if bool(res.get("ok", false)):
 				AudioManager.play_sfx("buy_upgrade", 0.03, 0.85)
-				SaveManager.save_game()
+				SaveManager.autosave()
 				select_module_for_editor.emit(mid_cap)
 				open_tab("shop")
 				show_toast(L.mod_name(mid_cap))
@@ -507,7 +515,7 @@ func _populate_installed_hardware_cards(container: Control, reopen_tab_id: Strin
 				var ures: Dictionary = ShipGrid.upgrade_installed_module(uid_cap)
 				if bool(ures.get("ok", false)):
 					AudioManager.play_sfx("buy_upgrade", 0.04, 0.9)
-					SaveManager.save_game()
+					SaveManager.autosave()
 					open_tab(tab_cap)
 					show_toast("%s -> Lv.%d/5" % [L.mod_name(mid), int(ures.get("new_level", lvl + 1))])
 				else:
@@ -714,7 +722,7 @@ func _populate_crew_inspector(ivb: VBoxContainer, cid: String) -> void:
 		ThemeHelper.style_accent_button(act_btn, Color(0.86, 0.42, 0.24))
 		act_btn.pressed.connect(func():
 			CrewManager.unequip_card(cid)
-			SaveManager.save_game()
+			SaveManager.autosave()
 			open_tab("crew")
 		)
 	else:
@@ -724,7 +732,7 @@ func _populate_crew_inspector(ivb: VBoxContainer, cid: String) -> void:
 			var res: Dictionary = CrewManager.equip_card(cid)
 			if bool(res.get("ok", false)):
 				AudioManager.play_sfx("buy_upgrade", 0.03, 0.8)
-				SaveManager.save_game()
+				SaveManager.autosave()
 				open_tab("crew")
 			else:
 				AudioManager.play_sfx("ui_error", 0.02, 0.75)
@@ -944,7 +952,7 @@ func _build_upgrades_tab() -> void:
 				var r4: Dictionary = UpgradeManager.purchase_fourth_slot()
 				if bool(r4.get("ok", false)):
 					AudioManager.play_sfx("buy_upgrade", 0.03, 0.9)
-					SaveManager.save_game()
+					SaveManager.autosave()
 					open_tab("upgrades")
 				else:
 					show_toast(L.localize_reason(str(r4.get("reason", ""))), true)
@@ -1062,7 +1070,7 @@ func _build_upgrades_tab() -> void:
 				var rbuy: Dictionary = UpgradeManager.buy_upgrade(uid_cap)
 				if bool(rbuy.get("ok", false)):
 					AudioManager.play_sfx("buy_upgrade", 0.03, 0.85)
-					SaveManager.save_game()
+					SaveManager.autosave()
 					open_tab("upgrades")
 					show_toast(L.upg_name(u))
 				else:
@@ -1073,7 +1081,7 @@ func _build_upgrades_tab() -> void:
 			ThemeHelper.style_accent_button(btn, Color(0.85, 0.42, 0.24))
 			btn.pressed.connect(func():
 				UpgradeManager.toggle_equip_upgrade(uid_cap)
-				SaveManager.save_game()
+				SaveManager.autosave()
 				open_tab("upgrades")
 			)
 		else:
@@ -1083,7 +1091,7 @@ func _build_upgrades_tab() -> void:
 			btn.pressed.connect(func():
 				var req: Dictionary = UpgradeManager.toggle_equip_upgrade(uid_cap)
 				if bool(req.get("ok", false)):
-					SaveManager.save_game()
+					SaveManager.autosave()
 					open_tab("upgrades")
 				else:
 					show_toast(L.localize_reason(str(req.get("reason", ""))), true)
@@ -1185,7 +1193,8 @@ func _build_achievements_tab() -> void:
 		var acard := PanelContainer.new()
 		acard.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		acard.custom_minimum_size = Vector2(280, 250)
-		acard.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(ThemeHelper.COL_BG_CARD, rcol, 13, 2, 11))
+		var _plq := ThemeHelper.make_plaque_style(str(t.get("rarity", "Common")).to_lower(), 0.50, 14)
+		acard.add_theme_stylebox_override("panel", _plq)
 		grid.add_child(acard)
 
 		var avb := VBoxContainer.new()
@@ -1318,7 +1327,7 @@ func _build_launch_tab() -> void:
 		var gained: int = ShipGrid.sell_all_cargo()
 		if gained > 0:
 			AudioManager.play_sfx("buy_upgrade", 0.03, 0.9)
-			SaveManager.save_game()
+			SaveManager.autosave()
 			open_tab("launch")
 			show_toast("+%d CR" % gained)
 	)
@@ -1420,7 +1429,7 @@ func _build_launch_tab() -> void:
 				var ures: Dictionary = ShipGrid.unlock_sector(sidx_cap)
 				if bool(ures.get("ok", false)):
 					AudioManager.play_sfx("card_legendary", 0.02, 0.9)
-					SaveManager.save_game()
+					SaveManager.autosave()
 					open_tab("launch")
 				else:
 					show_toast(L.localize_reason(str(ures.get("reason", ""))), true)
@@ -1439,82 +1448,30 @@ func _build_settings_tab() -> void:
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_body_root.add_child(sc)
 
-	var center := HBoxContainer.new()
-	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center.alignment = BoxContainer.ALIGNMENT_CENTER
-	sc.add_child(center)
+	var wrap := VBoxContainer.new()
+	wrap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wrap.add_theme_constant_override("separation", 14)
+	sc.add_child(wrap)
 
-	var card := PanelContainer.new()
-	card.name = "SettingsCard"
-	card.custom_minimum_size = Vector2(680, 0)
-	card.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(ThemeHelper.COL_BG_CARD, Color(0.22, 0.72, 1.0, 0.72), 14, 2, 20))
-	center.add_child(card)
+	var grid := GridContainer.new()
+	grid.name = "SettingsGroups"
+	grid.columns = 2
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_theme_constant_override("h_separation", 14)
+	grid.add_theme_constant_override("v_separation", 14)
+	wrap.add_child(grid)
 
-	var vb := VBoxContainer.new()
-	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vb.add_theme_constant_override("separation", 14)
-	card.add_child(vb)
-
-	# 1. Prominent Language Selector Row
-	var lang_hb := HBoxContainer.new()
-	lang_hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lang_hb.add_theme_constant_override("separation", 12)
-	vb.add_child(lang_hb)
-	var lang_lbl := Label.new()
-	lang_lbl.text = L.tr_ui("settings_language")
-	lang_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	if ThemeHelper.font_bold:
-		lang_lbl.add_theme_font_override("font", ThemeHelper.font_bold)
-	lang_lbl.add_theme_color_override("font_color", ThemeHelper.COL_GOLD)
-	lang_hb.add_child(lang_lbl)
-	lang_hb.add_child(ThemeHelper.make_language_dropdown(false))
-
-	var sep1 := HSeparator.new()
-	sep1.modulate = Color(0.22, 0.68, 0.96, 0.35)
-	vb.add_child(sep1)
-
-	_add_slider_row(vb, L.tr_ui("settings_master_vol"), AudioManager.master_volume, 0.0, 1.0, func(v: float):
-		AudioManager.master_volume = v
-		AudioManager.apply_volumes()
-		SaveManager.save_game()
-	)
-	_add_slider_row(vb, L.tr_ui("settings_music_vol"), AudioManager.music_volume, 0.0, 1.0, func(v: float):
-		AudioManager.music_volume = v
-		AudioManager.apply_volumes()
-		SaveManager.save_game()
-	)
-	_add_slider_row(vb, L.tr_ui("settings_sfx_vol"), AudioManager.sfx_volume, 0.0, 1.0, func(v: float):
-		AudioManager.sfx_volume = v
-		AudioManager.apply_volumes()
-		SaveManager.save_game()
-	)
-	_add_slider_row(vb, L.tr_ui("settings_cam_sens"), ThemeHelper.camera_sensitivity, 0.3, 2.5, func(v: float):
-		ThemeHelper.camera_sensitivity = v
-		SaveManager.save_game()
-	)
-
-	var mute_cb := CheckButton.new()
-	mute_cb.text = L.tr_ui("settings_mute")
-	mute_cb.button_pressed = AudioManager.muted
-	mute_cb.toggled.connect(func(on: bool):
-		AudioManager.muted = on
-		AudioManager.apply_volumes()
-		SaveManager.save_game()
-	)
-	vb.add_child(mute_cb)
-
-	var gfx_hb := HBoxContainer.new()
-	gfx_hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	gfx_hb.add_theme_constant_override("separation", 10)
-	vb.add_child(gfx_hb)
-	var gl := Label.new()
-	gl.text = L.tr_ui("settings_gfx")
-	gl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	gfx_hb.add_child(gl)
+	# ---------------------------------------------------------------- DISPLAY
+	var g_disp := _add_settings_group(grid, L.tr_ui("settings_grp_display"), Color(0.22, 0.78, 1.0))
+	var gfx_row := HBoxContainer.new()
+	gfx_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gfx_row.add_theme_constant_override("separation", 8)
+	g_disp.add_child(gfx_row)
 	for preset in ["Low", "Medium", "High"]:
 		var pb := Button.new()
 		pb.text = preset
-		pb.custom_minimum_size = Vector2(96, 36)
+		pb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		pb.custom_minimum_size = Vector2(0, 34)
 		if ThemeHelper.graphics_preset == preset:
 			ThemeHelper.style_accent_button(pb, Color(0.20, 0.78, 1.0))
 		else:
@@ -1524,41 +1481,276 @@ func _build_settings_tab() -> void:
 			SaveManager.save_game()
 			open_tab("settings")
 		)
-		gfx_hb.add_child(pb)
+		gfx_row.add_child(pb)
 
-	var fs_cb := CheckButton.new()
-	fs_cb.text = L.tr_ui("settings_fullscreen")
-	fs_cb.button_pressed = (DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN)
-	fs_cb.toggled.connect(func(on: bool):
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if on else DisplayServer.WINDOW_MODE_WINDOWED)
+	_add_check_row(g_disp, L.tr_ui("settings_vsync"), ThemeHelper.vsync_enabled, func(on: bool):
+		ThemeHelper.vsync_enabled = on
+		ThemeHelper.apply_display_settings()
+		SaveManager.save_game()
 	)
-	vb.add_child(fs_cb)
-
-	var rm_cb := CheckButton.new()
-	rm_cb.text = L.tr_ui("settings_reduced_motion")
-	rm_cb.button_pressed = ThemeHelper.reduced_motion
-	rm_cb.toggled.connect(func(on: bool):
+	_add_slider_row(g_disp, L.tr_ui("settings_fps_cap"), float(ThemeHelper.fps_cap), 30.0, 240.0, func(v: float):
+		ThemeHelper.fps_cap = int(round(v))
+		ThemeHelper.apply_display_settings()
+		SaveManager.save_game()
+	, 10.0, " FPS")
+	_add_slider_row(g_disp, L.tr_ui("settings_ui_scale"), ThemeHelper.ui_scale, 0.75, 1.35, func(v: float):
+		ThemeHelper.ui_scale = v
+		ThemeHelper.apply_ui_scale()
+		SaveManager.save_game()
+	, 0.05, "x")
+	_add_check_row(g_disp, L.tr_ui("settings_fullscreen"), DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN, func(on: bool):
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if on else DisplayServer.WINDOW_MODE_WINDOWED)
+		SaveManager.save_game()
+	)
+	_add_check_row(g_disp, L.tr_ui("settings_reduced_motion"), ThemeHelper.reduced_motion, func(on: bool):
 		ThemeHelper.reduced_motion = on
 		SaveManager.save_game()
 	)
-	vb.add_child(rm_cb)
 
-func _add_slider_row(parent: VBoxContainer, label_text: String, cur: float, min_v: float, max_v: float, cb: Callable) -> void:
+	# ------------------------------------------------------------------ AUDIO
+	var g_aud := _add_settings_group(grid, L.tr_ui("settings_grp_audio"), Color(0.30, 0.90, 0.62))
+	_add_slider_row(g_aud, L.tr_ui("settings_master_vol"), AudioManager.master_volume, 0.0, 1.0, func(v: float):
+		AudioManager.master_volume = v
+		AudioManager.apply_volumes()
+		SaveManager.save_game()
+	, 0.05, "")
+	_add_slider_row(g_aud, L.tr_ui("settings_music_vol"), AudioManager.music_volume, 0.0, 1.0, func(v: float):
+		AudioManager.music_volume = v
+		AudioManager.apply_volumes()
+		SaveManager.save_game()
+	, 0.05, "")
+	_add_slider_row(g_aud, L.tr_ui("settings_sfx_vol"), AudioManager.sfx_volume, 0.0, 1.0, func(v: float):
+		AudioManager.sfx_volume = v
+		AudioManager.apply_volumes()
+		SaveManager.save_game()
+	, 0.05, "")
+	_add_check_row(g_aud, L.tr_ui("settings_mute"), AudioManager.muted, func(on: bool):
+		AudioManager.muted = on
+		AudioManager.apply_volumes()
+		SaveManager.save_game()
+	)
+
+	# ----------------------------------------------------------------- FLIGHT
+	var g_flt := _add_settings_group(grid, L.tr_ui("settings_grp_flight"), Color(1.0, 0.78, 0.25))
+	_add_slider_row(g_flt, L.tr_ui("settings_cam_sens"), ThemeHelper.camera_sensitivity, 0.3, 2.5, func(v: float):
+		ThemeHelper.camera_sensitivity = v
+		SaveManager.save_game()
+	, 0.05, "x")
+	_add_slider_row(g_flt, L.tr_ui("settings_fov"), ThemeHelper.camera_fov, 45.0, 105.0, func(v: float):
+		ThemeHelper.camera_fov = v
+		SaveManager.save_game()
+	, 1.0, "°")
+	_add_slider_row(g_flt, L.tr_ui("settings_shake"), ThemeHelper.screen_shake, 0.0, 1.5, func(v: float):
+		ThemeHelper.screen_shake = v
+		SaveManager.save_game()
+	, 0.05, "x")
+	_add_check_row(g_flt, L.tr_ui("settings_invert_y"), ThemeHelper.invert_y_axis, func(on: bool):
+		ThemeHelper.invert_y_axis = on
+		SaveManager.save_game()
+	)
+
+	# -------------------------------------------------------------------- HUD
+	var g_hud := _add_settings_group(grid, L.tr_ui("settings_grp_hud"), Color(0.80, 0.55, 1.0))
+	_add_slider_row(g_hud, L.tr_ui("settings_crosshair"), ThemeHelper.crosshair_opacity, 0.15, 1.0, func(v: float):
+		ThemeHelper.crosshair_opacity = v
+		SaveManager.save_game()
+	, 0.05, "")
+	_add_check_row(g_hud, L.tr_ui("settings_hud_bars"), ThemeHelper.show_hud_bars, func(on: bool):
+		ThemeHelper.show_hud_bars = on
+		SaveManager.save_game()
+	)
+	_add_check_row(g_hud, L.tr_ui("settings_ach_toasts"), ThemeHelper.achievement_toasts, func(on: bool):
+		ThemeHelper.achievement_toasts = on
+		SaveManager.save_game()
+	)
+
+	# ------------------------------------------------------- DATA & LANGUAGE
+	var g_data_card := PanelContainer.new()
+	g_data_card.name = "SettingsGroup_data"
+	g_data_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	g_data_card.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(
+		ThemeHelper.COL_BG_CARD, Color(0.22, 0.68, 0.96, 0.62), 13, 2, 16))
+	wrap.add_child(g_data_card)
+	var g_data := VBoxContainer.new()
+	g_data.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	g_data.add_theme_constant_override("separation", 10)
+	g_data_card.add_child(g_data)
+	var dhdr := Label.new()
+	dhdr.text = L.tr_ui("settings_grp_data").to_upper()
+	dhdr.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dhdr.clip_text = true
+	if ThemeHelper.font_bold:
+		dhdr.add_theme_font_override("font", ThemeHelper.font_bold)
+	dhdr.add_theme_font_size_override("font_size", 15)
+	dhdr.add_theme_color_override("font_color", Color(0.22, 0.68, 0.96))
+	g_data.add_child(dhdr)
+
+	var lang_row := HBoxContainer.new()
+	lang_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lang_row.add_theme_constant_override("separation", 12)
+	g_data.add_child(lang_row)
+	var lang_lbl := Label.new()
+	lang_lbl.text = L.tr_ui("settings_language")
+	lang_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lang_lbl.clip_text = true
+	if ThemeHelper.font_bold:
+		lang_lbl.add_theme_font_override("font", ThemeHelper.font_bold)
+	lang_lbl.add_theme_color_override("font_color", ThemeHelper.COL_GOLD)
+	lang_row.add_child(lang_lbl)
+	lang_row.add_child(ThemeHelper.make_language_dropdown(false))
+
+	_add_check_row(g_data, L.tr_ui("settings_autosave"), ThemeHelper.auto_save, func(on: bool):
+		ThemeHelper.auto_save = on
+		if on:
+			SaveManager.flush_pending_autosave()
+		SaveManager.save_game()
+	)
+
+	var res_row := HBoxContainer.new()
+	res_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	res_row.add_theme_constant_override("separation", 12)
+	g_data.add_child(res_row)
+	var res_lbl := Label.new()
+	res_lbl.text = L.tr_ui("settings_reset_save")
+	res_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	res_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	res_lbl.add_theme_font_size_override("font_size", 13)
+	res_lbl.add_theme_color_override("font_color", ThemeHelper.COL_MUTED)
+	res_row.add_child(res_lbl)
+	var res_btn := Button.new()
+	res_btn.text = L.tr_ui("settings_reset_save")
+	res_btn.custom_minimum_size = Vector2(190, 34)
+	ThemeHelper.style_accent_button(res_btn, Color(0.86, 0.30, 0.34))
+	res_row.add_child(res_btn)
+
+	var confirm := PanelContainer.new()
+	confirm.visible = false
+	confirm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	confirm.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(
+		Color(0.09, 0.03, 0.045, 0.96), ThemeHelper.COL_RED, 11, 2, 12))
+	g_data.add_child(confirm)
+	var cvb := VBoxContainer.new()
+	cvb.add_theme_constant_override("separation", 8)
+	confirm.add_child(cvb)
+	var cwarn := Label.new()
+	cwarn.text = L.tr_ui("settings_reset_warn")
+	cwarn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cwarn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	cwarn.add_theme_font_size_override("font_size", 13)
+	cwarn.add_theme_color_override("font_color", Color(1.0, 0.62, 0.62))
+	cvb.add_child(cwarn)
+	var crow := HBoxContainer.new()
+	crow.alignment = BoxContainer.ALIGNMENT_END
+	crow.add_theme_constant_override("separation", 10)
+	cvb.add_child(crow)
+	var cno := Button.new()
+	cno.text = L.tr_ui("cancel")
+	cno.custom_minimum_size = Vector2(130, 32)
+	ThemeHelper.wire_button_fx(cno)
+	cno.pressed.connect(func(): confirm.visible = false)
+	crow.add_child(cno)
+	var cyes := Button.new()
+	cyes.text = L.tr_ui("settings_confirm_reset")
+	cyes.custom_minimum_size = Vector2(200, 32)
+	ThemeHelper.style_accent_button(cyes, ThemeHelper.COL_RED)
+	cyes.pressed.connect(func():
+		SaveManager.reset_all_progress()
+		confirm.visible = false
+		show_toast(L.tr_ui("settings_done_reset"))
+		AudioManager.play_sfx("ui_back", 0.0, 0.9)
+		open_tab("shop")
+	)
+	crow.add_child(cyes)
+	res_btn.pressed.connect(func():
+		confirm.visible = true
+		ThemeHelper.animate_entry(confirm, 0.0, Vector2.ONE)
+	)
+
+	ThemeHelper.animate_grid_stagger(grid, 0.03, 8)
+	ThemeHelper.animate_entry(g_data_card, 0.06, Vector2.ONE)
+
+
+func _add_settings_group(parent: Control, title: String, accent: Color) -> VBoxContainer:
+	var card := PanelContainer.new()
+	card.name = "SettingsGroup_%s" % title.left(12)
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	card.custom_minimum_size = Vector2(330, 0)
+	card.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(ThemeHelper.COL_BG_CARD, Color(accent.r, accent.g, accent.b, 0.62), 13, 2, 16))
+	parent.add_child(card)
+
+	var vb := VBoxContainer.new()
+	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vb.add_theme_constant_override("separation", 10)
+	card.add_child(vb)
+
+	var hdr := Label.new()
+	hdr.text = title.to_upper()
+	hdr.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hdr.clip_text = true
+	if ThemeHelper.font_bold:
+		hdr.add_theme_font_override("font", ThemeHelper.font_bold)
+	hdr.add_theme_font_size_override("font_size", 15)
+	hdr.add_theme_color_override("font_color", accent)
+	vb.add_child(hdr)
+	return vb
+
+
+func _add_check_row(parent: Control, label_text: String, initial: bool, cb: Callable) -> void:
+	var cb_btn := CheckButton.new()
+	cb_btn.text = label_text
+	cb_btn.button_pressed = initial
+	cb_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cb_btn.clip_text = true
+	cb_btn.add_theme_font_size_override("font_size", 13)
+	cb_btn.toggled.connect(cb)
+	parent.add_child(cb_btn)
+
+
+func _add_slider_row(parent: Control, label_text: String, cur: float, min_v: float, max_v: float, cb: Callable, step: float = 0.05, suffix: String = "") -> void:
 	var hb := HBoxContainer.new()
 	hb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hb.add_theme_constant_override("separation", 12)
+	hb.add_theme_constant_override("separation", 10)
 	parent.add_child(hb)
+
 	var l := Label.new()
 	l.text = label_text
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	l.custom_minimum_size = Vector2(260, 0)
+	l.custom_minimum_size = Vector2(150, 0)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.add_theme_font_size_override("font_size", 12)
 	hb.add_child(l)
+
 	var sl := HSlider.new()
-	sl.custom_minimum_size = Vector2(240, 26)
+	sl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sl.custom_minimum_size = Vector2(96, 24)
 	sl.min_value = min_v
 	sl.max_value = max_v
-	sl.step = 0.05
+	sl.step = step
 	sl.value = cur
-	sl.value_changed.connect(cb)
 	hb.add_child(sl)
+
+	var val := Label.new()
+	val.text = _fmt_slider_value(cur, suffix)
+	val.custom_minimum_size = Vector2(58, 0)
+	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	if ThemeHelper.font_mono:
+		val.add_theme_font_override("font", ThemeHelper.font_mono)
+	val.add_theme_font_size_override("font_size", 12)
+	val.add_theme_color_override("font_color", ThemeHelper.COL_CYAN)
+	hb.add_child(val)
+
+	sl.value_changed.connect(func(v: float):
+		val.text = _fmt_slider_value(v, suffix)
+		cb.call(v)
+	)
+
+
+func _fmt_slider_value(v: float, suffix: String) -> String:
+	if suffix == " FPS":
+		return "%d%s" % [int(round(v)), ""]
+	if suffix == "x":
+		return "%.2fx" % v
+	if suffix == "°":
+		return "%d°" % int(round(v))
+	return "%d%%" % int(round(v * 100.0))

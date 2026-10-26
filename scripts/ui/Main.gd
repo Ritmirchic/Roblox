@@ -16,6 +16,7 @@ var _tagline_lbl: Label = null
 var _summary_lbl: Label = null
 var _play_btn: Button = null
 var _quick_btn: Button = null
+var _hall_btn: Button = null
 var _set_btn: Button = null
 var _new_btn: Button = null
 var _quit_btn: Button = null
@@ -198,7 +199,7 @@ func _show_main_menu() -> void:
 	left_card.offset_right = 564
 	left_card.offset_top = 24
 	left_card.offset_bottom = -24
-	left_card.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(Color(0.024, 0.046, 0.108, 0.93), Color(0.22, 0.78, 1.0, 0.88), 16, 2, 18))
+	left_card.add_theme_stylebox_override("panel", ThemeHelper.make_plaque_style("rare", 0.46, 24))
 	root.add_child(left_card)
 
 	var sc := ScrollContainer.new()
@@ -260,6 +261,13 @@ func _show_main_menu() -> void:
 	ThemeHelper.style_accent_button(_quick_btn, Color(0.20, 0.70, 0.96))
 	_quick_btn.pressed.connect(func(): _launch_space_sector(0))
 	vb.add_child(_quick_btn)
+
+	_hall_btn = Button.new()
+	_hall_btn.custom_minimum_size = Vector2(390, 42)
+	_hall_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	ThemeHelper.style_accent_button(_hall_btn, Color(0.85, 0.55, 0.15))
+	_hall_btn.pressed.connect(_enter_achievement_hall)
+	vb.add_child(_hall_btn)
 
 	_set_btn = Button.new()
 	_set_btn.custom_minimum_size = Vector2(390, 42)
@@ -360,6 +368,7 @@ func _refresh_menu_texts() -> void:
 	])
 	_play_btn.text = L.tr_ui("menu_enter_hangar")
 	_quick_btn.text = L.tr_ui("menu_quick_launch")
+	_hall_btn.text = L.tr_ui("menu_hall_of_achievements")
 	_set_btn.text = L.tr_ui("menu_settings")
 	_new_btn.text = L.tr_ui("menu_new_career")
 	_quit_btn.text = L.tr_ui("menu_exit")
@@ -377,6 +386,14 @@ func _enter_hangar() -> void:
 	add_child(hangar)
 	_active_world = hangar
 
+func _enter_achievement_hall() -> void:
+	_clear_current_mode()
+	_pulse_scene_curtain()
+	var hall := AchievementHall3D.new()
+	hall.return_to_hangar.connect(_show_main_menu)
+	add_child(hall)
+	_active_world = hall
+
 func _launch_space_sector(sector_idx: int) -> void:
 	_clear_current_mode()
 	_pulse_scene_curtain()
@@ -387,7 +404,7 @@ func _launch_space_sector(sector_idx: int) -> void:
 	_active_world = exp_scene
 
 func _run_packaged_exe_self_test() -> void:
-	print("=== RUNNING PACKAGED RUNTIME VERIFICATION (v2.0.1) ===")
+	print("=== RUNNING PACKAGED RUNTIME VERIFICATION (v2.1.0) ===")
 	_show_main_menu()
 	await get_tree().process_frame
 	await get_tree().process_frame

@@ -397,7 +397,7 @@ func _build_hangar_ui() -> void:
 	_menu_btn.custom_minimum_size = Vector2(142, 36)
 	ThemeHelper.wire_button_fx(_menu_btn)
 	_menu_btn.pressed.connect(func():
-		SaveManager.save_game()
+		SaveManager.autosave()
 		request_main_menu.emit()
 	)
 	thb.add_child(_menu_btn)
@@ -479,7 +479,7 @@ func _build_hangar_ui() -> void:
 			AudioManager.play_sfx("buy_upgrade", 0.04, 0.85)
 			selected_mod_id = "hull_cell"
 			editor_mode = "place"
-			SaveManager.save_game()
+			SaveManager.autosave()
 			_refresh_ui()
 		else:
 			_status_banner.text = L.tr_ui("not_enough_credits")
@@ -571,7 +571,7 @@ func _build_hangar_ui() -> void:
 			nm = "Ship_%d" % (ShipGrid.saved_layouts.size() + 1)
 		if ShipGrid.save_named_layout(nm):
 			_blueprint_le.release_focus()
-			SaveManager.save_game()
+			SaveManager.autosave()
 			_status_banner.text = L.tr_ui("saved_layout_msg", [nm])
 			_refresh_ui()
 	)
@@ -596,7 +596,7 @@ func _build_hangar_ui() -> void:
 			var sel_name := _blueprint_opt.get_item_text(_blueprint_opt.selected)
 			if ShipGrid.load_named_layout(sel_name):
 				AudioManager.play_sfx("module_place", 0.03, 0.85)
-				SaveManager.save_game()
+				SaveManager.autosave()
 				_status_banner.text = L.tr_ui("loaded_layout_msg", [sel_name])
 				_on_ship_changed()
 	)
@@ -1076,7 +1076,7 @@ func _handle_left_click(screen_pos: Vector2) -> void:
 		var res := ShipGrid.remove_module_at(hovered_anchor)
 		if res["ok"]:
 			AudioManager.play_sfx("module_remove", 0.04, 0.85)
-			SaveManager.save_game()
+			SaveManager.autosave()
 		else:
 			AudioManager.play_sfx("ui_error", 0.03, 0.7)
 			_status_banner.text = L.localize_reason(str(res["reason"]))
@@ -1085,7 +1085,7 @@ func _handle_left_click(screen_pos: Vector2) -> void:
 		if res["ok"]:
 			AudioManager.play_sfx("module_place", 0.04, 0.9)
 			_rebuild_ship_3d_preview(int(res["uid"]))
-			SaveManager.save_game()
+			SaveManager.autosave()
 			_refresh_ui()
 		else:
 			AudioManager.play_sfx("ui_error", 0.03, 0.7)

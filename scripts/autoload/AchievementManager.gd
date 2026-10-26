@@ -34,6 +34,7 @@ var active_tasks: Dictionary = {
 
 # Permanent Collectible Achievement Card Album: card_key -> int times completed
 var collected_album: Dictionary = {}
+var album_meta: Dictionary = {}
 var _claimed_ledger: Dictionary = {}
 var _accum_tick: float = 0.0
 
@@ -194,6 +195,7 @@ func record_event(event_type: String, amount: float) -> void:
 				if float(task["progress"]) >= float(task["target"]):
 					task["completed"] = true
 					collected_album[task["id"]] = int(collected_album.get(task["id"], 0)) + 1
+					_remember_album_entry(task)
 					achievement_completed.emit(task)
 	if any_changed:
 		achievements_updated.emit()
@@ -216,7 +218,7 @@ func claim_reward(category: String, task_id: String) -> Dictionary:
 			ShipGrid.add_crystals(reward)
 			collected_album[task_id] = maxi(1, int(collected_album.get(task_id, 0)))
 			achievements_updated.emit()
-			SaveManager.save_game()
+			SaveManager.autosave()
 			return {"ok": true, "crystals": reward}
 	return {"ok": false, "reason": "Achievement not found."}
 
@@ -228,11 +230,90 @@ func get_total_active_count() -> int:
 		+ active_tasks["weekly"].size()
 	)
 
+## Freeze a human-readable snapshot so the card stays in the hall after the
+## rotating UTC bucket that generated it has been replaced.
+func _remember_album_entry(task: Dictionary) -> void:
+	var tid := str(task.get("id", ""))
+	if tid.is_empty() or album_meta.has(tid):
+		return
+	album_meta[tid] = {
+		"id": tid,
+		"name": str(task.get("name", "")),
+		"description": str(task.get("description", "")),
+		"objective": str(task.get("objective", "")),
+		"rarity": str(task.get("rarity", "Common")),
+		"art": str(task.get("art", "res://assets/cards/achievements/ach_01.png")),
+		"category": str(task.get("category", "daily")),
+		"earned_at": get_utc_unix(),
+	}
+
+
+func total_card_count() -> int:
+	return TOTAL_ACTIVE_ACHIEVEMENTS
+
+
+func earned_count() -> int:
+	return album_meta.size() if not album_meta.is_empty() else collected_album.size()
+
+
+## Every achievement card the pilot has ever earned, newest first.
+func hall_entries() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var seen: Dictionary = {}
+	for tid in album_meta.keys():
+		var meta: Dictionary = album_meta[tid]
+		seen[tid] = true
+		out.append(meta.duplicate(true))
+	for cat in ["minute", "hourly", "daily", "weekly"]:
+		for task in active_tasks.get(cat, []):
+			if not bool(task.get("completed", false)):
+				continue
+			var tid2 := str(task["id"])
+			if seen.has(tid2):
+				continue
+			seen[tid2] = true
+			out.append({
+				"id": tid2,
+				"name": str(task.get("name", "")),
+				"description": str(task.get("description", "")),
+				"objective": str(task.get("objective", "")),
+				"rarity": str(task.get("rarity", "Common")),
+				"art": str(task.get("art", "res://assets/cards/achievements/ach_01.png")),
+				"category": cat,
+				"earned_at": 0,
+			})
+	for tid3 in collected_album.keys():
+		if seen.has(tid3):
+			continue
+		out.append(_make_album_stub(tid3))
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int(a.get("earned_at", 0)) > int(b.get("earned_at", 0))
+	)
+	return out
+
+
+func _make_album_stub(tid: String) -> Dictionary:
+	var pretty := str(L.ach_name({"id": tid}))
+	if pretty.strip_edges().is_empty():
+		pretty = tid.replace("ach_", "ACH-")
+	return {
+		"id": tid,
+		"name": pretty,
+		"description": "",
+		"objective": "",
+		"rarity": "Common",
+		"art": "res://assets/cards/achievements/ach_01.png",
+		"category": "daily",
+		"earned_at": 0,
+	}
+
+
 func serialize_state() -> Dictionary:
 	return {
 		"bucket_ids": bucket_ids.duplicate(true),
 		"active_tasks": active_tasks.duplicate(true),
 		"collected_album": collected_album.duplicate(true),
+		"album_meta": album_meta.duplicate(true),
 		"claimed_ledger": _claimed_ledger.duplicate(true),
 	}
 
@@ -242,6 +323,11 @@ func load_state(data: Dictionary) -> void:
 		return
 	if typeof(data.get("collected_album")) == TYPE_DICTIONARY:
 		collected_album = data["collected_album"].duplicate(true)
+	album_meta.clear()
+	if typeof(data.get("album_meta")) == TYPE_DICTIONARY:
+		for k in data["album_meta"].keys():
+			if typeof(data["album_meta"][k]) == TYPE_DICTIONARY:
+				album_meta[str(k)] = data["album_meta"][k].duplicate(true)
 	if typeof(data.get("claimed_ledger")) == TYPE_DICTIONARY:
 		_claimed_ledger = data["claimed_ledger"].duplicate(true)
 	if typeof(data.get("bucket_ids")) == TYPE_DICTIONARY and typeof(data.get("active_tasks")) == TYPE_DICTIONARY:

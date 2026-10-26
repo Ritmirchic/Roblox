@@ -220,16 +220,21 @@ jobs:
 
           $tag = "space-miner-v1.0.0"
           $notes = @"
-          # SPACE MINER: BUILD & CONQUER — v2.0.1 (64-Bit Windows Multilingual, GUI Layout Fix & Audio/Art Overhaul)
+          # SPACE MINER: BUILD & CONQUER — v2.1.0 (64-Bit Windows · Full Art, HUD & Settings Expansion)
 
-          Complete standalone 64-bit Windows 3D space mining, modular ship construction, orbital combat, and collectible card progression game built on **Godot Engine 4.3**.
+          Complete standalone 64-bit Windows 3D space mining, modular ship construction, orbital combat and collectible card progression game built on **Godot Engine 4.3**.
 
-          ### v2.0.1 Fixes & Major Overhaul Highlights
-          - **Critical GUI Container Layout & Upgrade Core Fix (`v2.0.1`)**: Eliminated all `Container` child `Control.scale` conflicts (`Control::set_rect`), replaced anchor-inside-0x0-Control station containers with pure `MarginContainer` layout, enforced explicit minimum widths on all wrapped labels across Main Menu / Hangar / Modals (preventing narrow vertical text columns or card pile-ups), and populated **Ядро улучшений (`Upgrade Core`)** with **5 Protocol Slots**, **all 18 Upgrade Protocols**, and **Installed Ship Hardware Upgrades (Lv. 1–5)** in one unified screen.
-          - **Complete GUI Rebuild & Non-Overlapping Responsive Layout**: Rebuilt Main Menu, 3D Hangar HUD (relocated Bottom Station Dock, collapsible side docks, integrated station switcher strip, strict mouse-hit isolation over HUD panels), Flight HUD, and Pack Opening Ceremony — verified zero overlaps or clipping from `1280x720` up to `4K`.
-          - **10 World Languages (Russian Primary Default)**: Full live localization across **Русский (primary default)**, English, Español, Deutsch, Français, Português, 简体中文, 日本語, 한국어, and Türkçe with bundled SIL OFL `Exo 2`, `JetBrains Mono`, and CJK font fallbacks (`0` missing glyphs).
-          - **Studio 44.1 kHz Sci-Fi Audio Overhaul**: All 23 ambient loops and sound effects completely re-synthesized at `44.1 kHz` 16-bit PCM with warm filtered stereo-grade harmonics, musical chord cadences, and smooth fade-ins.
-          - **High-Detail Sci-Fi Fighter & Achievement Card Artwork + Rich Animations**: All 42 Crew Fighter portraits (`400x500`), 30 Widescreen 3D PBR Achievement Dioramas (`360x204`), Holographic Card Back, and Booster Packs redesigned with interactive mouse-tracked foil sheen, Hero Bridge Dossier showcase, and levitating packs.
+          ### v2.1.0 Highlights
+          - **Hall of Achievements — a real empty-space 3D room**: every achievement card ever earned physically floats around the pilot on a glowing dais (nebula haze, star field, per-rarity emissive plaques). Drag to look around, mouse wheel to orbit closer, click any card for its dossier, `F` to step through the collection, `ESC` to return. Cards refresh live as new UTC-bucket achievements are completed.
+          - **Genuinely Unique Artwork, Not Recolors**: all **42 crew fighter portraits**, **18 upgrade protocol icons** and **30 achievement dioramas** are rendered per-item through an offline CPU PBR pipeline (mesh-specific geometry, materials, lighting, backdrop) — `42/42`, `18/18` and `30/30` distinct SHA-256 digests, verified with zero duplicates.
+          - **Redrawn Upgrade Core Icons & Achievement Backgrounds**: upgrade icons are rendered from the actual installed ship equipment models; every rarity now owns a procedurally shaded metal plaque (starburst rays, laurel wreath, emblem, corner brackets, brushed micro-relief, specular + rim + AO + film grain) that is also used as the shared GUI panel material, so menus, the station modal and achievement cards speak one visual language.
+          - **Meteor Shattering Into Collectible Debris**: destroyed asteroids now burst into 3–6 visible, physics-thrown rock chunks (5 on full shatter) with boosted explosion energy, each individually magnetically collectible — no more vanishing rocks.
+          - **Portal-Only Hangar Return**: the auxiliary steering reticle was removed (only the exact 3D ballistic Crosshair #2 remains) and every instant-exit path is gone — the warp gate (`< 9.5 m`) is now the single way back to the hangar; pause menu buttons only close the pause overlay.
+          - **Transparent Booster Pack Cutouts**: pack art is alpha-cut to its silhouette so the opening ceremony shows the glowing wings and flares over the live 3D scene with no black rectangular edges.
+          - **Expanded Settings (5 groups, 19 live controls)**: DISPLAY & SCREEN (3 graphics presets, V-Sync, frame-rate limit, UI scale, fullscreen, reduced motion), AUDIO (master/music/SFX + mute), FLIGHT CONTROLS (sensitivity, field of view, cockpit shake, invert pitch axis), PILOT HUD (crosshair opacity, resource panel, achievement popups) and DATA & LANGUAGE (10 languages, auto-save toggle, full progress reset with confirmation). Every control is functional, clamped, applied live to the engine and round-trips through the SHA-256 save file.
+          - **Real Impact Feedback Systems**: trauma-based cockpit camera shake driven by meteor destruction and plasma hits, plus gold achievement popups in flight and in the station, both respecting the reduced-motion and popup settings.
+          - **10 World Languages (Russian Primary Default)** with bundled SIL OFL `Exo 2`, `JetBrains Mono` and rebuilt CJK subsets — a regression test now proves **every** localized string in the project renders in the shipped font chain (`0` missing glyphs for Russian, Simplified Chinese, Japanese, Korean and Turkish).
+          - **Studio 44.1 kHz Sci-Fi Audio**: all 23 ambient loops and SFX synthesized at `44.1 kHz` 16-bit PCM with filtered warm harmonics and musical cadences.
 
           ## Downloads
           - **Windows Standalone Portable (`SPACE_MINER_WINDOWS.zip`)**: Extract and launch `SPACE_MINER.exe`. No external runtimes required.
@@ -254,9 +259,9 @@ jobs:
 
           if ($exists) {
             gh release upload $tag "dist\SPACE_MINER_WINDOWS.zip" "dist\SPACE_MINER_SETUP.exe" "dist\SPACE_MINER_SOURCE.zip" "dist\SHA256SUMS.txt" --clobber --repo "${{ github.repository }}"
-            gh release edit $tag --title "SPACE MINER: BUILD & CONQUER v2.0.1" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
+            gh release edit $tag --title "SPACE MINER: BUILD & CONQUER v2.1.0" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
           } else {
-            gh release create $tag "dist\SPACE_MINER_WINDOWS.zip" "dist\SPACE_MINER_SETUP.exe" "dist\SPACE_MINER_SOURCE.zip" "dist\SHA256SUMS.txt" --target "${{ github.sha }}" --title "SPACE MINER: BUILD & CONQUER v2.0.1" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
+            gh release create $tag "dist\SPACE_MINER_WINDOWS.zip" "dist\SPACE_MINER_SETUP.exe" "dist\SPACE_MINER_SOURCE.zip" "dist\SHA256SUMS.txt" --target "${{ github.sha }}" --title "SPACE MINER: BUILD & CONQUER v2.1.0" --notes-file "dist\RELEASE_NOTES.md" --repo "${{ github.repository }}"
           }
 
           Write-Host "::notice title=ReleasePublished::https://github.com/${{ github.repository }}/releases/tag/$tag"

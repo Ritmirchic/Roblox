@@ -137,7 +137,7 @@ func purchase_and_open_pack(pack_id: String) -> Dictionary:
 		AchievementManager.record_event("open_pack", 1)
 	ShipGrid.credits_changed.emit(ShipGrid.credits)
 	_busy_lock = false
-	SaveManager.save_game()
+	SaveManager.autosave()
 	pack_opened.emit(drawn_results, fifth_slot_won)
 	return {
 		"ok": true,

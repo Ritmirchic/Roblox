@@ -96,7 +96,8 @@ func apply_mining_damage(raw_dmg: float, pierce_tier: int, yield_mult: float, ra
 func _spawn_chunks(base_count: int, yield_mult: float, rare_chance: float, chunk_parent: Node) -> void:
 	if not chunk_parent:
 		return
-	var count := maxi(1, int(round(float(base_count) * maxf(1.0, minf(yield_mult, 4.0)))))
+	# More visible fragments when asteroid breaks: 3-6 larger glowing chunks
+	var count := maxi(3, int(round(float(base_count) * maxf(1.0, minf(yield_mult, 4.0)))))
 	var per_chunk_qty := maxi(1, int(round(maxf(1.0, yield_mult / float(count)) * float(base_count))))
 	for _i in range(count):
 		var res_id := _pick_weighted_resource(rare_chance)
@@ -104,7 +105,9 @@ func _spawn_chunks(base_count: int, yield_mult: float, rare_chance: float, chunk
 		var dir := Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)).normalized()
 		if dir.length_squared() < 0.01:
 			dir = Vector3.UP
-		chunk.setup(res_id, per_chunk_qty, global_position + dir * (radius * 0.55), dir * randf_range(4.0, 11.0))
+		# Larger impulse so fragments scatter visibly
+		var impulse := dir * randf_range(6.0, 14.0)
+		chunk.setup(res_id, per_chunk_qty, global_position + dir * (radius * 0.7), impulse)
 		chunk_parent.add_child(chunk)
 
 func _shatter(yield_mult: float, rare_chance: float, chunk_parent: Node) -> void:
@@ -112,8 +115,9 @@ func _shatter(yield_mult: float, rare_chance: float, chunk_parent: Node) -> void
 		return
 	_dead = true
 	AudioManager.play_sfx("asteroid_break", 0.09, 0.85)
-	VFXFactory.spawn_explosion(get_parent(), global_position, GameData.RESOURCES[dominant_resource]["color"], 0.95)
-	_spawn_chunks(3, yield_mult, rare_chance, chunk_parent)
+	VFXFactory.spawn_explosion(get_parent(), global_position, GameData.RESOURCES[dominant_resource]["color"], 1.2)
+	# Shatter into more visible fragments that player must collect
+	_spawn_chunks(5, yield_mult, rare_chance, chunk_parent)
 	ShipGrid.stats_history["asteroids_mined"] = int(ShipGrid.stats_history.get("asteroids_mined", 0)) + 1
 	if AchievementManager:
 		AchievementManager.record_event("mine_asteroid", 1)

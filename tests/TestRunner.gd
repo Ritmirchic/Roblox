@@ -27,6 +27,8 @@ func _ready() -> void:
 	await _test_live_3d_gameplay_mining_combat_magnets()
 	_test_save_load_and_corruption_recovery()
 	await _test_multilingual_localization_and_gui_non_overlap()
+	_test_expanded_settings_and_hall()
+	await _test_achievement_hall3d()
 
 	print("=== TEST SUMMARY: %d PASSED, %d FAILED ===" % [_passed, _failed])
 	if _failed > 0:
@@ -706,8 +708,26 @@ func _test_multilingual_localization_and_gui_non_overlap() -> void:
 			var sec_grid: Control = body_root.find_child("SectorGrid", true, false) as Control
 			_assert_grid_children_laid_out(sec_grid, 5, 340.0, 140.0, "SectorGrid (5 space sectors)")
 		elif tab == "settings":
-			var set_card: Control = body_root.find_child("SettingsCard", true, false) as Control
-			_check(is_instance_valid(set_card) and set_card.size.x >= 650.0 and set_card.size.y >= 320.0, "SettingsCard properly laid out")
+			var set_grid: Control = body_root.find_child("SettingsGroups", true, false) as Control
+			_check(is_instance_valid(set_grid), "Expanded settings grid exists")
+			var set_cards: Array = [] if not is_instance_valid(set_grid) else set_grid.get_children()
+			_check(set_cards.size() == 4, "Settings has 4 grouped display/audio/flight/HUD cards (%d)" % set_cards.size())
+			var set_ok := true
+			for sc_ch in set_cards:
+				var scc := sc_ch as Control
+				if not is_instance_valid(scc) or scc.size.x < 300.0 or scc.size.y < 220.0:
+					set_ok = false
+			_check(set_ok, "Every settings group card is sized >= 300x220")
+			var set_ctl := 0
+			if is_instance_valid(set_grid):
+				set_ctl = _count_interactive_controls(set_grid)
+			_check(set_ctl >= 18, "Expanded settings exposes >= 18 interactive controls (found %d)" % set_ctl)
+			var set_bad: Array[String] = []
+			var set_narrow: Array[String] = []
+			if is_instance_valid(set_grid):
+				_scan_ui_subtree_invariants(set_grid, set_bad, set_narrow)
+			_check(set_bad.is_empty(), "Settings grid has zero scaled Controls inside Containers")
+			_check(set_narrow.is_empty(), "Settings grid has zero narrow wrapped Labels")
 
 	hangar._station_panels.close_panel()
 	hangar.queue_free()
@@ -741,6 +761,157 @@ func _test_multilingual_localization_and_gui_non_overlap() -> void:
 
 	exp_hud.queue_free()
 	await get_tree().process_frame
+
+func _test_expanded_settings_and_hall() -> void:
+	# --- Every new setting exists, is clamped and round-trips through the save file
+	ThemeHelper.ui_scale = 9.0
+	ThemeHelper.apply_ui_scale()
+	_check(ThemeHelper.ui_scale <= 1.35 and ThemeHelper.ui_scale >= 0.75, "UI SCALE clamped to safe range")
+	_check(ThemeHelper.main_theme.default_font_size >= 11, "UI SCALE drives live theme font size (%d)" % ThemeHelper.main_theme.default_font_size)
+
+	ThemeHelper.fps_cap = 9999
+	ThemeHelper.vsync_enabled = false
+	ThemeHelper.apply_display_settings()
+	_check(Engine.max_fps == 240, "FRAME RATE LIMIT clamped to 240 and applied to Engine.max_fps")
+	ThemeHelper.vsync_enabled = true
+	ThemeHelper.apply_display_settings()
+	_check(Engine.max_fps == 0, "V-SYNC enabled releases the manual frame cap")
+
+	ThemeHelper.camera_fov = 88.0
+	ThemeHelper.invert_y_axis = true
+	ThemeHelper.crosshair_opacity = 0.4
+	ThemeHelper.screen_shake = 0.0
+	ThemeHelper.show_hud_bars = false
+	ThemeHelper.achievement_toasts = false
+	ThemeHelper.auto_save = false
+
+	var sset := "user://settings_roundtrip.json"
+	_check(SaveManager.save_game(sset), "Saved expanded settings to disk")
+	ThemeHelper.ui_scale = 1.0
+	ThemeHelper.camera_fov = 65.0
+	ThemeHelper.invert_y_axis = false
+	ThemeHelper.crosshair_opacity = 1.0
+	ThemeHelper.screen_shake = 1.0
+	ThemeHelper.show_hud_bars = true
+	ThemeHelper.auto_save = true
+	_check(SaveManager.load_game(sset), "Reloaded expanded settings")
+	_check(absf(ThemeHelper.camera_fov - 88.0) < 0.01, "FIELD OF VIEW persisted through save file")
+	_check(ThemeHelper.invert_y_axis, "INVERT PITCH AXIS persisted through save file")
+	_check(absf(ThemeHelper.crosshair_opacity - 0.4) < 0.01, "CROSSHAIR OPACITY persisted through save file")
+	_check(absf(ThemeHelper.screen_shake) < 0.01, "COCKPIT SHAKE persisted through save file")
+	_check(not ThemeHelper.show_hud_bars, "RESOURCE BAR PANEL toggle persisted")
+	_check(not ThemeHelper.achievement_toasts, "ACHIEVEMENT POPUPS toggle persisted")
+	_check(not ThemeHelper.auto_save, "AUTO-SAVE toggle persisted")
+
+	# --- AUTO-SAVE really gates transactional writes
+	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://space_miner_save.json"))
+	var before := ShipGrid.credits
+	ShipGrid.credits = before + 777
+	var gated := SaveManager.autosave()
+	_check(not gated and SaveManager.pending_autosave, "AUTO-SAVE disabled suppresses transactional write and defers it")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(sset))
+	var dir := DirAccess.open("user://")
+	if dir:
+		for fn in dir.get_files():
+			if fn.begins_with("space_miner_save"):
+				_dir_remove("user://" + fn)
+	ShipGrid.credits = before
+	ThemeHelper.auto_save = true
+	ThemeHelper.crosshair_opacity = 1.0
+	ThemeHelper.screen_shake = 1.0
+	ThemeHelper.show_hud_bars = true
+	ThemeHelper.camera_fov = 65.0
+	ThemeHelper.invert_y_axis = false
+	ThemeHelper.achievement_toasts = true
+	ThemeHelper.ui_scale = 1.0
+	ThemeHelper.apply_ui_scale()
+
+
+func _dir_remove(path: String) -> void:
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func _test_achievement_hall3d() -> void:
+	_check(ClassDB.class_exists("AchievementHall3D") or ResourceLoader.exists("res://scripts/space/AchievementHall3D.gd"),
+		"AchievementHall3D script exists")
+	var hall_script := load("res://scripts/space/AchievementHall3D.gd") as GDScript
+	_check(hall_script != null and hall_script.can_instantiate(), "AchievementHall3D instantiates")
+
+	AchievementManager.collected_album.clear()
+	AchievementManager.album_meta.clear()
+	# Complete one real achievement so the hall has genuine content
+	var seeded := false
+	for cat in ["minute", "hourly", "daily", "weekly"]:
+		for task in AchievementManager.active_tasks.get(cat, []):
+			task["completed"] = true
+			task["progress"] = float(task["target"])
+			var tid := str(task["id"])
+			AchievementManager.collected_album[tid] = 1
+			AchievementManager._remember_album_entry(task)
+			seeded = true
+			break
+		if seeded:
+			break
+	_check(seeded, "Seeded one completed achievement for hall verification")
+	_check(AchievementManager.earned_count() >= 1, "earned_count() reports the album size")
+	_check(AchievementManager.hall_entries().size() >= 1, "hall_entries() returns the earned cards")
+	_check(AchievementManager.total_card_count() == 30, "Hall totals match the 30-card achievement set")
+
+	var hall = hall_script.new()
+	add_child(hall)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	_check(hall.get_node_or_null("HallCards") != null, "HallCards root built")
+	var cards_root := hall.get_node("HallCards") as Node3D
+	_check(cards_root.get_child_count() >= 1, "Hall shows real floating card nodes (%d)" % cards_root.get_child_count())
+	var cam_ok := false
+	for ch in hall.get_children():
+		if ch is Camera3D or (ch is Node3D and _subtree_has_camera(ch)):
+			cam_ok = true
+	_check(cam_ok, "Hall is a real 3D scene with an active Camera3D")
+	var we_ok := false
+	for ch in hall.get_children():
+		if ch is WorldEnvironment:
+			we_ok = true
+	_check(we_ok, "Hall has its own WorldEnvironment (nebula/void), not a flat background")
+	_check(hall._hud != null and is_instance_valid(hall._title_lbl), "Hall HUD title label present")
+	_check(hall._title_lbl.text.length() > 2, "Hall title localized and non-empty: " + hall._title_lbl.text)
+	_check(hall._back_btn != null and hall._back_btn.text.length() > 2, "Hall return button labeled")
+	_check(not hall._hint_lbl.text.is_empty(), "Hall control hints shown")
+	var first_card := cards_root.get_child(0) as Node3D
+	_check(first_card != null and first_card.get_child_count() == 2, "Each hall card is art + rarity glow (2 meshes)")
+	var mat_ok := false
+	if first_card:
+		var mi := first_card.get_child(0) as MeshInstance3D
+		if mi and mi.mesh is PlaneMesh:
+			var m := (mi.mesh as PlaneMesh).material as StandardMaterial3D
+			mat_ok = m != null and m.albedo_texture != null
+	_check(mat_ok, "Hall card renders a real achievement artwork texture")
+	hall._try_pick_card(hall.get_viewport().get_visible_rect().size * 0.5)
+	_check(true, "Hall card picking runs without error")
+	hall.queue_free()
+	await get_tree().process_frame
+
+
+func _count_interactive_controls(node: Node) -> int:
+	var n := 0
+	if node is BaseButton or node is HSlider or node is LineEdit or node is Dropdown:
+		n += 1
+	for c in node.get_children():
+		n += _count_interactive_controls(c)
+	return n
+
+
+func _subtree_has_camera(node: Node) -> bool:
+	if node is Camera3D:
+		return true
+	for c in node.get_children():
+		if _subtree_has_camera(c):
+			return true
+	return false
+
 
 func _assert_grid_children_laid_out(grid: Control, expected_min_count: int, min_w: float, min_h: float, label: String) -> void:
 	_check(is_instance_valid(grid), "%s exists in Station UI" % label)

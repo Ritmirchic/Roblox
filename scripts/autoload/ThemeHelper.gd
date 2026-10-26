@@ -24,6 +24,7 @@ var camera_sensitivity: float = 1.0
 func _ready() -> void:
 	_load_multilingual_fonts()
 	_build_theme()
+	apply_all_settings()
 
 func _load_multilingual_fonts() -> void:
 	var fallbacks: Array[Font] = []
@@ -144,6 +145,39 @@ func _build_theme() -> void:
 	pb_fg.set_corner_radius_all(5)
 	main_theme.set_stylebox("background", "ProgressBar", pb_bg)
 	main_theme.set_stylebox("fill", "ProgressBar", pb_fg)
+
+var _plaque_cache: Dictionary = {}
+
+## A panel style painted with the game's own procedural rarity-plaque artwork so
+## menus, modals and cards share one visual language instead of generic UI chrome.
+## `dark` dims the plate for text legibility; `pad` is the inner content padding.
+func make_plaque_style(rarity: String = "rare", dark: float = 0.55, pad: int = 16) -> StyleBox:
+	var key := "%s|%f|%d" % [rarity, dark, pad]
+	if _plaque_cache.has(key):
+		return _plaque_cache[key]
+	var tex_path := "res://assets/cards/achievements/bg_%s.png" % rarity.to_lower()
+	var out: StyleBox
+	if ResourceLoader.exists(tex_path):
+		var sb := StyleBoxTexture.new()
+		sb.texture = load(tex_path)
+		sb.modulate_color = Color(dark, dark * 1.02, dark * 1.10, 1.0)
+		# STRETCH (default) paints the whole plate across the panel: no tiling.
+		sb.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
+		sb.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
+		sb.border_width_left = 0
+		sb.border_width_top = 0
+		sb.border_width_right = 0
+		sb.border_width_bottom = 0
+		sb.set_content_margin_side(Control.SIDE_LEFT, float(pad))
+		sb.set_content_margin_side(Control.SIDE_TOP, float(pad))
+		sb.set_content_margin_side(Control.SIDE_RIGHT, float(pad))
+		sb.set_content_margin_side(Control.SIDE_BOTTOM, float(pad))
+		out = sb
+	else:
+		out = make_panel_style(Color(0.04, 0.06, 0.11, 0.96), COL_BORDER, 13, 2, pad)
+	_plaque_cache[key] = out
+	return out
+
 
 func clear_children(parent: Node) -> void:
 	if not is_instance_valid(parent):
@@ -284,3 +318,72 @@ func apply_graphics_preset(preset: String) -> void:
 		_:
 			vp.msaa_3d = Viewport.MSAA_4X
 			vp.scaling_3d_scale = 1.0
+
+# ============================================================================
+# v2.1 EXPANDED PERSISTED SETTINGS STORE
+# Every value below is consumed by live gameplay / presentation code paths.
+# ============================================================================
+
+var ui_scale: float = 1.0
+var camera_fov: float = 65.0
+var invert_y_axis: bool = false
+var crosshair_opacity: float = 1.0
+var screen_shake: float = 1.0
+var show_hud_bars: bool = true
+var achievement_toasts: bool = true
+var auto_save: bool = true
+var vsync_enabled: bool = true
+var fps_cap: int = 120
+
+func apply_ui_scale() -> void:
+	ui_scale = clampf(ui_scale, 0.75, 1.35)
+	if main_theme:
+		main_theme.default_font_size = int(round(15.0 * ui_scale))
+	var win := get_window()
+	if win:
+		win.content_scale_factor = ui_scale
+
+func apply_display_settings() -> void:
+	fps_cap = clampi(fps_cap, 30, 240)
+	Engine.max_fps = fps_cap if not vsync_enabled else 0
+	DisplayServer.window_set_vsync_mode(
+		DisplayServer.VSYNC_ENABLED if vsync_enabled else DisplayServer.VSYNC_DISABLED
+	)
+
+func apply_all_settings() -> void:
+	apply_ui_scale()
+	apply_display_settings()
+	apply_graphics_preset(graphics_preset)
+
+func settings_snapshot() -> Dictionary:
+	return {
+		"graphics_preset": graphics_preset,
+		"reduced_motion": reduced_motion,
+		"camera_sensitivity": camera_sensitivity,
+		"camera_fov": camera_fov,
+		"invert_y_axis": invert_y_axis,
+		"crosshair_opacity": crosshair_opacity,
+		"screen_shake": screen_shake,
+		"show_hud_bars": show_hud_bars,
+		"achievement_toasts": achievement_toasts,
+		"auto_save": auto_save,
+		"vsync_enabled": vsync_enabled,
+		"fps_cap": fps_cap,
+		"ui_scale": ui_scale,
+	}
+
+func load_settings_snapshot(st: Dictionary) -> void:
+	graphics_preset = str(st.get("graphics_preset", "High"))
+	reduced_motion = bool(st.get("reduced_motion", false))
+	camera_sensitivity = clampf(float(st.get("camera_sensitivity", 1.0)), 0.2, 3.0)
+	camera_fov = clampf(float(st.get("camera_fov", 65.0)), 45.0, 105.0)
+	invert_y_axis = bool(st.get("invert_y_axis", false))
+	crosshair_opacity = clampf(float(st.get("crosshair_opacity", 1.0)), 0.15, 1.0)
+	screen_shake = clampf(float(st.get("screen_shake", 1.0)), 0.0, 1.5)
+	show_hud_bars = bool(st.get("show_hud_bars", true))
+	achievement_toasts = bool(st.get("achievement_toasts", true))
+	auto_save = bool(st.get("auto_save", true))
+	vsync_enabled = bool(st.get("vsync_enabled", true))
+	fps_cap = clampi(int(st.get("fps_cap", 120)), 30, 240)
+	ui_scale = clampf(float(st.get("ui_scale", 1.0)), 0.75, 1.35)
+	apply_all_settings()

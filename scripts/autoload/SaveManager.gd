@@ -6,6 +6,7 @@ const BACKUP_SAVE_PATH: String = "user://space_miner_save.bak"
 const HASH_SALT: String = "SPACE_MINER_V2_INTEGRITY"
 
 var last_load_status: String = "fresh"
+var pending_autosave: bool = false
 
 func _ready() -> void:
 	# Skip auto-loading user save when running automated headless test runner
@@ -43,17 +44,32 @@ func build_save_payload() -> Dictionary:
 		"upg_owned": UpgradeManager.owned_upgrades.duplicate(true),
 		"upg_equipped": UpgradeManager.active_equipped.duplicate(true),
 		"achievements": AchievementManager.serialize_state(),
-		"settings": {
-			"language": L.current_lang,
-			"master_volume": AudioManager.master_volume,
-			"music_volume": AudioManager.music_volume,
-			"sfx_volume": AudioManager.sfx_volume,
-			"muted": AudioManager.muted,
-			"graphics_preset": ThemeHelper.graphics_preset,
-			"reduced_motion": ThemeHelper.reduced_motion,
-			"camera_sensitivity": ThemeHelper.camera_sensitivity,
-		}
+		"settings": _build_settings_block()
 	}
+
+func _build_settings_block() -> Dictionary:
+	var blk := ThemeHelper.settings_snapshot()
+	blk["language"] = L.current_lang
+	blk["master_volume"] = AudioManager.master_volume
+	blk["music_volume"] = AudioManager.music_volume
+	blk["sfx_volume"] = AudioManager.sfx_volume
+	blk["muted"] = AudioManager.muted
+	return blk
+
+## Transactional save: writes only when the player has AUTO-SAVE enabled.
+## Progress-critical saves (expedition end, reset) always use save_game() directly.
+func autosave() -> bool:
+	if not ThemeHelper.auto_save:
+		pending_autosave = true
+		return false
+	pending_autosave = false
+	return save_game()
+
+## Flush a deferred transactional save (used when AUTO-SAVE is re-enabled).
+func flush_pending_autosave() -> void:
+	if pending_autosave:
+		pending_autosave = false
+		save_game()
 
 func save_game(path: String = DEFAULT_SAVE_PATH) -> bool:
 	var payload := build_save_payload()
@@ -220,9 +236,7 @@ func apply_loaded_payload(data: Dictionary) -> bool:
 		AudioManager.sfx_volume = clampf(float(st.get("sfx_volume", 0.78)), 0.0, 1.0)
 		AudioManager.muted = bool(st.get("muted", false))
 		AudioManager.apply_volumes()
-		ThemeHelper.reduced_motion = bool(st.get("reduced_motion", false))
-		ThemeHelper.camera_sensitivity = clampf(float(st.get("camera_sensitivity", 1.0)), 0.2, 3.0)
-		ThemeHelper.apply_graphics_preset(str(st.get("graphics_preset", "High")))
+		ThemeHelper.load_settings_snapshot(st)
 
 	ShipGrid.ship_changed.emit()
 	ShipGrid.credits_changed.emit(ShipGrid.credits)
@@ -247,6 +261,7 @@ func reset_all_progress() -> void:
 	UpgradeManager.active_equipped = ["upg_01"]
 	AchievementManager.bucket_ids = {"minute": -1, "hourly": -1, "daily": -1, "weekly": -1}
 	AchievementManager.collected_album.clear()
+	AchievementManager.album_meta.clear()
 	AchievementManager._claimed_ledger.clear()
 	AchievementManager.ensure_buckets_current()
 	save_game()

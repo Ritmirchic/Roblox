@@ -118,3 +118,139 @@ def test_23_studio_44100hz_wav_audio_files_valid():
             assert wf.getsampwidth() == 2
             assert wf.getframerate() == 44100, f"WAV {w.name} must be 44.1 kHz studio audio"
             assert wf.getnframes() > 1500
+
+
+def _font_codepoints(path):
+    """Codepoints covered by one font. fontTools is imported lazily so pytest
+    collection of the other asset tests never depends on it."""
+    from fontTools.ttLib import TTFont
+    return set(TTFont(str(path)).getBestCmap().keys())
+
+
+def test_every_localization_string_renders_in_bundled_fonts():
+    """Every character of every in-game string must exist in the font chain,
+    otherwise Russian/CJK/players see tofu boxes instead of text."""
+    chain = [
+        "Exo2-ExtraBold.ttf", "Exo2-Medium.ttf", "JetBrainsMono-SemiBold.ttf",
+        "SciFiSymbols.ttf", "CJK-SC.ttf", "CJK-JP.ttf", "CJK-KR.ttf",
+    ]
+    covered = set()
+    for fn in chain:
+        covered |= _font_codepoints(ROOT / "assets" / "fonts" / fn)
+    assert 0x430 in covered and 0x436 in covered, "Cyrillic must be covered"
+
+    missing = {}
+    for gd in sorted(list(ROOT.glob("scripts/**/*.gd")) + list(ROOT.glob("tests/*.gd"))):
+        text = gd.read_text(encoding="utf-8", errors="replace")
+        for m in re.finditer(r'"([^"\\\n]*)"', text):
+            for ch in m.group(1):
+                if ord(ch) > 0x7F and ord(ch) not in covered:
+                    missing.setdefault(ch, set()).add(gd.name)
+    assert not missing, "Glyphs missing from bundled font chain: %s" % {
+        "U+%04X %s" % (ord(c), "".join(sorted(v))[:60]) for c, v in list(missing.items())[:10]
+    }
+
+
+def test_seven_unique_rarity_plaque_backdrops():
+    """Redrawn achievement backgrounds: one procedurally shaded plaque per rarity."""
+    rarities = ["common", "uncommon", "rare", "epic", "legendary", "mythic", "secret"]
+    seen = set()
+    for r in rarities:
+        fp = ROOT / "assets" / "cards" / "achievements" / ("bg_%s.png" % r)
+        assert fp.is_file(), "missing achievement backdrop %s" % fp.name
+        im = Image.open(fp)
+        assert im.size == (640, 360), "unexpected backdrop size %s on %s" % (im.size, fp.name)
+        h = hashlib.sha256(fp.read_bytes()).hexdigest()
+        assert h not in seen, "backdrops must not be recolors of each other: %s" % r
+        seen.add(h)
+    assert len(seen) == 7
+
+
+def test_eighteen_unique_upgrade_icons():
+    icons = sorted((ROOT / "assets" / "icons" / "upgrades").glob("upg_*.png"))
+    assert len(icons) == 18, "expected 18 upgrade protocol icons, found %d" % len(icons)
+    hs = {hashlib.sha256(p.read_bytes()).hexdigest() for p in icons}
+    assert len(hs) == 18, "upgrade icons must all be unique"
+
+
+def test_hall_of_achievements_scene_wired():
+    hall = ROOT / "scripts" / "space" / "AchievementHall3D.gd"
+    src = hall.read_text(encoding="utf-8")
+    assert "class_name AchievementHall3D" in src
+    assert "signal return_to_hangar" in src
+    for needed in ["WorldEnvironment", "Camera3D", "CPUParticles3D", "PlaneMesh",
+                   "BILLBOARD_ENABLED", "hall_entries()", "unproject_position"]:
+        assert needed in src, "hall must really build 3D content (%s)" % needed
+    main = (ROOT / "scripts" / "ui" / "Main.gd").read_text(encoding="utf-8")
+    assert "AchievementHall3D.new()" in main and "_enter_achievement_hall" in main
+    am = (ROOT / "scripts" / "autoload" / "AchievementManager.gd").read_text(encoding="utf-8")
+    for fn in ["func hall_entries()", "func earned_count()", "func total_card_count()", "var album_meta"]:
+        assert fn in am, "AchievementManager missing %s" % fn
+
+
+def test_settings_are_functional_not_cosmetic():
+    """Every settings key must be declared, persisted, applied and consumed by real code."""
+    keys = ["ui_scale", "camera_fov", "invert_y_axis", "crosshair_opacity", "screen_shake",
+            "show_hud_bars", "achievement_toasts", "auto_save", "vsync_enabled", "fps_cap"]
+    th = (ROOT / "scripts/autoload/ThemeHelper.gd").read_text(encoding="utf-8")
+    for k in keys:
+        assert "var %s:" % k in th, "ThemeHelper must declare setting %s" % k
+        assert '"%s"' % k in th, "ThemeHelper must persist setting %s" % k
+    assert "Engine.max_fps" in th and "window_set_vsync_mode" in th and "content_scale_factor" in th
+
+    ui = (ROOT / "scripts/ui/HangarStationPanels.gd").read_text(encoding="utf-8")
+    for k in keys:
+        assert "ThemeHelper.%s =" % k in ui, "settings UI must write ThemeHelper.%s" % k
+
+    flight = (ROOT / "scripts/space/SpaceExpedition3D.gd").read_text(encoding="utf-8")
+    assert "ThemeHelper.camera_fov" in flight, "FOV setting must drive the flight camera"
+    assert "ThemeHelper.invert_y_axis" in flight, "invert-pitch setting must drive mouse flight"
+    assert "ThemeHelper.screen_shake" in flight and "_shake_trauma" in flight, "shake setting must drive real trauma"
+    assert "ThemeHelper.crosshair_opacity" in flight, "crosshair opacity must drive HUD drawing"
+    assert "ThemeHelper.show_hud_bars" in flight, "resource-panel setting must toggle the HUD stack"
+    assert "ThemeHelper.achievement_toasts" in flight, "popup setting must gate achievement notifications"
+
+    sm = (ROOT / "scripts/autoload/SaveManager.gd").read_text(encoding="utf-8")
+    assert "func autosave()" in sm and "func flush_pending_autosave()" in sm
+    assert "ThemeHelper.auto_save" in sm, "auto-save toggle must gate transactional saves"
+
+
+def test_only_one_crosshair_and_portal_only_exit():
+    src = (ROOT / "scripts/space/SpaceExpedition3D.gd").read_text(encoding="utf-8")
+    assert "CROSSHAIR #2" in src
+    assert "STEER_RING_RADIUS_PX" in src
+    assert 'event.keycode == KEY_H' not in src, "instant exit hotkey must be removed"
+    assert "WARP_EXIT_RADIUS" in src or "9.5" in src, "warp gate proximity must remain the only exit"
+
+
+def test_pack_art_has_transparent_silhouette():
+    for name in ("pack_standard.png", "pack_elite.png"):
+        im = Image.open(ROOT / "assets" / "cards" / name)
+        assert im.mode == "RGBA", "%s must keep an alpha channel" % name
+        a = im.getchannel("A")
+        w, h = im.size
+        edge = [a.getpixel((x, 0)) for x in range(0, w, 7)] + \
+               [a.getpixel((x, h - 1)) for x in range(0, w, 7)] + \
+               [a.getpixel((0, y)) for y in range(0, h, 7)] + \
+               [a.getpixel((w - 1, y)) for y in range(0, h, 7)]
+        assert max(edge) == 0, "%s still has an opaque black edge" % name
+
+
+def test_every_tr_ui_key_exists_in_all_ten_languages():
+    loc_src = (ROOT / "scripts/autoload/Localization.gd").read_text(encoding="utf-8")
+    used = set()
+    for gd in list(ROOT.glob("scripts/**/*.gd")):
+        for m in re.finditer(r'tr_ui\("([a-z0-9_]+)"', gd.read_text(encoding="utf-8", errors="replace")):
+            used.add(m.group(1))
+    lang_re = re.compile(r'"(%s)"\s*:' % "|".join(
+        ["ru", "en", "es", "de", "fr", "pt", "zh", "ja", "ko", "tr"]))
+    missing = []
+    for key in sorted(used):
+        blk = re.search(r'\n\t"%s": \{(.*?)\n\t\}' % re.escape(key), loc_src, re.DOTALL)
+        if not blk:
+            missing.append(key + " (absent)")
+            continue
+        langs = set(lang_re.findall(blk.group(1)))
+        if len(langs) != 10:
+            missing.append("%s (only %s)" % (key, ",".join(sorted(langs))))
+    assert not missing, "Localization keys with missing languages: %s" % missing[:12]

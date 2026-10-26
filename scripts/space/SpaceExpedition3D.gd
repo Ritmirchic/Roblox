@@ -28,6 +28,12 @@ var _virtual_stick: Vector2 = Vector2.ZERO
 var _smoothed_stick: Vector2 = Vector2.ZERO
 var _mouse_idle_time: float = 0.0
 var _mouse_captured: bool = true
+var _shake_trauma: float = 0.0
+var _shake_seed: float = 0.0
+var _ach_toast: PanelContainer
+var _ach_toast_lbl: Label
+var _ach_toast_time: float = 0.0
+var _ach_toast_queue: Array[String] = []
 const STEER_RING_RADIUS_PX: float = 165.0
 
 # Timers
@@ -85,6 +91,7 @@ func _ready() -> void:
 	_build_expedition_hud()
 	L.language_changed.connect(func(_lang: String): _apply_hud_localization())
 	_apply_hud_localization()
+	AchievementManager.achievement_completed.connect(_on_achievement_completed)
 	_set_mouse_flight_mode(true)
 
 func _exit_tree() -> void:
@@ -179,7 +186,7 @@ func _spawn_player_and_containers() -> void:
 	_cam_pivot = Node3D.new()
 	add_child(_cam_pivot)
 	_cam = Camera3D.new()
-	_cam.fov = 65.0
+	_cam.fov = ThemeHelper.camera_fov
 	_cam.far = 900.0
 	_cam_pivot.add_child(_cam)
 
@@ -236,6 +243,8 @@ func _spawn_single_asteroid(min_dist: float, max_dist: float) -> void:
 	var ast := Asteroid3D.new()
 	ast.setup(sector_def, pos, randf_range(0.85, 2.15))
 	ast.destroyed.connect(func(_a, _wp):
+		if is_instance_valid(player_ship) and _wp.distance_to(player_ship.global_position) < 120.0:
+			add_camera_trauma(0.30)
 		if is_inside_tree() and asteroids_root.get_child_count() < int(sector_def.get("asteroid_count", 45)):
 			_spawn_single_asteroid(85.0, 260.0)
 	)
@@ -279,6 +288,7 @@ func _build_expedition_hud() -> void:
 	_status_box.offset_right = 362
 	_status_box.offset_bottom = 236
 	_status_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_status_box.visible = ThemeHelper.show_hud_bars
 	_hud_root.add_child(_status_box)
 
 	var svb := VBoxContainer.new()
@@ -345,6 +355,29 @@ func _build_expedition_hud() -> void:
 	_hazard_warn_lbl.add_theme_color_override("font_color", Color(1.0, 0.38, 0.42))
 	_hud_root.add_child(_hazard_warn_lbl)
 
+	_ach_toast = PanelContainer.new()
+	_ach_toast.name = "AchievementToast"
+	_ach_toast.anchor_left = 0.0
+	_ach_toast.anchor_right = 1.0
+	_ach_toast.offset_left = 430
+	_ach_toast.offset_right = -430
+	_ach_toast.offset_top = 252
+	_ach_toast.offset_bottom = 300
+	_ach_toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ach_toast.visible = false
+	_ach_toast.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(
+		Color(0.035, 0.075, 0.14, 0.95), Color(1.0, 0.78, 0.25, 0.92), 12, 14, 6))
+	_hud_root.add_child(_ach_toast)
+
+	_ach_toast_lbl = Label.new()
+	_ach_toast_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_ach_toast_lbl.clip_text = true
+	if ThemeHelper.font_bold:
+		_ach_toast_lbl.add_theme_font_override("font", ThemeHelper.font_bold)
+	_ach_toast_lbl.add_theme_font_size_override("font_size", 15)
+	_ach_toast_lbl.add_theme_color_override("font_color", ThemeHelper.COL_GOLD)
+	_ach_toast.add_child(_ach_toast_lbl)
+
 	# 3. Top-Right Tactical Radar Minimap + Return Button (x: W-210..W-14, y: 12..246)
 	_radar_box = PanelContainer.new()
 	_radar_box.name = "FlightRadarPanel"
@@ -371,7 +404,10 @@ func _build_expedition_hud() -> void:
 	_ret_btn.custom_minimum_size = Vector2(0, 34)
 	_ret_btn.add_theme_font_size_override("font_size", 13)
 	ThemeHelper.style_accent_button(_ret_btn, Color(0.18, 0.78, 0.56))
-	_ret_btn.pressed.connect(_complete_expedition_and_return)
+	_ret_btn.pressed.connect(func():
+		_pause_panel.visible = false
+		_set_mouse_flight_mode(true)
+)
 	rvb.add_child(_ret_btn)
 
 	# 4. Bottom Flight Controls Hint Pill
@@ -447,7 +483,10 @@ func _build_expedition_hud() -> void:
 	_pause_ext_btn = Button.new()
 	_pause_ext_btn.custom_minimum_size = Vector2(0, 44)
 	ThemeHelper.style_accent_button(_pause_ext_btn, Color(0.18, 0.82, 0.52))
-	_pause_ext_btn.pressed.connect(_complete_expedition_and_return)
+	_pause_ext_btn.pressed.connect(func():
+		_pause_panel.visible = false
+		_set_mouse_flight_mode(true)
+)
 	pvb.add_child(_pause_ext_btn)
 
 	ThemeHelper.animate_entry(_status_box, 0.0, Vector2(0.96, 0.96))
@@ -560,25 +599,14 @@ func _draw_hud_world_overlays() -> void:
 	var vp: Vector2 = get_viewport().get_visible_rect().size
 	var center: Vector2 = vp * 0.5
 
-	var nose_col := Color(0.55, 0.78, 0.95, 0.34)
+	var xh_a: float = ThemeHelper.crosshair_opacity
+	var nose_col := Color(0.55, 0.78, 0.95, 0.34 * xh_a)
 	_overlay_canvas.draw_line(center + Vector2(-7, 0), center + Vector2(-2, 0), nose_col, 1.4)
 	_overlay_canvas.draw_line(center + Vector2(2, 0), center + Vector2(7, 0), nose_col, 1.4)
 	_overlay_canvas.draw_line(center + Vector2(0, -7), center + Vector2(0, -2), nose_col, 1.4)
 	_overlay_canvas.draw_line(center + Vector2(0, 2), center + Vector2(0, 7), nose_col, 1.4)
 	if _smoothed_stick.length() > 0.04:
 		_overlay_canvas.draw_arc(center, STEER_RING_RADIUS_PX, 0.0, TAU, 48, Color(0.20, 0.62, 0.88, 0.16), 1.2)
-
-	# CROSSHAIR #1: Primary Steering & Aiming Reticle (Cyan)
-	var aim_screen_pos: Vector2 = center + _smoothed_stick * STEER_RING_RADIUS_PX
-	if aim_screen_pos.distance_to(center) > 4.0:
-		_overlay_canvas.draw_line(center, aim_screen_pos, Color(0.28, 0.86, 1.0, 0.28), 1.5)
-	var aim_col := Color(0.28, 0.92, 1.0, 0.88)
-	_overlay_canvas.draw_arc(aim_screen_pos, 15.0, 0.0, TAU, 32, aim_col, 1.8)
-	_overlay_canvas.draw_line(aim_screen_pos + Vector2(-22, 0), aim_screen_pos + Vector2(-15, 0), aim_col, 1.8)
-	_overlay_canvas.draw_line(aim_screen_pos + Vector2(15, 0), aim_screen_pos + Vector2(22, 0), aim_col, 1.8)
-	_overlay_canvas.draw_line(aim_screen_pos + Vector2(0, -22), aim_screen_pos + Vector2(0, -15), aim_col, 1.8)
-	_overlay_canvas.draw_line(aim_screen_pos + Vector2(0, 15), aim_screen_pos + Vector2(0, 22), aim_col, 1.8)
-	_overlay_canvas.draw_circle(aim_screen_pos, 2.0, Color(0.75, 0.98, 1.0, 0.95))
 
 	if not is_instance_valid(player_ship) or not is_instance_valid(_cam):
 		return
@@ -606,11 +634,9 @@ func _draw_hud_world_overlays() -> void:
 		elif hit_kind == "asteroid":
 			pip_col = Color(0.52, 0.98, 0.82, 0.95)
 
-		if pipper_pos.distance_to(aim_screen_pos) > 5.0:
-			_overlay_canvas.draw_line(aim_screen_pos, pipper_pos, Color(pip_col.r, pip_col.g, pip_col.b, 0.36), 1.5)
-
 		var p_rad := 11.5 if hit_kind in ["enemy", "magnetic_enemy"] else 9.0
-		var draw_col := pip_col if on_screen else Color(pip_col.r, pip_col.g, pip_col.b, 0.55)
+		pip_col.a *= xh_a
+		var draw_col := pip_col if on_screen else Color(pip_col.r, pip_col.g, pip_col.b, 0.55 * xh_a)
 		if hit_kind == "magnetic_enemy":
 			_overlay_canvas.draw_arc(pipper_pos, p_rad + 4.8, 0.0, TAU, 32, Color(0.32, 0.95, 1.0, 0.78), 1.6)
 		_overlay_canvas.draw_arc(pipper_pos, p_rad, 0.0, TAU, 28, draw_col, 2.2)
@@ -728,6 +754,7 @@ func _draw_radar_minimap() -> void:
 # FLIGHT LOOP, CAMERA ANTI-CLIPPING, HAZARDS & EXTRACTION
 # ==============================================================================
 func _process(delta: float) -> void:
+	_tick_achievement_toast(delta)
 	if not is_instance_valid(player_ship) or _extracting:
 		return
 
@@ -840,6 +867,22 @@ func _update_aim_ray_and_lock() -> void:
 					best_en = en_n
 		player_ship.locked_enemy = best_en
 
+func add_camera_trauma(amount: float) -> void:
+	if ThemeHelper.reduced_motion:
+		return
+	_shake_trauma = clampf(_shake_trauma + amount * ThemeHelper.screen_shake, 0.0, 1.0)
+	_shake_seed = randf() * 100.0
+
+
+func _shake_offset(delta: float) -> Vector3:
+	if _shake_trauma <= 0.001:
+		return Vector3.ZERO
+	_shake_trauma = maxf(0.0, _shake_trauma - delta * 1.65)
+	var amp := pow(_shake_trauma, 1.7) * 0.62
+	var ph := _shake_seed + Time.get_ticks_msec() * 0.021
+	return Vector3(sin(ph * 1.31) * amp, cos(ph * 1.77) * amp, sin(ph * 2.13) * amp * 0.45)
+
+
 func _update_third_person_camera(delta: float) -> void:
 	var smooth_xf := player_ship.get_smoothed_transform()
 	var target_pos := smooth_xf.origin + smooth_xf.basis * Vector3(0, 1.85, 0)
@@ -859,9 +902,10 @@ func _update_third_person_camera(delta: float) -> void:
 	_cam_dist = lerpf(_cam_dist, _target_cam_dist, 1.0 - exp(-14.0 * delta))
 	var spd_ratio := clampf(player_ship.linear_velocity.length() / 80.0, 0.0, 1.0)
 	var desired_dist := _cam_dist + spd_ratio * 3.4
-	_cam.fov = lerpf(_cam.fov, 64.0 + spd_ratio * 11.0, 1.0 - exp(-7.0 * delta))
+	_cam.fov = lerpf(_cam.fov, maxf(30.0, ThemeHelper.camera_fov - 1.0) + spd_ratio * 11.0, 1.0 - exp(-7.0 * delta))
 
 	var desired_world := _cam_pivot.global_position + _cam_pivot.global_transform.basis.z * desired_dist
+	desired_world += _shake_offset(delta)
 	var rq := PhysicsRayQueryParameters3D.create(_cam_pivot.global_position, desired_world)
 	rq.exclude = [player_ship.get_rid()]
 	var hit := get_world_3d().direct_space_state.intersect_ray(rq)
@@ -870,6 +914,26 @@ func _update_third_person_camera(delta: float) -> void:
 		_cam.position = _cam.position.lerp(Vector3(0, 0, safe_d), 1.0 - exp(-24.0 * delta))
 	else:
 		_cam.position = _cam.position.lerp(Vector3(0, 0, desired_dist), 1.0 - exp(-15.0 * delta))
+
+func _on_achievement_completed(task: Dictionary) -> void:
+	if not ThemeHelper.achievement_toasts:
+		return
+	_ach_toast_queue.append(L.ach_name(task))
+
+
+func _tick_achievement_toast(delta: float) -> void:
+	if _ach_toast_time > 0.0:
+		_ach_toast_time -= delta
+		if _ach_toast_time <= 0.0:
+			_ach_toast.visible = false
+		return
+	if not _ach_toast_queue.is_empty():
+		var nm: String = _ach_toast_queue.pop_front()
+		_ach_toast_lbl.text = "◆ " + nm
+		_ach_toast.visible = true
+		_ach_toast_time = 4.5
+		ThemeHelper.animate_entry(_ach_toast, 0.0, Vector2.ONE)
+		AudioManager.play_sfx("card_legendary", 0.0, 0.85)
 
 func _process_sector_spawns_and_hazards(delta: float) -> void:
 	_enemy_spawn_cd -= delta
@@ -898,10 +962,14 @@ func _process_sector_spawns_and_hazards(delta: float) -> void:
 			AudioManager.play_sfx("plasma_shot", 0.08, 0.85)
 			if bolt_end.distance_to(player_ship.global_position) < 9.0:
 				player_ship.receive_enemy_hit(34.0, player_ship.global_position, 0)
+				add_camera_trauma(0.55)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and _mouse_captured:
-		_virtual_stick += event.relative * (0.0021 * ThemeHelper.camera_sensitivity)
+		var rel := event.relative
+		if ThemeHelper.invert_y_axis:
+			rel.y = -rel.y
+		_virtual_stick += rel * (0.0021 * ThemeHelper.camera_sensitivity)
 		if _virtual_stick.length() > 1.0:
 			_virtual_stick = _virtual_stick.normalized()
 		_mouse_idle_time = 0.0
@@ -928,8 +996,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.keycode == KEY_Z and is_instance_valid(player_ship):
 			player_ship.stabilizer_enabled = not player_ship.stabilizer_enabled
 			AudioManager.play_sfx("ui_click", 0.05, 0.6)
-		elif event.keycode == KEY_H:
-			_complete_expedition_and_return()
+
 
 func _toggle_manual_target_lock() -> void:
 	if is_instance_valid(_manual_locked_enemy):
