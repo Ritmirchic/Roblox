@@ -445,7 +445,7 @@ func _build_expedition_hud() -> void:
 	_pause_panel.offset_bottom = 150
 	_pause_panel.custom_minimum_size = Vector2(470, 300)
 	_pause_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	_pause_panel.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(Color(0.025, 0.048, 0.115, 0.97), Color(0.24, 0.80, 1.0, 0.90), 16, 2, 22))
+	_pause_panel.add_theme_stylebox_override("panel", ThemeHelper.make_plaque_style("rare", 0.40, 24))
 	_hud_root.add_child(_pause_panel)
 
 	var pvb := VBoxContainer.new()
@@ -966,7 +966,7 @@ func _process_sector_spawns_and_hazards(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and _mouse_captured:
-		var rel := event.relative
+		var rel: Vector2 = event.relative
 		if ThemeHelper.invert_y_axis:
 			rel.y = -rel.y
 		_virtual_stick += rel * (0.0021 * ThemeHelper.camera_sensitivity)

@@ -316,7 +316,7 @@ func _show_main_menu() -> void:
 	_new_game_confirm.offset_top = -110
 	_new_game_confirm.offset_bottom = 110
 	_new_game_confirm.custom_minimum_size = Vector2(480, 220)
-	_new_game_confirm.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(Color(0.03, 0.055, 0.125, 0.98), ThemeHelper.COL_RED, 16, 2, 20))
+	_new_game_confirm.add_theme_stylebox_override("panel", ThemeHelper.make_plaque_style("secret", 0.44, 22))
 	root.add_child(_new_game_confirm)
 
 	var nvb := VBoxContainer.new()

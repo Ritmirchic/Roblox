@@ -241,8 +241,7 @@ func _build_hud() -> void:
 	_dossier.offset_bottom = -26
 	_dossier.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_dossier.visible = false
-	_dossier.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(
-		Color(0.028, 0.055, 0.115, 0.96), Color(1.0, 0.78, 0.25, 0.72), 14, 2, 18))
+	_dossier.add_theme_stylebox_override("panel", ThemeHelper.make_plaque_style("legendary", 0.50, 18))
 	_hud_root.add_child(_dossier)
 
 	var dvb := VBoxContainer.new()
