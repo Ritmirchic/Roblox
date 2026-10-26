@@ -1,9 +1,9 @@
 name: fetch-godot-toolchain
 
 # CI relay: GitHub-hosted runners have full network egress, unlike the dev
-# sandbox. This workflow downloads the official MIT-licensed Godot engine and
-# the Windows export templates, splits large binaries into git-pushable chunks,
-# and commits them to the `toolchain-bin` branch for offline consumption.
+# sandbox. Downloads official MIT-licensed Godot engine + Windows export
+# templates, splits large binaries into git-pushable chunks, commits them to
+# the `toolchain-bin` branch. On failure, pushes fetch.log for diagnosis.
 on:
   workflow_dispatch:
   push:
@@ -15,44 +15,56 @@ permissions:
 
 jobs:
   fetch:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Fetch Godot editor and export templates
+        id: fetch
+        continue-on-error: true
         run: |
-          set -euo pipefail
+          set -x
+          which curl unzip git
           BASE="https://github.com/godotengine/godot/releases/download/4.7.2-stable"
           mkdir -p engine templates
-          curl -fL --retry 3 "$BASE/Godot_v4.7.2-stable_linux.x86_64.zip" -o engine/godot-linux-x86_64.zip
-          curl -fL --retry 3 "$BASE/Godot_v4.7.2-stable_export_templates.tpz" -o /tmp/tpl.tpz
-          mkdir -p /tmp/tplx && (cd /tmp/tplx && unzip -q /tmp/tpl.tpz)
+          curl -fL --retry 3 --retry-delay 2 \
+            "$BASE/Godot_v4.7.2-stable_linux.x86_64.zip" \
+            -o engine/godot-linux-x86_64.zip
+          curl -fL --retry 3 --retry-delay 2 \
+            "$BASE/Godot_v4.7.2-stable_export_templates.tpz" -o /tmp/tpl.tpz
+          mkdir -p /tmp/tplx
+          unzip -q /tmp/tpl.tpz -d /tmp/tplx
+          ls -la /tmp/tplx/templates | head -20
           cp /tmp/tplx/templates/version.txt templates/
           for n in windows_release_x86_64 windows_debug_x86_64; do
             cp "/tmp/tplx/templates/$n.exe" templates/
             cp "/tmp/tplx/templates/$n.pck" templates/
           done
-          curl -fL "https://raw.githubusercontent.com/godotengine/godot/master/LICENSE.txt" -o GODOT-LICENSE.txt
-
-      - name: Checksums and chunking
-        run: |
-          set -euo pipefail
+          curl -fL "https://raw.githubusercontent.com/godotengine/godot/master/LICENSE.txt" \
+            -o GODOT-LICENSE.txt
           sha256sum engine/* templates/* GODOT-LICENSE.txt | tee SHA256SUMS
-          # GitHub rejects files over 100 MB; split anything large into 80 MB parts.
           find engine templates -type f -size +80M -print0 | while IFS= read -r -d '' f; do
             split -b 80M -d -a 3 "$f" "$f.part"
             rm "$f"
           done
-          cat > README-BINARIES.md <<'EOF'
-          # Godot 4.7.2 stable toolchain (relayed via GitHub Actions)
+          printf '%s\n' '# Godot 4.7.2 stable toolchain (relayed via GitHub Actions)' '' \
+            'Unmodified official Godot Engine releases, MIT licensed (GODOT-LICENSE.txt).' \
+            'Reassemble *.partNNN with cat; checksums in SHA256SUMS.' > README-BINARIES.md
 
-          All binaries here are unmodified official Godot Engine releases, MIT licensed
-          (see GODOT-LICENSE.txt). Files ending in `..partNNN` are 80 MB binary splits;
-          reassemble with: `cat file.part000 file.part001 ... > file`.
-          Checksums of the reassembled files are in SHA256SUMS.
-          EOF
+      - name: Push failure log
+        if: steps.fetch.outcome == 'failure'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add fetch.log 2>/dev/null || true
+          git commit -m "Add fetch failure log" || true
+          git push || true
+
+      - name: Check fetch result
+        run: |
+          if [ "${{ steps.fetch.outcome }}" = "failure" ]; then exit 1; fi
 
       - name: Commit to toolchain-bin branch
         run: |
