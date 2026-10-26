@@ -1044,9 +1044,12 @@ func _test_card_foils_and_lock_combat() -> void:
 	_check(absf(CrewManager.get_finish_multiplier("crew_09") - 1.25) < 0.001, "Holo print scales its buff by 1.25x")
 	_check(CrewManager.set_finish("crew_09", "glow"), "set_finish applies a valid finish")
 	_check(not CrewManager.set_finish("crew_09", "platinum"), "set_finish refuses an unknown finish")
-	_check(CrewManager.get_finest_owned() == "glow", "get_finest_owned reports the rarest print in the binder")
+	_check(CrewManager.get_finest_owned() == "crew_09", "get_finest_owned reports the card holding the rarest print")
 
 	# --- foil buffs reach the ship --------------------------------------------
+	# crew slots are bought, not given: unlock 5 so the bridge can be staffed
+	ShipGrid.purchased_expansion_cells = 50
+	_check(ShipGrid.get_unlocked_crew_slots() >= 5, "Test harness unlocked 5 bridge crew slots")
 	var before_buffs := CrewManager.get_combined_buffs()
 	CrewManager.equip_card("crew_09")
 	var after_buffs := CrewManager.get_combined_buffs()
@@ -1122,25 +1125,27 @@ func _test_card_foils_and_lock_combat() -> void:
 	add_child(host)
 	await get_tree().process_frame
 	var decoy := Node3D.new()
-	decoy.global_position = Vector3(18.0, 0.0, -42.0)
+	decoy.global_position = Vector3(30.0, 0.0, -90.0)
 	host.add_child(decoy)
 	var pr := Projectile3D.new()
 	host.add_child(pr)
-	pr.setup(true, "kinetic", 12.0, 55.0, Projectile3D.make_aim_transform(Vector3.ZERO, Vector3.RIGHT), 0.0, 5.0, decoy, Vector3.ZERO, false, 0.0, true)
+	pr.setup(true, "kinetic", 12.0, 210.0, Projectile3D.make_aim_transform(Vector3.ZERO, Vector3.RIGHT), 0.0, 5.0, decoy, Vector3.ZERO, false, 0.0, true)
 	_check(bool(pr.lock_homing), "Round fired on a locked target enables convergence guidance")
 	var dir0 := (-pr._velocity).normalized()
 	var ang0 := dir0.angle_to((decoy.global_position - pr.global_position).normalized())
 	_check(ang0 > 0.9, "Round starts visibly off-axis from its lock (%.2f rad)" % ang0)
-	for i in range(26):
+	for i in range(24):
 		pr._physics_process(1.0 / 60.0)
 	var ang1 := (-pr._velocity).normalized().angle_to((decoy.global_position - pr.global_position).normalized())
 	var dir1 := (-pr._velocity).normalized()
 	var to_tgt := (decoy.global_position - pr.global_position).normalized()
-	_check(ang1 < ang0 * 0.55, "Guided round curves onto the green lock (err %.2f -> %.2f rad)" % [ang0, ang1])
-	_check(dir1.dot(to_tgt) > 0.85, "Guided round converges hard on the locked hull (dot %.2f)" % dir1.dot(to_tgt))
+	_check(ang1 < ang0 * 0.35, "Guided round curves onto the green lock (err %.2f -> %.2f rad)" % [ang0, ang1])
+	_check(dir1.dot(to_tgt) > 0.95, "Guided round converges hard on the locked hull (dot %.2f)" % dir1.dot(to_tgt))
+	_check(global_dist_at(pr, decoy) < 34.0, "Guidance closes on the lock instead of orbiting (%.1f m left)" % global_dist_at(pr, decoy))
+	_check(pr._velocity.length() > 200.0, "Guidance never bleeds muzzle velocity (%.1f m/s)" % pr._velocity.length())
 	var free_shot := Projectile3D.new()
 	host.add_child(free_shot)
-	free_shot.setup(true, "kinetic", 12.0, 55.0, Projectile3D.make_aim_transform(Vector3.ZERO, Vector3.RIGHT))
+	free_shot.setup(true, "kinetic", 12.0, 210.0, Projectile3D.make_aim_transform(Vector3.ZERO, Vector3.RIGHT))
 	_check(not bool(free_shot.lock_homing), "Unlocked rounds stay ballistic")
 	pr.queue_free()
 	free_shot.queue_free()
@@ -1193,6 +1198,9 @@ func _test_card_foils_and_lock_combat() -> void:
 	exp2.queue_free()
 	await get_tree().process_frame
 
+
+func global_dist_at(a: Node3D, b: Node3D) -> float:
+	return a.global_position.distance_to(b.global_position)
 
 func _test_achievement_hall3d() -> void:
 	_check(ClassDB.class_exists("AchievementHall3D") or ResourceLoader.exists("res://scripts/space/AchievementHall3D.gd"),

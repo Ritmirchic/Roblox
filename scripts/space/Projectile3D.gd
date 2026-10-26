@@ -179,7 +179,15 @@ func _physics_process(delta: float) -> void:
 		if rem_d > 0.05 and cur_dir.length_squared() > 0.5:
 			var desired := to_tgt / rem_d
 			var eff_turn := turn_rate
-			if magnetic_homing or lock_homing:
+			if lock_homing:
+				# Proportional navigation onto the marked hull: authority scales with bearing
+				# error over remaining time of flight, so rounds converge instead of orbiting
+				# and stop correcting once they are lined up.
+				var lock_err := cur_dir.angle_to(desired)
+				eff_turn = clampf((speed / maxf(6.0, rem_d)) * lock_err * 1.9 + 2.2, 2.2, 15.0)
+				if lock_err < 0.05:
+					eff_turn = 0.0
+			elif magnetic_homing:
 				# Speed-matched magnetic curvature + strong inverse-distance terminal attraction near hull
 				eff_turn = maxf(turn_rate, (speed / 20.0) * (turn_rate / 7.8))
 				eff_turn *= lerpf(2.6, 1.0, clampf(rem_d / 36.0, 0.0, 1.0))
