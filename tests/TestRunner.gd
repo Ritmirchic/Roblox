@@ -897,7 +897,7 @@ func _test_achievement_hall3d() -> void:
 
 func _count_interactive_controls(node: Node) -> int:
 	var n := 0
-	if node is BaseButton or node is HSlider or node is LineEdit or node is Dropdown:
+	if node is BaseButton or node is HSlider or node is LineEdit or node is OptionButton:
 		n += 1
 	for c in node.get_children():
 		n += _count_interactive_controls(c)
