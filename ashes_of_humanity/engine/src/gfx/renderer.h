@@ -127,6 +127,7 @@ public:
                 const TextureSet& tex);
 
   void render();
+  void renderUIOverlay();
 
   // ---- post / look ----
   void setExposure(float e);

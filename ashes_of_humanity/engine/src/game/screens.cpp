@@ -22,6 +22,67 @@ static Vec4 rarityColor(int r) {
 }
 
 // ---------------------------------------------------------------------------
+// The loading screen is shown while the assets and the world are generated.
+// ---------------------------------------------------------------------------
+void Game::drawLoadingScreen(float progress, const char* label) {
+  if (!m_renderer) return;
+  int w = m_renderer->settings.width;
+  int h = m_renderer->settings.height;
+
+  // A simple camera so the sky can be rendered behind the artwork.
+  CameraState cam;
+  cam.pos = Vec3(0.0f, 40.0f, 0.0f);
+  cam.forward = normalize(Vec3(0.0f, -0.12f, -1.0f));
+  cam.up = Vec3(0.0f, 1.0f, 0.0f);
+  Mat4 view = Mat4::lookAt(cam.pos, cam.pos + cam.forward, cam.up);
+  f32 aspect = (f32)w / (f32)std::max(1, h);
+  Mat4 proj = Mat4::perspective(60.0f * DEG, aspect, 0.1f, 900.0f);
+  m_renderer->setCamera(view, proj, cam.pos);
+
+  SkyState sky;
+  sky.sunDir = normalize(Vec3(0.35f, 0.28f, -0.9f));
+  sky.zenith = Vec3(0.035f, 0.045f, 0.085f);
+  sky.horizon = Vec3(0.13f, 0.12f, 0.13f);
+  sky.ground = Vec3(0.04f, 0.04f, 0.045f);
+  sky.sunColor = Vec3(1.0f, 0.72f, 0.45f);
+  sky.sunIntensity = 0.9f;
+  sky.skyExposure = 0.7f;
+  m_renderer->setSky(sky);
+  FogState fog;
+  fog.color = Vec3(0.09f, 0.09f, 0.10f);
+  fog.density = 0.004f;
+  fog.height = 8.0f;
+  fog.start = 10.0f;
+  m_renderer->setFog(fog);
+  m_renderer->clearLights();
+  m_renderer->setExposure(0.7f);
+  m_renderer->setBloom(0.4f);
+  m_renderer->setTime(m_time);
+  m_renderer->setColorGrade(0.8f, 1.05f, Vec3(0.01f, 0.005f, 0.0f), Vec3(1, 1, 1), Vec3(1, 1, 1));
+  m_renderer->setDamage(0.0f);
+  m_renderer->setVignette(0.5f);
+  m_renderer->setFade(0.0f, Vec3(0, 0, 0));
+
+  m_ui.begin(w, h);
+  f32 W = (f32)w, H = (f32)h;
+  if (m_loadingBg) m_ui.imageCover(0, 0, W, H, m_loadingBg, Vec4(0.85f, 0.85f, 0.85f, 0.92f));
+  m_ui.gradientV(0, 0, W, H, Vec4(0.02f, 0.02f, 0.025f, 0.55f), Vec4(0.03f, 0.03f, 0.03f, 0.85f));
+  if (m_titleLogo) {
+    f32 s = 256.0f;
+    m_ui.image(W * 0.5f - s * 0.5f, H * 0.5f - s * 0.5f - 30.0f, s, s, m_titleLogo,
+               Vec4(0.95f, 0.95f, 0.95f, 0.95f));
+  }
+  m_ui.text(W * 0.5f - 250.0f, H * 0.5f + 150.0f, "ASHES OF HUMANITY: LAST SIGNAL",
+            Vec4(0.86f, 0.80f, 0.66f, 1.0f), 1.6f);
+  m_ui.text(W * 0.5f - 60.0f, H * 0.5f + 190.0f, label, Vec4(0.62f, 0.63f, 0.66f, 1.0f), 1.1f);
+  m_ui.bar(W * 0.5f - 220.0f, H * 0.5f + 212.0f, 440.0f, 6.0f, progress,
+           Vec4(0.86f, 0.63f, 0.23f, 1.0f), Vec4(0.10f, 0.10f, 0.11f, 0.9f));
+  m_ui.end();
+  m_renderer->render();
+}
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 void Game::render() {
   if (!m_renderer) return;
   m_renderer->beginFrame();
@@ -107,8 +168,10 @@ void Game::render() {
   m_renderer->setTime(m_time);
   m_renderer->setColorGrade(0.82f, 1.06f, Vec3(0.01f, 0.005f, 0.0f), Vec3(1, 1, 1), Vec3(1, 1, 1));
 
-  m_renderer->render();
+  // The interface is built and submitted first: the renderer draws the UI
+  // batches inside its own frame, so they have to exist before render().
   renderUI();
+  m_renderer->render();
 }
 
 // ---------------------------------------------------------------------------
@@ -309,6 +372,10 @@ void Game::drawScreen(GameState s) {
       if (m_menuBg) m_ui.imageCover(0, 0, W, H, m_menuBg, Vec4(1, 1, 1, 1));
       m_ui.gradientV(0, 0, W, H, Vec4(0.02f, 0.025f, 0.03f, 0.72f),
                      Vec4(0.06f, 0.055f, 0.05f, 0.35f));
+      if (m_titleLogo) {
+        f32 s = 240.0f;
+        m_ui.image(W * 0.5f - s * 0.5f, H * 0.09f, s, s, m_titleLogo, Vec4(1, 1, 1, 0.92f));
+      }
       m_ui.text(W * 0.5f - 320.0f, H * 0.18f, "ASHES OF HUMANITY", Vec4(0.86f, 0.83f, 0.78f, 1), 4.2f);
       m_ui.text(W * 0.5f - 128.0f, H * 0.18f + 42.0f, "LAST SIGNAL", accent, 3.0f);
       m_ui.rect(W * 0.5f - 190.0f, H * 0.18f + 76.0f, 380.0f, 1.0f, Vec4(0.45f, 0.38f, 0.26f, 0.7f));

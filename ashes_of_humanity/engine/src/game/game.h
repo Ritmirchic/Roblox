@@ -85,6 +85,8 @@ public:
 private:
   // --- setup ---
   bool loadAssets();
+  bool loadBranding();
+  void drawLoadingScreen(float progress, const char* label);
   void buildWorld(u32 seed);
   void spawnWorld();
   void spawnPlayer();

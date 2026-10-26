@@ -19,8 +19,8 @@ downloadable directly:
 | File | Size | Direct download |
 |---|---|---|
 | `ASHES_OF_HUMANITY_SETUP.exe` | 27 309 961 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_SETUP.exe |
-| `ASHES_OF_HUMANITY_WINDOWS.zip` | 26 868 347 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_WINDOWS.zip |
-| `ASHES_OF_HUMANITY_SOURCE.zip` | 34 904 796 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_SOURCE.zip |
+| `ASHES_OF_HUMANITY_WINDOWS.zip` | 26 870 943 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_WINDOWS.zip |
+| `ASHES_OF_HUMANITY_SOURCE.zip` | 34 906 371 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_SOURCE.zip |
 
 Or browse the folder:
 https://github.com/Ritmirchic/Roblox/tree/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0
@@ -122,13 +122,13 @@ title art, loading screen and Win32 version information.
 
 ```
 $ ./build/AshesOfHumanity.exe --test
- RESULT: 81 passed, 0 failed
+ RESULT: 93 passed, 0 failed
 
 $ ./build/AshesOfHumanity.exe --sim 60
  sim: finished - hp=96.6 hunger=75.3 thirst=78.0 mutants=51 level=1
 ```
 
-* 81 automated checks covering world generation, collision, item and weapon
+* 93 automated checks covering world generation, collision, item and weapon
   databases, inventory, crafting, combat, AI, quests, save/load and
   migration, audio, UI and the animator.
 * A 60 second headless gameplay simulation that cycles through every

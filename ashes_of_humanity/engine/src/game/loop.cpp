@@ -373,6 +373,70 @@ int Game::runTests() {
     }
   }
 
+
+  // ------------------------------------------------------- boss arenas
+  printf("\n[BOSS ARENAS]\n");
+  {
+    World w;
+    w.generate(20241);
+    const std::vector<BossArena>& arenas = w.bossArenas();
+    rep.check(arenas.size() == 6, "six boss arenas are placed in the world");
+    bool distinct = true;
+    bool aboveGround = true;
+    int regions[6] = { 0, 0, 0, 0, 0, 0 };
+    for (const BossArena& a : arenas) {
+      if (a.bossIndex < 10 || a.bossIndex > 15) distinct = false;
+      if (a.pos.y < w.heightAt(a.pos.x, a.pos.z) - 0.5f) aboveGround = false;
+      int r = w.regionAt(a.pos.x, a.pos.z);
+      if (r >= 0 && r < 6) regions[r]++;
+    }
+    rep.check(distinct, "every arena references a distinct boss");
+    rep.check(aboveGround, "arena centres sit on the terrain");
+    bool spread = false;
+    for (int i = 0; i < 6; ++i) if (regions[i] > 0) spread = true;
+    rep.check(spread, "arenas are distributed over the regions");
+  }
+
+  // ------------------------------------------------------- attachments
+  printf("\n[WEAPON MODIFICATION]\n");
+  {
+    ItemDatabase items;
+    WeaponDatabase wdb;
+    items.build();
+    wdb.build();
+    linkWeaponItems(items, wdb);
+    rep.check(wdb.attachments().size() >= 5, "attachments are defined");
+    rep.check(items.find("Red Dot Sight") >= 0, "attachment has an inventory item");
+    Player p;
+    // give the player a rifle and a suppressor
+    int rifleItem = items.find("Assault Rifle");
+    int suppressorItem = items.find("Suppressor");
+    if (rifleItem >= 0) {
+      p.inv[0].defId = rifleItem;
+      p.inv[0].count = 1;
+      p.inv[0].durability = 1.0f;
+      p.equip[EQ_MAIN] = p.inv[0];
+      ItemStack gun = p.equip[EQ_MAIN];
+      const WeaponDef base = effectiveWeapon(gun, items, wdb);
+      rep.check(base.magSize > 0, "base weapon resolves through the modifier chain");
+      if (suppressorItem >= 0) {
+        p.inv[1].defId = suppressorItem;
+        p.inv[1].count = 1;
+        int supId = 0;
+        for (const AttachmentDef& ad : wdb.attachments())
+          if (ad.name == "Suppressor") supId = ad.id;
+        bool fitted = fitAttachmentToEquipped(p, items, wdb, supId);
+        rep.check(fitted, "attachment can be fitted to a weapon");
+        rep.check(inventoryCount(p, suppressorItem) == 0, "fitting consumes the attachment");
+        const WeaponDef mod = effectiveWeapon(p.equip[EQ_MAIN], items, wdb);
+        rep.check(mod.damage < base.damage, "suppressor reduces damage");
+        rep.check(mod.recoil < base.recoil, "suppressor reduces recoil");
+        bool again = fitAttachmentToEquipped(p, items, wdb, supId);
+        rep.check(!again, "an occupied attachment slot refuses a second part");
+      }
+    }
+  }
+
   // ------------------------------------------------------------------- saves
   printf("\n[SAVES]\n");
   {

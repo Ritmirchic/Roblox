@@ -103,6 +103,7 @@ void World::buildBossArenas() {
   m_arenas.clear();
   auto add = [&](const char* name, Vec3 p, float r, int boss) {
     BossArena a;
+    p.y = heightAt(p.x, p.z);
     a.name = name; a.pos = p; a.radius = r; a.bossIndex = boss;
     m_arenas.push_back(a);
   };

@@ -60,7 +60,13 @@ bool Game::init(void* nativeWindow, int width, int height) {
   m_quests.build();
   m_crafting.build(m_items);
 
+  // The loading screen is shown while the content is streamed in.
+  if (m_renderer) {
+    loadBranding();
+    drawLoadingScreen(0.08f, "LOADING ASSETS");
+  }
   if (!loadAssets()) LOGW("game: some assets are missing");
+  if (m_renderer) drawLoadingScreen(0.55f, "GENERATING WORLD");
 
   m_ctx.world = &m_world;
   m_ctx.items = &m_items;
@@ -137,6 +143,30 @@ void Game::shutdown() {
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// The branding artwork is loaded first so the loading screen can be shown
+// while the rest of the content streams in.
+// ---------------------------------------------------------------------------
+bool Game::loadBranding() {
+  if (!m_renderer) return false;
+  const char* uiNames[3] = { "menu_background", "loading_screen", "title_logo" };
+  for (int i = 0; i < 3; ++i) {
+    std::string path = std::string("assets/ui/") + uiNames[i] + ".aft";
+    bool ok = false;
+    std::vector<u8> data = readFile(path, &ok);
+    if (!ok || data.empty()) continue;
+    TextureData td;
+    if (!deserializeTexture(data.data(), data.size(), td)) continue;
+    GpuTexture* t = m_renderer->createTexture(td, uiNames[i]);
+    if (!t) continue;
+    if (i == 0) m_menuBg = t;
+    else if (i == 1) m_loadingBg = t;
+    else m_titleLogo = t;
+  }
+  return m_menuBg != nullptr;
+}
+
+// ---------------------------------------------------------------------------
 bool Game::loadAssets() {
   // Textures: one set per material slot index.
   std::vector<std::string> texNames = listDir("assets/textures");
@@ -165,23 +195,6 @@ bool Game::loadAssets() {
   }
   LOGI("assets: %d texture sets", (int)m_setCacheFull.size());
 
-  // Branding (menu / loading artwork) lives outside the material set table.
-  {
-    const char* uiNames[3] = { "menu_background", "loading_screen", "title_logo" };
-    for (int i = 0; i < 3; ++i) {
-      std::string path = std::string("assets/ui/") + uiNames[i] + ".aft";
-      bool ok = false;
-      std::vector<u8> data = readFile(path, &ok);
-      if (!ok || data.empty()) continue;
-      TextureData td;
-      if (!deserializeTexture(data.data(), data.size(), td)) continue;
-      if (!m_renderer) continue;
-      GpuTexture* t = m_renderer->createTexture(td, uiNames[i]);
-      if (i == 0) m_menuBg = t;
-      else if (i == 1) m_loadingBg = t;
-      else m_titleLogo = t;
-    }
-  }
 
   // Meshes.
   std::vector<std::string> meshNames = listDir("assets/meshes");

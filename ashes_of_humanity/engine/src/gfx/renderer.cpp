@@ -638,6 +638,54 @@ void Renderer::renderScenePass() {
 }
 
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// The 2D interface is drawn after tone mapping so the text stays crisp and
+// is not affected by bloom.
+// ---------------------------------------------------------------------------
+void Renderer::renderUIOverlay() {
+  if (m_uiBatches.empty()) return;
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glViewport(0, 0, settings.width, settings.height);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glDisable(GL_DEPTH_TEST);
+  glDepthMask(GL_FALSE);
+  glDisable(GL_CULL_FACE);
+  glUseProgram(m_ui.id);
+  Mat4 ortho = Mat4::ortho(0, (float)settings.width, (float)settings.height, 0, -1, 1);
+  glUniformMatrix4fv(uniform(m_ui, "uProj"), 1, GL_FALSE, ortho.m);
+  static u32 uvao = 0, uvbo = 0, uibo = 0;
+  if (!uvao) {
+    glGenVertexArrays(1, &uvao);
+    glGenBuffers(1, &uvbo);
+    glGenBuffers(1, &uibo);
+    glBindVertexArray(uvao);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 32, (void*)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 32, (void*)8);
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 32, (void*)16);
+  }
+  for (const auto& b : m_uiBatches) {
+    glBindVertexArray(uvao);
+    glBindBuffer(GL_ARRAY_BUFFER, uvbo);
+    glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(b.verts.size() * 4), b.verts.data(), GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, uibo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)(b.idx.size() * 4), b.idx.data(), GL_DYNAMIC_DRAW);
+    bindTexture(0, b.tex.albedo);
+    glUniform1i(uniform(m_ui, "uTex"), 0);
+    glUniform1i(uniform(m_ui, "uHasTex"), b.tex.albedo ? 1 : 0);
+    glDrawElements(GL_TRIANGLES, (GLsizei)b.idx.size(), GL_UNSIGNED_INT, (void*)0);
+    stats.drawCalls++;
+  }
+  glEnable(GL_DEPTH_TEST);
+  glDepthMask(GL_TRUE);
+  glEnable(GL_CULL_FACE);
+  glDisable(GL_BLEND);
+}
+
 // ---------------------------------------------------------------------------
 void Renderer::render() {
   if (!m_initialized) return;
@@ -730,48 +778,8 @@ void Renderer::render() {
     glDisable(GL_BLEND);
   }
 
-  // UI overlay (2D)
-  if (!m_uiBatches.empty()) {
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glDisable(GL_DEPTH_TEST);
-    glDepthMask(GL_FALSE);
-    glDisable(GL_CULL_FACE);
-    glUseProgram(m_ui.id);
-    Mat4 ortho = Mat4::ortho(0, (float)settings.width, (float)settings.height, 0, -1, 1);
-    glUniformMatrix4fv(uniform(m_ui, "uProj"), 1, GL_FALSE, ortho.m);
-    static u32 uvao = 0, uvbo = 0, uibo = 0;
-    if (!uvao) {
-      glGenVertexArrays(1, &uvao);
-      glGenBuffers(1, &uvbo);
-      glGenBuffers(1, &uibo);
-      glBindVertexArray(uvao);
-      // UI vertex layout: vec2 position, vec2 uv, vec4 colour (all floats).
-      glEnableVertexAttribArray(0);
-      glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 32, (void*)0);
-      glEnableVertexAttribArray(1);
-      glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 32, (void*)8);
-      glEnableVertexAttribArray(2);
-      glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 32, (void*)16);
-    }
-    for (const auto& b : m_uiBatches) {
-      glBindVertexArray(uvao);
-      glBindBuffer(GL_ARRAY_BUFFER, uvbo);
-      glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(b.verts.size() * 4), b.verts.data(), GL_DYNAMIC_DRAW);
-      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, uibo);
-      glBufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)(b.idx.size() * 4), b.idx.data(), GL_DYNAMIC_DRAW);
-      bindTexture(0, b.tex.albedo);
-      glUniform1i(uniform(m_ui, "uTex"), 0);
-      glUniform1i(uniform(m_ui, "uHasTex"), b.tex.albedo ? 1 : 0);
-      glDrawElements(GL_TRIANGLES, (GLsizei)b.idx.size(), GL_UNSIGNED_INT, (void*)0);
-    }
-    glEnable(GL_DEPTH_TEST);
-    glDepthMask(GL_TRUE);
-    glEnable(GL_CULL_FACE);
-    glDisable(GL_BLEND);
-  }
-
   renderPost();
+  renderUIOverlay();
   glSwapBuffers();
 }
 
