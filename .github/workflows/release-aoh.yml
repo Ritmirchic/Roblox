@@ -1,0 +1,93 @@
+name: release-ashes-of-humanity
+
+# Builds, tests and publishes Ashes of Humanity from a GitHub runner, which
+# has the full network egress the dev sandbox lacks (notably
+# uploads.github.com for release assets).
+on:
+  workflow_dispatch:
+  push:
+    branches: ["arena/7a439bd1-roblox"]
+    paths: [".github/workflows/release-aoh.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  build-test-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GODOT_VERSION: 4.7.2-stable
+      RELEASE_TAG: ashes-of-humanity-v1.0.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch Godot editor and export templates
+        run: |
+          set -eux
+          BASE="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}"
+          mkdir -p "$HOME/godot" "$HOME/.local/share/godot/export_templates"
+          curl -fL --retry 3 "$BASE/Godot_v${GODOT_VERSION}_linux.x86_64.zip" -o /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d "$HOME/godot"
+          chmod +x "$HOME/godot/Godot_v${GODOT_VERSION}_linux.x86_64"
+          curl -fL --retry 3 "$BASE/Godot_v${GODOT_VERSION}_export_templates.tpz" -o /tmp/tpl.tpz
+          mkdir -p /tmp/tplx
+          unzip -q /tmp/tpl.tpz -d /tmp/tplx
+          mv "/tmp/tplx/templates" "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}"
+          "$HOME/godot/Godot_v${GODOT_VERSION}_linux.x86_64" --version
+
+      - name: Import project resources
+        run: |
+          set -eux
+          cd AshesOfHumanity
+          "$HOME/godot/Godot_v${GODOT_VERSION}_linux.x86_64" --headless --import
+
+      - name: Run headless integration smoke test
+        run: |
+          set -eux
+          cd AshesOfHumanity
+          "$HOME/godot/Godot_v${GODOT_VERSION}_linux.x86_64" \
+            --headless --path . res://scenes/SmokeTest.tscn
+
+      - name: Export Windows standalone
+        run: |
+          set -eux
+          cd AshesOfHumanity
+          mkdir -p dist/AshesOfHumanity/LICENSES
+          "$HOME/godot/Godot_v${GODOT_VERSION}_linux.x86_64" \
+            --headless --export-release "Windows Desktop"
+          test -s dist/AshesOfHumanity/AshesOfHumanity.exe
+
+      - name: Assemble distribution folders
+        run: |
+          set -eux
+          cd AshesOfHumanity
+          # Legal notices and player readme (tracked in packaging/).
+          cp packaging/README.txt dist/AshesOfHumanity/README.txt
+          cp packaging/Godot-LICENSE.txt dist/AshesOfHumanity/LICENSES/Godot-LICENSE.txt
+          cp packaging/ATTRIBUTION.txt dist/AshesOfHumanity/LICENSES/ATTRIBUTION.txt
+          # Portable Windows zip
+          (cd dist && zip -r -9 ASHES_OF_HUMANITY_WINDOWS.zip AshesOfHumanity)
+          # Source zip without local engine caches or build output
+          mkdir -p /tmp/stage
+          cp -r . /tmp/stage/AshesOfHumanity
+          rm -rf /tmp/stage/AshesOfHumanity/.godot /tmp/stage/AshesOfHumanity/dist
+          (cd /tmp/stage && zip -r -9 "$GITHUB_WORKSPACE/AshesOfHumanity/dist/ASHES_OF_HUMANITY_SOURCE.zip" AshesOfHumanity)
+          sha256sum dist/*.zip | tee dist/SHA256SUMS.txt
+          ls -lh dist
+
+      - name: Publish to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eux
+          cd AshesOfHumanity/dist
+          gh release view "$RELEASE_TAG" >/dev/null 2>&1 || \
+            gh release create "$RELEASE_TAG" --title "ASHES OF HUMANITY: LAST SIGNAL v1.0.0" --notes "Automated build from branch ${GITHUB_REF_NAME}."
+          gh release upload "$RELEASE_TAG" \
+            ASHES_OF_HUMANITY_WINDOWS.zip \
+            ASHES_OF_HUMANITY_SOURCE.zip \
+            SHA256SUMS.txt --clobber
+          gh release view "$RELEASE_TAG" --json assets \
+            --jq '.assets[] | .name + " " + (.size|tostring) + " " + .state'

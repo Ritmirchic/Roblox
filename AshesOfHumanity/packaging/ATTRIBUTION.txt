@@ -1,0 +1,31 @@
+ATTRIBUTION AND ORIGINALITY NOTICE
+==================================
+
+"Ashes of Humanity: Last Signal"
+
+Game engine
+-----------
+Godot Engine 4.7.2-stable, copyright (c) 2014-present Godot Engine
+contributors; copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.
+Distributed under the MIT License — see Godot-LICENSE.txt in this folder.
+
+Game content
+------------
+All game source code (GDScript), 3D models, textures, UI art, branding
+(icon and loading screen), sound effects and music in this product are
+original works created procedurally for this project with:
+  - Blender / bpy for geometry and glTF export
+  - Pillow for texture and branding generation
+  - Custom Python synthesis for all audio assets
+No third-party game content, sample libraries, trademarks or licensed
+IP are included. All fictional names, characters and events are original.
+
+Fonts
+-----
+The game uses the Godot Engine default built-in font only.
+
+Save data
+---------
+All save data is generated locally on the player's machine and is never
+transmitted. The game contains no telemetry, no network code and no
+third-party advertising.
