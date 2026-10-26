@@ -17,6 +17,8 @@ var credit_reward: int = 100
 var drop_resource: String = "iron"
 # Elite response wings (threat system): tougher, louder, better salvage.
 var elite: bool = false
+# Threat escalation multiplier: hot sectors fight meaner (speed + tempo).
+var aggression: float = 1.0
 var _lock_ring: MeshInstance3D = null
 var _halo: MeshInstance3D = null
 
@@ -152,7 +154,8 @@ func _physics_process(delta: float) -> void:
 		return
 
 	if shield < max_shield:
-		shield = minf(max_shield, shield + max_shield * 0.04 * delta)
+		shield = minf(max_shield, shield + max_shield * (0.04 if aggression <= 1.0 else 0.085) * delta)
+	var spd := move_speed * aggression
 
 	if is_instance_valid(_halo):
 		_halo.rotate_z(delta * 1.15)
@@ -171,16 +174,16 @@ func _physics_process(delta: float) -> void:
 	var desired_vel := Vector3.ZERO
 	if dist > engage_range * 1.45:
 		# Patrol / close distance
-		desired_vel = dir_to_player * move_speed * 0.85
+		desired_vel = dir_to_player * spd * 0.85
 	elif dist > engage_range * 0.58:
 		# Strafe orbit around player
 		var tangent := dir_to_player.cross(Vector3.UP).normalized() * _strafe_dir
 		var vertical := Vector3.UP * sin(_strafe_phase) * 0.35
-		desired_vel = (dir_to_player * 0.35 + tangent * 0.85 + vertical).normalized() * move_speed
+		desired_vel = (dir_to_player * 0.35 + tangent * 0.85 + vertical).normalized() * spd
 	else:
 		# Break away to prevent ramming lock
 		var tangent2 := dir_to_player.cross(Vector3.UP).normalized() * _strafe_dir
-		desired_vel = (-dir_to_player * 0.65 + tangent2 * 0.75).normalized() * move_speed
+		desired_vel = (-dir_to_player * 0.65 + tangent2 * 0.75).normalized() * spd
 
 	velocity = velocity.lerp(desired_vel, clampf(delta * 3.0, 0.0, 1.0))
 	move_and_slide()
@@ -188,7 +191,7 @@ func _physics_process(delta: float) -> void:
 	# Firing logic
 	_fire_cd -= delta
 	if dist <= engage_range and _fire_cd <= 0.0 and projectiles_root:
-		_fire_cd = 1.0 / maxf(0.2, fire_rate)
+		_fire_cd = 1.0 / maxf(0.2, fire_rate * aggression)
 		_fire_at_player(dir_to_player)
 
 func _fire_at_player(aim_dir: Vector3) -> void:

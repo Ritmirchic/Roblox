@@ -1067,8 +1067,17 @@ func _test_card_foils_and_lock_combat() -> void:
 		want_rd += float(fd["radar_mult"]) - 1.0
 	_check(absf(float(perks["market"]) - clampf(want_mk, 1.0, 1.45)) < 0.001, "Market perk equals the summed equipped foil bonuses")
 	_check(float(perks["market"]) <= 1.451 and float(perks["radar"]) <= 1.401, "Stacked foil perks respect the designed caps")
+	# the foil perk has to reach the engine, not just the data layer
+	CrewManager.equipped_crew.clear()
 	var probe := PlayerShip3D.new()
-	_check(probe.has_method("get_radar_range"), "PlayerShip3D resolves radar reach through the foil perk")
+	add_child(probe)
+	await get_tree().process_frame
+	var radar_cold := probe.get_radar_range()
+	CrewManager.grant_card("crew_12", "holo")
+	CrewManager.equip_card("crew_12")
+	var radar_hot := probe.get_radar_range()
+	_check(absf(radar_cold - 140.0) < 0.01, "Cold radar range falls back to the base sweep (140 m)")
+	_check(radar_hot > radar_cold * 1.05, "Holo foil print physically extends ship radar (%.1f -> %.1f m)" % [radar_cold, radar_hot])
 	probe.free()
 
 	# --- pack odds are honest, per pack type -----------------------------------
@@ -1183,15 +1192,6 @@ func _test_card_foils_and_lock_combat() -> void:
 		en.queue_free()
 	exp2.queue_free()
 	await get_tree().process_frame
-
-
-func player_ship_radar_probe() -> float:
-	var probe := PlayerShip3D.new()
-	add_child(probe)
-	await get_tree().process_frame
-	var base_range := probe.get_radar_range()
-	probe.queue_free()
-	return base_range
 
 
 func _test_achievement_hall3d() -> void:

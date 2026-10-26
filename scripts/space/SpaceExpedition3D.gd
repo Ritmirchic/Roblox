@@ -264,7 +264,7 @@ func _spawn_single_asteroid(min_dist: float, max_dist: float) -> void:
 	)
 	asteroids_root.add_child(ast)
 
-func _spawn_sector_enemy(eid_override: String = "", as_elite: bool = false, at: Vector3 = Vector3.ZERO, use_pos: bool = false, guarantee_salvage: bool = false) -> void:
+func _spawn_sector_enemy(eid_override: String = "", as_elite: bool = false, at: Vector3 = Vector3.ZERO, use_pos: bool = false, guarantee_salvage: bool = false, aggression: float = 1.0) -> void:
 	var pool: Array = sector_def.get("enemy_pool", ["scout_drone"])
 	if pool.is_empty() or not is_instance_valid(player_ship):
 		return
@@ -273,6 +273,7 @@ func _spawn_sector_enemy(eid_override: String = "", as_elite: bool = false, at: 
 		cos(randf() * TAU) * 145.0, randf_range(-24.0, 24.0), sin(randf() * TAU) * 145.0)
 	var en := EnemyShip3D.new()
 	en.setup(eid, spawn_pos, player_ship, projectiles_root, chunks_root, as_elite)
+	en.aggression = clampf(aggression, 1.0, 1.6)
 	if as_elite:
 		en.set_meta("salvage_guaranteed", false)
 	en.set_meta("salvage_guaranteed", bool(as_elite) and guarantee_salvage)
@@ -291,14 +292,15 @@ func _spawn_response_wing(tier: int) -> void:
 		return
 	var heavy: String = str(pool[pool.size() - 1])
 	var light: String = str(pool[0])
+	var pressure := clampf(_threat / 100.0, 0.0, 1.0)
 	var base_ang := randf() * TAU
 	var orbit := 188.0 + 26.0 * float(tier)
 	var center := player_ship.global_position + Vector3(cos(base_ang) * orbit, randf_range(-18.0, 26.0), sin(base_ang) * orbit)
 	var escorts := 2 if tier == 1 else 3
 	for i in range(escorts):
 		var off := Vector3(cos(base_ang + TAU * float(i) / float(escorts)) * 42.0, float(i - 1) * 9.0, sin(base_ang + TAU * float(i) / float(escorts)) * 42.0)
-		_spawn_sector_enemy(light, false, center + off, true)
-	_spawn_sector_enemy(heavy, true, center, true, tier >= 2)
+		_spawn_sector_enemy(light, false, center + off, true, false, lerpf(1.06, 1.34, pressure))
+	_spawn_sector_enemy(heavy, true, center, true, tier >= 2, lerpf(1.10, 1.42, pressure))
 	_wings_called += 1
 	if tier >= 2:
 		_hud_alert(L.tr_ui("threat_heavy_inbound"), Color(1.0, 0.46, 0.24))
@@ -314,11 +316,42 @@ func _on_enemy_defeated(en: EnemyShip3D, world_pos: Vector3) -> void:
 	if en == null:
 		return
 	_add_threat(15.0 if en.elite else 8.5)
-	add_camera_trauma(0.34 if en.elite else 0.18)
+	add_camera_trauma(0.95 if en.elite else 0.18)
+	if en.elite:
+		_spawn_kill_shockwave(world_pos)
 	if not en.elite:
 		return
 	if bool(en.get_meta("salvage_guaranteed", false)) or randf() < 0.30:
 		_grant_salvage_card(world_pos)
+
+
+# Elite kills get a set-piece read: an expanding command ring over the wreck.
+func _spawn_kill_shockwave(at: Vector3) -> void:
+	if ThemeHelper.reduced_motion:
+		return
+	var ring := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = 3.0
+	torus.outer_radius = 3.65
+	torus.rings = 40
+	torus.ring_segments = 8
+	ring.mesh = torus
+	ring.rotation_degrees = Vector3(90, 0, 0)
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var rmat := StandardMaterial3D.new()
+	rmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	rmat.albedo_color = Color(1.0, 0.86, 0.45, 0.82)
+	rmat.emission_enabled = true
+	rmat.emission = Color(1.0, 0.78, 0.32)
+	rmat.emission_energy_multiplier = 2.4
+	ring.material_override = rmat
+	ring.global_position = at
+	enemies_root.add_child(ring)
+	var tw := ring.create_tween()
+	tw.tween_property(ring, "scale", Vector3.ONE * 9.5, 0.58).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(rmat, "albedo_color:a", 0.0, 0.62)
+	tw.tween_callback(ring.queue_free)
 
 
 # Elite wing leaders carry collectible prints: combat feeds the card chase.
