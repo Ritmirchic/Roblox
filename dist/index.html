@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Ashes of Humanity: Last Signal</title>
+<meta name="description" content="A single-player post-apocalyptic open-world survival RPG running on a custom WebGL2 engine.">
+<meta name="theme-color" content="#0a0c0a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230a0c0a'/%3E%3Cpath d='M16 4 L26 16 L16 28 L6 16 Z' fill='none' stroke='%23c9963f' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23c9963f'/%3E%3C/svg%3E">
+<style>
+  html,body{margin:0;height:100%;background:#060706;overflow:hidden}
+  #boot{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:#060706;z-index:200;font-family:"Arial Narrow",Arial,sans-serif;color:#b3ac9a;transition:opacity .6s}
+  #boot h1{margin:0;font-size:15px;letter-spacing:.6em;font-weight:400;text-transform:uppercase}
+  #boot p{margin:18px 0 0;font-size:10px;letter-spacing:.28em;color:#5c5a51;text-transform:uppercase}
+  #boot .bar{width:220px;height:1px;background:#20241e;margin-top:26px;position:relative;overflow:hidden}
+  #boot .bar i{position:absolute;inset:0;width:40%;background:#c9963f;animation:slide 1.4s infinite ease-in-out}
+  @keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(320%)}}
+  #boot.error{color:#d4664c}
+  #boot.error .bar{display:none}
+</style>
+</head>
+<body>
+<div id="ui"></div>
+<div id="boot">
+  <h1>ASHES OF HUMANITY</h1>
+  <p>LAST SIGNAL</p>
+  <div class="bar"><i></i></div>
+</div>
+<noscript><div style="color:#c9963f;padding:40px;font-family:sans-serif">This game requires JavaScript and a WebGL2-capable browser.</div></noscript>
+<script type="module" src="./game.js"></script>
+</body>
+</html>
