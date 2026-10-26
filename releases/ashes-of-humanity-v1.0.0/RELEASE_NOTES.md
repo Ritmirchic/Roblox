@@ -8,16 +8,30 @@ Original 3D post-apocalyptic survival action RPG for **Windows 64-bit**.
 
 ---
 
-## Downloads
+## ⚠ Where the binaries live
 
-| File | Size | What it is |
+The build machine that produced this release cannot reach GitHub's asset upload
+endpoint (`uploads.github.com` is blocked there), so the files could not be
+attached to this release page as release assets. They are committed to the
+repository instead, under `releases/ashes-of-humanity-v1.0.0/`, and are
+downloadable directly:
+
+| File | Size | Direct download |
 |---|---|---|
-| `ASHES_OF_HUMANITY_SETUP.exe` | ~27 MB | Self-extracting installer (icon, version info, desktop + Start Menu shortcuts, optional auto-launch) |
-| `ASHES_OF_HUMANITY_WINDOWS.zip` | ~27 MB | Portable build — unzip anywhere and run `AshesOfHumanity.exe` |
-| `ASHES_OF_HUMANITY_SOURCE.zip` | ~35 MB | Complete project source, engine, asset pipeline and generated assets |
+| `ASHES_OF_HUMANITY_SETUP.exe` | 27 309 961 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_SETUP.exe |
+| `ASHES_OF_HUMANITY_WINDOWS.zip` | 26 868 347 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_WINDOWS.zip |
+| `ASHES_OF_HUMANITY_SOURCE.zip` | 34 904 796 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_SOURCE.zip |
 
-> The engine resolves `assets/` next to the executable, so keep the folder
-> structure produced by the installer or the zip.
+Or browse the folder:
+https://github.com/Ritmirchic/Roblox/tree/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0
+
+* `ASHES_OF_HUMANITY_SETUP.exe` — self-extracting installer (custom Win32 UI,
+  application icon, version information, desktop and Start Menu shortcuts,
+  optional auto-launch of the game).
+* `ASHES_OF_HUMANITY_WINDOWS.zip` — portable build. Unzip anywhere and run
+  `AshesOfHumanity.exe`. The game looks for `assets/` next to the executable.
+* `ASHES_OF_HUMANITY_SOURCE.zip` — the complete project: engine, gameplay,
+  Blender asset pipeline, installer sources and the generated assets.
 
 ---
 
@@ -26,7 +40,7 @@ Original 3D post-apocalyptic survival action RPG for **Windows 64-bit**.
 **This game is not made with Unreal Engine 5 or Godot.** Neither engine could be
 obtained in the build environment — the Unreal binaries were not reachable and
 the Godot editor plus its Windows export templates could not be downloaded
-(the release CDN is blocked in this environment).
+(the release CDN is blocked in that environment).
 
 The game therefore runs on an **original engine written from scratch in C++17
 against the OpenGL 3.3 core profile**, cross-compiled to Windows x86-64 with
@@ -77,12 +91,12 @@ infection; the MEDICAL bay of the inventory shows the report and you bandage
 yourself in the field.
 
 **Combat** — 13 weapons from improvised pipe bats and spears through pistols,
-shotguns, SMGs, assault rifles and a crossbow. Each has its own damage,
-rate of fire, magazine, spread, recoil, falloff curve, durability and weight.
-Aim down sights, attach optics, a suppressor, a grip or an extended magazine
-and the numbers really change. Melee swings arc horizontally, projectiles
-travel, hitboxes are vertical capsules, and the AI attacks with a token system
-so you are never buried by a pack.
+shotguns, SMGs, assault rifles and a crossbow. Each has its own damage, rate
+of fire, magazine, spread, recoil, falloff curve, durability and weight. Aim
+down sights, fit an optic, a suppressor, a grip or an extended magazine and the
+numbers really change. Melee swings arc horizontally, projectiles travel,
+hitboxes are vertical capsules, and the AI attacks with a token system so you
+are never buried by a pack.
 
 **Enemies** — ten mutant species with distinct silhouettes and behaviour
 (sight, hearing, investigate, search, patrol, pursue, attack, retreat, group
@@ -90,7 +104,7 @@ alerting) plus six bosses with phases, telegraphed attacks, weak points and
 their own arenas. Walking into an arena wakes its boss.
 
 **Progression** — 50 levels, six attributes and four skill trees (Combat,
-Survival, Engineering, Exploration) with 14 crafting recipes, blueprints and
+Survival, Engineering, Exploration), 14 crafting recipes with blueprints and
 workstations.
 
 **Story** — 40 main quests across 8 acts, 60 side quests, a flag and
@@ -104,7 +118,7 @@ title art, loading screen and Win32 version information.
 
 ---
 
-## Testing (actually executed in this environment)
+## Testing (actually executed)
 
 ```
 $ ./build/AshesOfHumanity.exe --test
@@ -120,8 +134,11 @@ $ ./build/AshesOfHumanity.exe --sim 60
 * A 60 second headless gameplay simulation that cycles through every
   gameplay state (inventory, map, skills, crafting, journal, building,
   dialogue, cutscene) without a crash.
-* The Windows payload was verified by extracting the shipped installer and the
-  shipped zip and comparing all 195 files byte for byte against the originals.
+* The shipped payloads were verified by extracting the installer and the zip
+  and comparing all 195 files byte for byte against the originals.
+* The Windows executable was verified as a valid PE32+ console binary for
+  x86-64 importing OPENGL32/GDI32/USER32/WINMM with an embedded `.rsrc`
+  section (icon + VERSIONINFO).
 
 **Not verified:** the game has never been displayed in a real window — the
 build machine has no GPU, no display server and no software OpenGL
