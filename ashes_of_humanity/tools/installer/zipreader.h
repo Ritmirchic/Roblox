@@ -195,6 +195,15 @@ struct ZipEntry {
   u32 localOffset = 0;
 };
 
+// Archive entries always use forward slashes.  Windows needs backslashes, and
+// every directory level has to exist before a file can be written.
+static std::string nativePath(const std::string& name) {
+  std::string out = name;
+  for (size_t i = 0; i < out.size(); ++i)
+    if (out[i] == '/') out[i] = '\\';
+  return out;
+}
+
 static u16 rd16(const u8* p) { return (u16)(p[0] | (p[1] << 8)); }
 static u32 rd32(const u8* p) {
   return (u32)p[0] | ((u32)p[1] << 8) | ((u32)p[2] << 16) | ((u32)p[3] << 24);

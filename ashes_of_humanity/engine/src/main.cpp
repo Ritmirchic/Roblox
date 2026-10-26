@@ -17,12 +17,20 @@ static void hideConsole() {
   HWND h = GetConsoleWindow();
   if (h) ShowWindow(h, SW_HIDE);
 }
+static void fatalBox(const char* text) {
+  MessageBoxA(nullptr, text, "ASHES OF HUMANITY: LAST SIGNAL", MB_OK | MB_ICONERROR);
+}
 #else
 static void hideConsole() {}
+static void fatalBox(const char*) {}
 #endif
 
 int main(int argc, char** argv) {
-  logInit("ashes_log.txt");
+  // The log always lands next to the executable so a crash can be inspected.
+  {
+    std::string logPath = joinPath(exeDir(), "ashes_log.txt");
+    logInit(logPath);
+  }
 
   int width = 1280, height = 720;
   bool fullscreen = false;
@@ -58,10 +66,18 @@ int main(int argc, char** argv) {
 
   // Resolve the data root: prefer the working directory, fall back to the
   // directory next to the executable.
-  if (!dirExists("assets")) {
+  bool haveAssets = dirExists("assets");
+  if (!haveAssets) {
     std::string ex = exeDir();
     setDataRoot(joinPath(ex, "assets"));
-    if (!dirExists(joinPath(ex, "assets"))) setDataRoot("assets");
+    haveAssets = dirExists(joinPath(ex, "assets"));
+    if (!haveAssets) setDataRoot("assets");
+  }
+  if (!haveAssets && !runTests && simSeconds <= 0.0f) {
+    fatalBox("The 'assets' folder was not found.\n\n"
+             "Keep the game folder structure intact: 'assets' has to sit next to\n"
+             "AshesOfHumanity.exe.  Reinstall the game or unzip the archive again.");
+    return 3;
   }
 
   Game game;
@@ -105,6 +121,9 @@ int main(int argc, char** argv) {
 
   if (!game.init(window.nativeHandle(), width, height)) {
     LOGE("main: game init failed");
+    fatalBox("The game could not start.\n\n"
+             "Your graphics driver may not support OpenGL 3.3.  See ashes_log.txt\n"
+             "next to the executable for the full log.");
     window.destroy();
     logShutdown();
     return 2;

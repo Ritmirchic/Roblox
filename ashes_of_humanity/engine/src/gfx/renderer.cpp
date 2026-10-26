@@ -186,6 +186,9 @@ void Renderer::createTargets() {
       glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, fb.depth);
     }
     fb.w = fw; fb.h = fh; fb.hdr = hdr;
+    GLenum st = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (st != GL_FRAMEBUFFER_COMPLETE)
+      LOGE("renderer: framebuffer incomplete (0x%04x) at %dx%d", (unsigned)st, fw, fh);
   };
   makeFbo(m_hdr, w, h, true, m_hdrSupported, false);
   for (int i = 0; i < 5; ++i) {

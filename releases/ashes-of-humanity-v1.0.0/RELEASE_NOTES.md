@@ -18,9 +18,9 @@ downloadable directly:
 
 | File | Size | Direct download |
 |---|---|---|
-| `ASHES_OF_HUMANITY_SETUP.exe` | 27 312 558 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_SETUP.exe |
-| `ASHES_OF_HUMANITY_WINDOWS.zip` | 26 870 944 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_WINDOWS.zip |
-| `ASHES_OF_HUMANITY_SOURCE.zip` | 34 906 371 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_SOURCE.zip |
+| `ASHES_OF_HUMANITY_SETUP.exe` | 27 318 393 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_SETUP.exe |
+| `ASHES_OF_HUMANITY_WINDOWS.zip` | 26 871 147 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_WINDOWS.zip |
+| `ASHES_OF_HUMANITY_SOURCE.zip` | 34 907 652 B | https://github.com/Ritmirchic/Roblox/raw/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0/ASHES_OF_HUMANITY_SOURCE.zip |
 
 Or browse the folder:
 https://github.com/Ritmirchic/Roblox/tree/arena/ba22cacd-roblox/releases/ashes-of-humanity-v1.0.0
@@ -136,6 +136,11 @@ $ ./build/AshesOfHumanity.exe --sim 60
   dialogue, cutscene) without a crash.
 * The shipped payloads were verified by extracting the installer and the zip
   and comparing all 195 files byte for byte against the originals.
+* v1.0.0 rebuild 2 (2026-10-26): the installer was rewritten on the wide
+  character API (Unicode paths), directory creation now handles every level of
+  an archive path, the installer is a GUI subsystem binary without a console
+  window, the game writes `ashes_log.txt` next to the executable and shows a
+  message box when the assets folder is missing or OpenGL 3.3 is unavailable.
 * The Windows executable was verified as a valid PE32+ console binary for
   x86-64 importing OPENGL32/GDI32/USER32/WINMM with an embedded `.rsrc`
   section (icon + VERSIONINFO).

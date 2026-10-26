@@ -6,23 +6,41 @@
 //  locates the archive inside its own image, inflates every entry and writes
 //  the game to the chosen directory.
 //
-//  A compact DEFLATE (RFC 1951) decoder is included so the build has no
-//  external dependencies.
+//  Everything that touches the file system uses the wide character API so
+//  that non ASCII user names and folder names work correctly.
 // ============================================================================
 #include <windows.h>
 #include <shellapi.h>
-#include "zipreader.h"
 #include <shlobj.h>
 #include <shlwapi.h>
 #include <objbase.h>
+#include "zipreader.h"
 #include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+static std::string toUtf8(const std::wstring& w) {
+  if (w.empty()) return "";
+  int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), nullptr, 0, nullptr, nullptr);
+  std::string out((size_t)n, '\0');
+  WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), &out[0], n, nullptr, nullptr);
+  return out;
+}
+
+static std::wstring fromUtf8(const std::string& s) {
+  if (s.empty()) return L"";
+  int n = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), nullptr, 0);
+  std::wstring out((size_t)n, L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), &out[0], n);
+  return out;
+}
 
 // ---------------------------------------------------------------------------
-// Installer
+// Installer state
 // ---------------------------------------------------------------------------
 static HWND g_hwnd = nullptr;
 static HWND g_pathEdit = nullptr;
@@ -30,53 +48,58 @@ static HWND g_status = nullptr;
 static HWND g_progress = nullptr;
 static HWND g_button = nullptr;
 static HWND g_launchCheck = nullptr;
-static std::string g_installDir;
+static std::wstring g_installDir;
 static bool g_launch = true;
-static std::string g_payloadExe;
 
-static void setStatus(const char* text) {
-  if (g_status) SetWindowTextA(g_status, text);
+static void setStatus(const std::string& text) {
+  if (g_status) SetWindowTextA(g_status, text.c_str());
 }
 
-static bool ensureDirs(const std::string& path) {
-  std::string cur;
+// Creates every directory level of the path.  Accepts both separators.
+static bool ensureDirs(const std::wstring& path) {
+  std::wstring cur;
   for (size_t i = 0; i < path.size(); ++i) {
     cur += path[i];
-    if (path[i] == '\\' || i + 1 == path.size())
-      CreateDirectoryA(cur.c_str(), nullptr);
+    bool sep = (path[i] == L'\\' || path[i] == L'/');
+    if (sep || i + 1 == path.size()) {
+      if (cur.size() > 3) {
+        if (!CreateDirectoryW(cur.c_str(), nullptr) && GetLastError() != ERROR_ALREADY_EXISTS)
+          return false;
+      }
+    }
   }
   return true;
 }
 
-static void createShortcut(const char* exePath, const char* shortcutPath) {
-  IShellLinkW* link = nullptr;
+static void createShortcut(const std::wstring& exePath, const std::wstring& shortcutPath) {
+  IShellLinkW* wl = nullptr;
   if (SUCCEEDED(CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
-                                 IID_IShellLinkW, (void**)&link))) {
-    IShellLinkW* wl = link;
-    wchar_t wexe[MAX_PATH], work[MAX_PATH];
-    MultiByteToWideChar(CP_ACP, 0, exePath, -1, wexe, MAX_PATH);
-    wl->SetPath(wexe);
-    lstrcpynW(work, wexe, MAX_PATH);
-    PathRemoveFileSpecW(work);
-    wl->SetWorkingDirectory(work);
+                                 IID_IShellLinkW, (void**)&wl))) {
+    wl->SetPath(exePath.c_str());
+    std::wstring work = exePath;
+    PathRemoveFileSpecW(&work[0]);
+    wl->SetWorkingDirectory(work.c_str());
     wl->SetDescription(L"ASHES OF HUMANITY: LAST SIGNAL");
     IPersistFile* pf = nullptr;
     if (SUCCEEDED(wl->QueryInterface(IID_IPersistFile, (void**)&pf))) {
-      wchar_t sp[MAX_PATH];
-      MultiByteToWideChar(CP_ACP, 0, shortcutPath, -1, sp, MAX_PATH);
-      pf->Save(sp, TRUE);
+      pf->Save(shortcutPath.c_str(), TRUE);
       pf->Release();
     }
-    link->Release();
+    wl->Release();
   }
 }
 
+// ---------------------------------------------------------------------------
+// The installation itself
+// ---------------------------------------------------------------------------
 static void doInstall() {
   setStatus("Reading package...");
+
   // locate our own executable
-  char self[MAX_PATH];
-  GetModuleFileNameA(nullptr, self, MAX_PATH);
-  HANDLE f = CreateFileA(self, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+  std::wstring self(MAX_PATH, L'\0');
+  DWORD n = GetModuleFileNameW(nullptr, &self[0], MAX_PATH);
+  self.resize(n);
+  HANDLE f = CreateFileW(self.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
                          FILE_ATTRIBUTE_NORMAL, nullptr);
   if (f == INVALID_HANDLE_VALUE) { setStatus("Cannot read the installer."); return; }
   LARGE_INTEGER li;
@@ -84,7 +107,11 @@ static void doInstall() {
   size_t size = (size_t)li.QuadPart;
   std::vector<zip::u8> image(size);
   DWORD read = 0;
-  ReadFile(f, image.data(), (DWORD)size, &read, nullptr);
+  if (!ReadFile(f, image.data(), (DWORD)size, &read, nullptr)) {
+    CloseHandle(f);
+    setStatus("Cannot read the installer.");
+    return;
+  }
   CloseHandle(f);
 
   std::vector<zip::ZipEntry> entries;
@@ -94,31 +121,59 @@ static void doInstall() {
     return;
   }
 
-  ensureDirs(g_installDir);
+  if (!ensureDirs(g_installDir)) {
+    char msg[256];
+    snprintf(msg, sizeof(msg), "Cannot create the folder (error %u)", (unsigned)GetLastError());
+    setStatus(msg);
+    return;
+  }
+
   int done = 0;
   int total = (int)entries.size();
   for (size_t i = 0; i < entries.size(); ++i) {
     const zip::ZipEntry& e = entries[i];
     if (!e.name.empty() && e.name.back() == '/') {
-      std::string dir = g_installDir + "\\" + e.name;
-      ensureDirs(dir);
+      ensureDirs(g_installDir + L"\\" + fromUtf8(zip::nativePath(e.name)));
       continue;
     }
-    std::string outPath = g_installDir + "\\" + e.name;
-    size_t slash = outPath.find_last_of("\\/");
-    if (slash != std::string::npos) ensureDirs(outPath.substr(0, slash));
+
+    // Archive paths use '/', Windows needs '\'.
+    std::wstring rel = fromUtf8(zip::nativePath(e.name));
+    std::wstring outPath = g_installDir + L"\\" + rel;
+
+    size_t slash = outPath.find_last_of(L'\\');
+    if (slash != std::wstring::npos && slash > 0) {
+      if (!ensureDirs(outPath.substr(0, slash))) {
+        char msg[512];
+        snprintf(msg, sizeof(msg), "Cannot create folder (error %u)", (unsigned)GetLastError());
+        setStatus(msg);
+        return;
+      }
+    }
 
     std::vector<zip::u8> content;
     if (!zip::extractEntry(image.data(), size, e, content, zipBase)) {
-      setStatus("Failed to extract a file.");
+      setStatus("Cannot unpack " + e.name);
       return;
     }
-    HANDLE out = CreateFileA(outPath.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+
+    HANDLE out = CreateFileW(outPath.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
                              FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (out == INVALID_HANDLE_VALUE) { setStatus("Cannot write the game files."); return; }
+    if (out == INVALID_HANDLE_VALUE) {
+      char msg[512];
+      snprintf(msg, sizeof(msg), "Cannot write %s (error %u)", e.name.c_str(),
+               (unsigned)GetLastError());
+      setStatus(msg);
+      return;
+    }
     DWORD written = 0;
-    WriteFile(out, content.data(), (DWORD)content.size(), &written, nullptr);
+    BOOL ok = WriteFile(out, content.data(), (DWORD)content.size(), &written, nullptr);
     CloseHandle(out);
+    if (!ok || written != (DWORD)content.size()) {
+      setStatus("Short write on " + e.name);
+      return;
+    }
+
     done++;
     if (g_progress) {
       SendMessageA(g_progress, PBM_SETPOS, (WPARAM)((done * 100) / (total ? total : 1)), 0);
@@ -128,119 +183,122 @@ static void doInstall() {
     }
   }
 
-  std::string gameExe = g_installDir + "\\AshesOfHumanity.exe";
-  g_payloadExe = gameExe;
+  std::wstring gameExe = g_installDir + L"\\AshesOfHumanity.exe";
 
   // shortcuts
-  char desktop[MAX_PATH], startMenu[MAX_PATH];
-  SHGetFolderPathA(nullptr, CSIDL_DESKTOPDIRECTORY, nullptr, SHGFP_TYPE_CURRENT, desktop);
-  SHGetFolderPathA(nullptr, CSIDL_PROGRAMS, nullptr, SHGFP_TYPE_CURRENT, startMenu);
-  std::string progDir = std::string(startMenu) + "\\Ashes of Humanity";
+  wchar_t desktop[MAX_PATH], startMenu[MAX_PATH];
+  SHGetFolderPathW(nullptr, CSIDL_DESKTOPDIRECTORY, nullptr, SHGFP_TYPE_CURRENT, desktop);
+  SHGetFolderPathW(nullptr, CSIDL_PROGRAMS, nullptr, SHGFP_TYPE_CURRENT, startMenu);
+  std::wstring progDir = std::wstring(startMenu) + L"\\Ashes of Humanity";
   ensureDirs(progDir);
-  std::string lnk = progDir + "\\Ashes of Humanity.lnk";
-  createShortcut(gameExe.c_str(), lnk.c_str());
-  std::string dsk = std::string(desktop) + "\\Ashes of Humanity.lnk";
-  createShortcut(gameExe.c_str(), dsk.c_str());
+  createShortcut(gameExe, progDir + L"\\Ashes of Humanity.lnk");
+  createShortcut(gameExe, std::wstring(desktop) + L"\\Ashes of Humanity.lnk");
 
   setStatus("Installation complete.");
   if (g_button) EnableWindow(g_button, FALSE);
   if (g_launchCheck) EnableWindow(g_launchCheck, FALSE);
   if (g_launch) {
     Sleep(400);
-    ShellExecuteA(nullptr, "open", gameExe.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+    ShellExecuteW(nullptr, L"open", gameExe.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
   }
 }
 
 static void browse(HWND hwnd) {
-  BROWSEINFOA bi = {0};
+  BROWSEINFOW bi = {};
   bi.hwndOwner = hwnd;
-  bi.lpszTitle = "Choose the installation folder";
+  bi.lpszTitle = L"Choose the installation folder";
   bi.ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE;
-  char buf[MAX_PATH] = {0};
-  bi.pszDisplayName = buf;
-  PIDLIST_ABSOLUTE pidl = SHBrowseForFolderA(&bi);
+  std::wstring buf(MAX_PATH, L'\0');
+  bi.pszDisplayName = &buf[0];
+  PIDLIST_ABSOLUTE pidl = SHBrowseForFolderW(&bi);
   if (pidl) {
-    char path[MAX_PATH];
-    if (SHGetPathFromIDListA(pidl, path)) {
+    wchar_t path[MAX_PATH];
+    if (SHGetPathFromIDListW(pidl, path)) {
       g_installDir = path;
-      SetWindowTextA(g_pathEdit, g_installDir.c_str());
+      SetWindowTextW(g_pathEdit, g_installDir.c_str());
     }
     CoTaskMemFree(pidl);
   }
 }
 
+// ---------------------------------------------------------------------------
+// Window
+// ---------------------------------------------------------------------------
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
   switch (msg) {
     case WM_CREATE: {
-      CREATESTRUCTA* cs = (CREATESTRUCTA*)lp;
+      CREATESTRUCTW* cs = (CREATESTRUCTW*)lp;
       HINSTANCE inst = (HINSTANCE)cs->lpCreateParams;
       g_hwnd = hwnd;
-      SetWindowTextA(hwnd, "ASHES OF HUMANITY: LAST SIGNAL - Installer");
+      SetWindowTextW(hwnd, L"ASHES OF HUMANITY: LAST SIGNAL - Installer");
 
-      HFONT font = CreateFontA(15, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+      HFONT font = CreateFontW(15, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
                                OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                               DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
-      HFONT bigFont = CreateFontA(26, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                               DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+      HFONT bigFont = CreateFontW(26, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
                                   OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                                  DEFAULT_PITCH | FF_DONTCARE, "Segoe UI");
+                                  DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
       RECT r;
       GetClientRect(hwnd, &r);
       int W = r.right, H = r.bottom;
 
-      HWND title = CreateWindowExA(0, "STATIC", "ASHES OF HUMANITY: LAST SIGNAL", WS_CHILD | WS_VISIBLE,
-                                   24, 20, W - 48, 34, hwnd, nullptr, inst, nullptr);
-      SendMessageA(title, WM_SETFONT, (WPARAM)bigFont, TRUE);
-      HWND sub = CreateWindowExA(0, "STATIC",
-        "Version 1.0.0  -  original 3D survival action RPG for Windows 64-bit.\r\n"
-        "The installer unpacks the game into the folder you choose.",
+      HWND title = CreateWindowExW(0, L"STATIC", L"ASHES OF HUMANITY: LAST SIGNAL",
+                                   WS_CHILD | WS_VISIBLE, 24, 20, W - 48, 34, hwnd, nullptr,
+                                   inst, nullptr);
+      SendMessageW(title, WM_SETFONT, (WPARAM)bigFont, TRUE);
+      HWND sub = CreateWindowExW(0, L"STATIC",
+        L"Version 1.0.0  -  original 3D survival action RPG for Windows 64-bit.\r\n"
+        L"The installer unpacks the game into the folder you choose.",
         WS_CHILD | WS_VISIBLE, 24, 58, W - 48, 44, hwnd, nullptr, inst, nullptr);
-      SendMessageA(sub, WM_SETFONT, (WPARAM)font, TRUE);
+      SendMessageW(sub, WM_SETFONT, (WPARAM)font, TRUE);
 
-      HWND lbl = CreateWindowExA(0, "STATIC", "Install to:", WS_CHILD | WS_VISIBLE,
+      HWND lbl = CreateWindowExW(0, L"STATIC", L"Install to:", WS_CHILD | WS_VISIBLE,
                                  24, 118, 80, 22, hwnd, nullptr, inst, nullptr);
-      SendMessageA(lbl, WM_SETFONT, (WPARAM)font, TRUE);
+      SendMessageW(lbl, WM_SETFONT, (WPARAM)font, TRUE);
 
-      g_pathEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", g_installDir.c_str(),
+      g_pathEdit = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", g_installDir.c_str(),
                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
                                    100, 114, W - 220, 26, hwnd, nullptr, inst, nullptr);
-      SendMessageA(g_pathEdit, WM_SETFONT, (WPARAM)font, TRUE);
-      HWND browseBtn = CreateWindowExA(0, "BUTTON", "Browse...",
+      SendMessageW(g_pathEdit, WM_SETFONT, (WPARAM)font, TRUE);
+      HWND browseBtn = CreateWindowExW(0, L"BUTTON", L"Browse...",
                                        WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                                        W - 112, 114, 88, 26, hwnd, (HMENU)2, inst, nullptr);
-      SendMessageA(browseBtn, WM_SETFONT, (WPARAM)font, TRUE);
+      SendMessageW(browseBtn, WM_SETFONT, (WPARAM)font, TRUE);
 
-      g_launchCheck = CreateWindowExA(0, "BUTTON", "Launch the game when the install finishes",
+      g_launchCheck = CreateWindowExW(0, L"BUTTON", L"Launch the game when the install finishes",
                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
                                       24, 152, W - 48, 24, hwnd, (HMENU)3, inst, nullptr);
-      SendMessageA(g_launchCheck, WM_SETFONT, (WPARAM)font, TRUE);
-      SendMessageA(g_launchCheck, BM_SETCHECK, BST_CHECKED, 0);
+      SendMessageW(g_launchCheck, WM_SETFONT, (WPARAM)font, TRUE);
+      SendMessageW(g_launchCheck, BM_SETCHECK, BST_CHECKED, 0);
 
-      g_progress = CreateWindowExA(0, "PROGRESS32", "", WS_CHILD | WS_VISIBLE,
+      g_progress = CreateWindowExW(0, L"PROGRESS32", L"", WS_CHILD | WS_VISIBLE,
                                    24, 186, W - 48, 18, hwnd, nullptr, inst, nullptr);
-      SendMessageA(g_progress, PBM_SETRANGE, 0, MAKELPARAM(0, 100));
+      SendMessageW(g_progress, PBM_SETRANGE, 0, MAKELPARAM(0, 100));
 
-      g_status = CreateWindowExA(0, "STATIC", "Ready.", WS_CHILD | WS_VISIBLE,
+      g_status = CreateWindowExW(0, L"STATIC", L"Ready.", WS_CHILD | WS_VISIBLE,
                                  24, 212, W - 48, 22, hwnd, nullptr, inst, nullptr);
-      SendMessageA(g_status, WM_SETFONT, (WPARAM)font, TRUE);
+      SendMessageW(g_status, WM_SETFONT, (WPARAM)font, TRUE);
 
-      g_button = CreateWindowExA(0, "BUTTON", "Install", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
+      g_button = CreateWindowExW(0, L"BUTTON", L"Install",
+                                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
                                  W - 140, H - 56, 116, 32, hwnd, (HMENU)1, inst, nullptr);
-      SendMessageA(g_button, WM_SETFONT, (WPARAM)font, TRUE);
+      SendMessageW(g_button, WM_SETFONT, (WPARAM)font, TRUE);
       SetFocus(g_pathEdit);
       break;
     }
     case WM_COMMAND: {
       int id = LOWORD(wp);
       if (id == 1) {         // install
-        char buf[MAX_PATH];
-        GetWindowTextA(g_pathEdit, buf, MAX_PATH);
+        wchar_t buf[MAX_PATH];
+        GetWindowTextW(g_pathEdit, buf, MAX_PATH);
         g_installDir = buf;
-        while (!g_installDir.empty() && (g_installDir.back() == '\\' || g_installDir.back() == '/'))
+        while (!g_installDir.empty() &&
+               (g_installDir.back() == L'\\' || g_installDir.back() == L'/'))
           g_installDir.pop_back();
-        g_launch = (SendMessageA(g_launchCheck, BM_GETCHECK, 0, 0) == BST_CHECKED);
-        SetWindowTextA(g_button, "Installing...");
+        g_launch = (SendMessageW(g_launchCheck, BM_GETCHECK, 0, 0) == BST_CHECKED);
+        SetWindowTextW(g_button, L"Installing...");
         doInstall();
-        SetWindowTextA(g_button, "Installed");
+        SetWindowTextW(g_button, L"Installed");
       } else if (id == 2) {
         browse(hwnd);
       }
@@ -255,33 +313,40 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     default:
       break;
   }
-  return DefWindowProcA(hwnd, msg, wp, lp);
+  return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
-int WINAPI WinMain(HINSTANCE inst, HINSTANCE, LPSTR, int) {
-  CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-  // default install folder
-  char buf[MAX_PATH];
-  if (SUCCEEDED(SHGetFolderPathA(nullptr, CSIDL_LOCAL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, buf))) {
-    g_installDir = std::string(buf) + "\\AshesOfHumanity";
-  } else {
-    g_installDir = "C:\\AshesOfHumanity";
-  }
+// The GUI entry point.
+static int runInstaller(HINSTANCE inst);
 
-  WNDCLASSA wc = {};
+int WINAPI WinMain(HINSTANCE inst, HINSTANCE, LPSTR, int) {
+  return runInstaller(inst);
+}
+
+static int runInstaller(HINSTANCE inst) {
+  CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+
+  // default install folder
+  wchar_t buf[MAX_PATH];
+  if (SUCCEEDED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, SHGFP_TYPE_CURRENT, buf)))
+    g_installDir = std::wstring(buf) + L"\\AshesOfHumanity";
+  else
+    g_installDir = L"C:\\AshesOfHumanity";
+
+  WNDCLASSW wc = {};
   wc.hInstance = inst;
   wc.lpfnWndProc = WndProc;
-  wc.lpszClassName = "AshesInstaller";
+  wc.lpszClassName = L"AshesInstaller";
   wc.hCursor = LoadCursorA(nullptr, IDC_ARROW);
   wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
-  wc.hIcon = LoadIconA(inst, MAKEINTRESOURCEA(1));
+  wc.hIcon = LoadIconW(inst, MAKEINTRESOURCEW(1));
   if (!wc.hIcon) wc.hIcon = LoadIconA(nullptr, IDI_APPLICATION);
-  RegisterClassA(&wc);
+  RegisterClassW(&wc);
 
   RECT r = { 0, 0, 560, 330 };
   AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
-  HWND hwnd = CreateWindowExA(WS_EX_APPWINDOW, "AshesInstaller",
-                              "ASHES OF HUMANITY: LAST SIGNAL - Installer",
+  HWND hwnd = CreateWindowExW(WS_EX_APPWINDOW, L"AshesInstaller",
+                              L"ASHES OF HUMANITY: LAST SIGNAL - Installer",
                               WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT,
                               CW_USEDEFAULT, r.right - r.left, r.bottom - r.top,
                               nullptr, nullptr, inst, nullptr);
@@ -290,9 +355,9 @@ int WINAPI WinMain(HINSTANCE inst, HINSTANCE, LPSTR, int) {
   UpdateWindow(hwnd);
 
   MSG msg;
-  while (GetMessageA(&msg, nullptr, 0, 0) > 0) {
+  while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
     TranslateMessage(&msg);
-    DispatchMessageA(&msg);
+    DispatchMessageW(&msg);
   }
   CoUninitialize();
   return 0;

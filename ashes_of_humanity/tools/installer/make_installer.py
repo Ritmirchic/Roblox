@@ -56,7 +56,8 @@ def main():
            "-I", os.path.join(ROOT, "engine", "src"), src, "-o", stub]
     if os.path.exists(res):
         cmd.append(res)
-    cmd += ["-lopengl32", "-lgdi32", "-luser32", "-lshell32", "-lole32", "-luuid", "-lshlwapi"]
+    cmd += ["-Wl,--subsystem,windows", "-lopengl32", "-lgdi32", "-luser32", "-lshell32",
+            "-lole32", "-luuid", "-lshlwapi"]
     print("compiling installer stub...")
     subprocess.check_call(cmd)
 
