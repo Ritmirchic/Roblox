@@ -1,0 +1,33 @@
+// Windows resources for ASHES OF HUMANITY: LAST SIGNAL
+// 1  = application icon
+// 2  = alternate icon (kept for future use)
+
+#define IDI_APP_ICON      1
+
+IDI_APP_ICON        ICON            "ashes.ico"
+
+1 VERSIONINFO
+FILEVERSION     1,0,0,0
+PRODUCTVERSION  1,0,0,0
+FILEOS          0x40004L
+FILETYPE        0x1L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      "Ashes of Humanity Project\\0"
+            VALUE "FileDescription",  "ASHES OF HUMANITY: LAST SIGNAL\\0"
+            VALUE "FileVersion",      "1.0.0.0\\0"
+            VALUE "InternalName",     "AshesOfHumanity\\0"
+            VALUE "LegalCopyright",   "Original work. All rights reserved.\\0"
+            VALUE "OriginalFilename", "AshesOfHumanity.exe\\0"
+            VALUE "ProductName",      "ASHES OF HUMANITY: LAST SIGNAL\\0"
+            VALUE "ProductVersion",   "1.0.0.0\\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

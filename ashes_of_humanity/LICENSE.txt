@@ -1,0 +1,13 @@
+ASHES OF HUMANITY: LAST SIGNAL
+Copyright (c) 2026 - original work, all rights reserved.
+
+This game is an original work. Every asset (models, textures, animation, audio)
+and every line of engine and gameplay code in this package was created
+specifically for this project.
+
+Third party components:
+  - Zig toolchain (MIT) used as the C/C++ cross compiler
+  - Blender (GPL) used offline to author the models and animations
+  - OpenGL 3.3 core profile API (Khronos)
+
+No third party content is redistributed in this package.

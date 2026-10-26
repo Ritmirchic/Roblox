@@ -1,0 +1,12 @@
+# Build outputs
+ashes_of_humanity/build/
+ashes_of_humanity/release/
+
+# Generated art (regenerate with tools/assetgen/build_assets.py and
+# tools/assetgen/branding.py - the results ship in the release archives)
+ashes_of_humanity/assets/
+ashes_of_humanity/branding/*.png
+
+# Python
+__pycache__/
+*.pyc
