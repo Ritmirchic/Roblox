@@ -35,18 +35,11 @@ const NAV_TABS: Array[Array] = [
 ]
 
 func _ready() -> void:
-	AchievementManager.achievement_completed.connect(_on_achievement_completed)
-
-func _on_achievement_completed(task: Dictionary) -> void:
-	if not ThemeHelper.achievement_toasts:
-		return
-	show_toast("\u25c6 " + L.ach_name(task))
-	AudioManager.play_sfx("card_legendary", 0.0, 0.85)
-
 	ThemeHelper.fill_full_rect(self)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	visible = false
 	_build_shell()
+	AchievementManager.achievement_completed.connect(_on_achievement_completed)
 	AchievementManager.achievements_updated.connect(_on_live_data_changed)
 	ShipGrid.credits_changed.connect(func(_c): _update_header_currencies())
 	ShipGrid.crystals_changed.connect(func(_c): _update_header_currencies())
@@ -54,6 +47,13 @@ func _on_achievement_completed(task: Dictionary) -> void:
 		if visible and not current_tab.is_empty():
 			open_tab(current_tab)
 	)
+
+func _on_achievement_completed(task: Dictionary) -> void:
+	if not ThemeHelper.achievement_toasts:
+		return
+	show_toast("◆ " + L.ach_name(task))
+	AudioManager.play_sfx("card_legendary", 0.0, 0.85)
+
 
 func _process(delta: float) -> void:
 	if not visible:

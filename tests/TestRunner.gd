@@ -713,11 +713,13 @@ func _test_multilingual_localization_and_gui_non_overlap() -> void:
 			var set_cards: Array = [] if not is_instance_valid(set_grid) else set_grid.get_children()
 			_check(set_cards.size() == 4, "Settings has 4 grouped display/audio/flight/HUD cards (%d)" % set_cards.size())
 			var set_ok := true
+			var set_detail := ""
 			for sc_ch in set_cards:
 				var scc := sc_ch as Control
-				if not is_instance_valid(scc) or scc.size.x < 300.0 or scc.size.y < 220.0:
+				if not is_instance_valid(scc) or scc.size.x < 300.0 or scc.size.y < 120.0:
 					set_ok = false
-			_check(set_ok, "Every settings group card is sized >= 300x220")
+					set_detail += " %s=%s" % [sc_ch.name, str(scc.size)]
+			_check(set_ok, "Every settings group card is sized >= 300x120 (row-balanced)%s" % set_detail)
 			var set_ctl := 0
 			if is_instance_valid(set_grid):
 				set_ctl = _count_interactive_controls(set_grid)

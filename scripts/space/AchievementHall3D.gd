@@ -356,13 +356,14 @@ func _make_achievement_billboard(art_path: String, tint: Color, pos: Vector3) ->
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	mat.billboard_keep_scale = true
 	if ResourceLoader.exists(art_path):
 		mat.albedo_texture = load(art_path)
 	mat.albedo_color = Color(1, 1, 1, 0.97)
 	plane.material = mat
 
 	var mi := MeshInstance3D.new()
-	mi.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	mi.mesh = plane
 	holder.add_child(mi)
 
@@ -373,10 +374,11 @@ func _make_achievement_billboard(art_path: String, tint: Color, pos: Vector3) ->
 	gmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	gmat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	gmat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	gmat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	gmat.billboard_keep_scale = true
 	gmat.albedo_color = Color(tint.r, tint.g, tint.b, 0.22)
 	gplane.material = gmat
 	var glow := MeshInstance3D.new()
-	glow.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	glow.mesh = gplane
 	glow.position = Vector3(0, 0, -0.05)
 	holder.add_child(glow)

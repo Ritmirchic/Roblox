@@ -276,3 +276,76 @@ def test_no_nonexistent_godot4_identifiers():
         for m in re.finditer(r"Color\(\s*[A-Za-z_][\w.\[\]]*\s*,\s*[\d.]+\s*\)", src):
             offenders.append("%s: Color(Color, alpha) -> %s" % (gd.name, m.group(0)))
     assert not offenders, "Invalid Godot 4 API usage: %s" % offenders[:8]
+
+
+# Critical bootstrap calls that must be issued from _ready(). A refactor once
+# inserted a handler between `func _ready()` and its body: the moved statements
+# became the tail of the new function, so the UI never built itself. GDScript
+# still parsed fine, so this must be asserted structurally.
+BOOTSTRAP_CONTRACT = {
+    "scripts/ui/HangarStationPanels.gd": ["_build_shell()"],
+    "scripts/ui/Main.gd": ["_build_transition_curtain()"],
+    "scripts/hangar/Hangar3D.gd": [
+        "_build_3d_hangar_environment()", "_build_camera_rig()",
+        "_build_ship_and_gizmos()", "_build_hangar_ui()",
+    ],
+    "scripts/space/SpaceExpedition3D.gd": [
+        "_build_sector_environment()", "_spawn_player_and_containers()",
+        "_populate_asteroids_and_props()", "_build_expedition_hud()",
+    ],
+    "scripts/space/AchievementHall3D.gd": [
+        "_build_environment()", "_build_camera()", "_build_hud()", "_rebuild_cards()",
+    ],
+}
+
+
+def _top_level_funcs(src):
+    """Map 'func name' -> body lines, using only zero-indent definitions."""
+    out, cur, body = {}, None, []
+    for line in src.splitlines():
+        m = re.match(r"^func\s+([A-Za-z_]\w*)\s*\(", line)
+        if m:
+            if cur:
+                out[cur] = body
+            cur, body = m.group(1), []
+            continue
+        if cur is not None:
+            if line.strip() and not line.startswith(("\t", " ")):
+                out[cur] = body
+                cur, body = None, []
+            else:
+                body.append(line)
+    if cur:
+        out[cur] = body
+    return out
+
+
+def test_ui_bootstrap_contract():
+    problems = []
+    for rel, calls in BOOTSTRAP_CONTRACT.items():
+        funcs = _top_level_funcs((ROOT / rel).read_text(encoding="utf-8"))
+        ready = funcs.get("_ready")
+        if ready is None:
+            problems.append("%s: no _ready()" % rel)
+            continue
+        joined = "\n".join(ready)
+        for c in calls:
+            if c not in joined:
+                problems.append("%s: _ready() must call %s" % (rel, c))
+        defined = set(re.findall(r"\nfunc\s+(\w+)", "\n".join(ready)))
+        if defined:
+            problems.append("%s: _ready() body contains nested func defs %s" % (rel, sorted(defined)))
+    assert not problems, "UI bootstrap contract violated: %s" % problems
+
+
+def test_no_mesh_instance_billboard_property():
+    """`billboard` is a Label3D / BaseMaterial3D feature; MeshInstance3D has no such
+    property, and Godot only reports the bad assignment at runtime."""
+    offenders = []
+    for gd in ROOT.glob("scripts/**/*.gd"):
+        src = gd.read_text(encoding="utf-8", errors="replace")
+        mesh_vars = set(re.findall(r"var\s+(\w+)\s*:?=?\s*MeshInstance3D\.new\(\)", src))
+        for m in re.finditer(r"^\s*(\w+)\.billboard\s*=", src, re.MULTILINE):
+            if m.group(1) in mesh_vars:
+                offenders.append("%s: %s.billboard" % (gd.name, m.group(1)))
+    assert not offenders, "set material.billboard_mode on the mesh material instead: %s" % offenders
