@@ -1,0 +1,82 @@
++ which curl unzip git sha256sum split
+/usr/bin/curl
+/usr/bin/unzip
+/usr/bin/git
+/usr/bin/sha256sum
+/usr/bin/split
++ BASE=https://github.com/godotengine/godot/releases/download/4.7.2-stable
++ mkdir -p engine templates
++ curl -fL --retry 3 --retry-delay 2 https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip -o engine/godot-linux-x86_64.zip
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+ 69 74.2M   69 51.7M    0     0   141M      0 --:--:-- --:--:-- --:--:--  141M100 74.2M  100 74.2M    0     0   141M      0 --:--:-- --:--:-- --:--:--  139M
++ ls -lh engine/
+total 75M
+-rw-r--r-- 1 runner runner 75M Oct 26 18:02 godot-linux-x86_64.zip
++ BASE=https://github.com/godotengine/godot/releases/download/4.7.2-stable
++ curl -fL --retry 3 --retry-delay 2 https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz -o /tmp/tpl.tpz
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+ 13 1221M   13  170M    0     0   205M      0  0:00:05 --:--:--  0:00:05  205M 30 1221M   30  370M    0     0   204M      0  0:00:05  0:00:01  0:00:04  204M 49 1221M   49  600M    0     0   213M      0  0:00:05  0:00:02  0:00:03  216M 70 1221M   70  859M    0     0   225M      0  0:00:05  0:00:03  0:00:02  230M 90 1221M   90 1110M    0     0   230M      0  0:00:05  0:00:04  0:00:01  235M100 1221M  100 1221M    0     0   234M      0  0:00:05  0:00:05 --:--:--  240M
++ ls -lh /tmp/tpl.tpz
+-rw-r--r-- 1 runner runner 1.2G Oct 26 18:02 /tmp/tpl.tpz
++ mkdir -p /tmp/tplx
++ unzip -q /tmp/tpl.tpz -d /tmp/tplx
++ ls -la /tmp/tplx/templates
++ head -30
+total 2023760
+drwxr-xr-x 2 runner runner      4096 Oct 26 18:02 .
+drwxr-xr-x 3 runner runner      4096 Oct 26 18:02 ..
+-rw-r--r-- 1 runner runner 127260725 Aug 17 14:58 android_debug.apk
+-rw-r--r-- 1 runner runner 104803333 Aug 17 14:58 android_release.apk
+-rw-r--r-- 1 runner runner 214418211 Aug 17 14:58 android_source.zip
+-rw-r--r-- 1 runner runner   4797472 Aug 17 14:50 icudt_godot.dat
+-rw-r--r-- 1 runner runner 202976946 Aug 17 14:59 ios.zip
+-rwxr-xr-x 1 runner runner  67185452 Aug 17 14:50 linux_debug.arm32
+-rwxr-xr-x 1 runner runner  68160800 Aug 17 14:50 linux_debug.arm64
+-rwxr-xr-x 1 runner runner  75323448 Aug 17 14:50 linux_debug.x86_32
+-rwxr-xr-x 1 runner runner  73703800 Aug 17 14:50 linux_debug.x86_64
+-rwxr-xr-x 1 runner runner  65784612 Aug 17 14:50 linux_release.arm32
+-rwxr-xr-x 1 runner runner  67079432 Aug 17 14:50 linux_release.arm64
+-rwxr-xr-x 1 runner runner  75679864 Aug 17 14:50 linux_release.x86_32
+-rwxr-xr-x 1 runner runner  73519416 Aug 17 14:50 linux_release.x86_64
+-rw-r--r-- 1 runner runner 123597580 Aug 17 14:53 macos.zip
+-rw-r--r-- 1 runner runner        13 Aug 17 14:59 version.txt
+-rw-r--r-- 1 runner runner  10342534 Aug 17 14:58 web_debug.zip
+-rw-r--r-- 1 runner runner  12125435 Aug 17 14:58 web_dlink_debug.zip
+-rw-r--r-- 1 runner runner  12014273 Aug 17 14:58 web_dlink_nothreads_debug.zip
+-rw-r--r-- 1 runner runner  11549046 Aug 17 14:58 web_dlink_nothreads_release.zip
+-rw-r--r-- 1 runner runner  11568406 Aug 17 14:58 web_dlink_release.zip
+-rw-r--r-- 1 runner runner  10232720 Aug 17 14:58 web_nothreads_debug.zip
+-rw-r--r-- 1 runner runner  10245903 Aug 17 14:58 web_nothreads_release.zip
+-rw-r--r-- 1 runner runner  10290815 Aug 17 14:58 web_release.zip
+-rwxr-xr-x 1 runner runner  98958848 Aug 17 14:50 windows_debug_arm64.exe
+-rwxr-xr-x 1 runner runner    159744 Aug 17 14:50 windows_debug_arm64_console.exe
+-rwxr-xr-x 1 runner runner 113264640 Aug 17 14:50 windows_debug_x86_32.exe
+-rwxr-xr-x 1 runner runner    192000 Aug 17 14:50 windows_debug_x86_32_console.exe
++ cp /tmp/tplx/templates/version.txt templates/
++ for n in windows_release_x86_64 windows_debug_x86_64
++ cp /tmp/tplx/templates/windows_release_x86_64.exe templates/
++ cp /tmp/tplx/templates/windows_release_x86_64.pck templates/
+cp: cannot stat '/tmp/tplx/templates/windows_release_x86_64.pck': No such file or directory
++ sha256sum engine/godot-linux-x86_64.zip templates/version.txt templates/windows_release_x86_64.exe GODOT-LICENSE.txt
++ tee SHA256SUMS
+cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4  engine/godot-linux-x86_64.zip
+38885c88f75abbc797a1db7559719800279a00cfb9fa8b2e2868a7f6f84bad2e  templates/version.txt
+sha256sum: GODOT-LICENSE.txt: No such file or directory
+d34d36f3be1a6c49c56525ae86469b92e4f417ddf0b43cf00dd80c385c4b0562  templates/windows_release_x86_64.exe
++ find engine templates -type f -size +80M -print0
++ IFS=
++ read -r -d '' f
++ split -b 80M -d -a 3 templates/windows_release_x86_64.exe templates/windows_release_x86_64.exe.part
++ rm templates/windows_release_x86_64.exe
++ IFS=
++ read -r -d '' f
++ printf '%s\n' '# Godot 4.7.2 stable toolchain (relayed via GitHub Actions)' '' 'Unmodified official Godot Engine releases, MIT licensed (GODOT-LICENSE.txt).' 'Reassemble *.partNNN with cat; checksums in SHA256SUMS.'
++ find . -name '*.part*' -o -name '*.zip' -o -name '*.pck' -o -name '*.exe'
++ head
+./templates/windows_release_x86_64.exe.part001
+./templates/windows_release_x86_64.exe.part000
+./engine/godot-linux-x86_64.zip
