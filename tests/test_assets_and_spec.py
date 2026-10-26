@@ -665,3 +665,96 @@ def test_every_referenced_skin_key_has_a_texture():
     for fam in ("btn", "tab", "slider", "bar"):
         for f in ui.glob("%s_*.png" % fam):
             assert f.stem in used or f.stem in margin_keys, "unused kit texture %s" % f.name
+
+
+def _split_top_level(arg_text: str) -> list:
+    """Split a call's argument list on commas that are not nested."""
+    parts, depth, cur, quote, esc = [], 0, "", False, False
+    for ch in arg_text:
+        if quote:
+            cur += ch
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                quote = False
+            continue
+        if ch == '"':
+            quote = True
+            cur += ch
+        elif ch in "([{":
+            depth += 1
+            cur += ch
+        elif ch in ")]}":
+            depth -= 1
+            cur += ch
+        elif ch == "," and depth == 0:
+            parts.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    if cur.strip():
+        parts.append(cur)
+    return parts
+
+
+def test_theme_helper_call_arity_matches_definitions():
+    """Wrong argument counts are only reported by the compiler, so they are
+    checked here: this class of error once took the whole autoload chain down.
+
+    Every call into an autoload / class_name script is matched against that
+    script's declared signature (required .. total parameters).
+    """
+    sigs = {}
+    for cls, rel in AUTOLOAD_SRC.items():
+        src = (ROOT / rel).read_text(encoding="utf-8")
+        cls_sigs = {}
+        for m in re.finditer(r"^(?:static )?func ([a-z_0-9]+)\(([^)]*)\)", src, re.M):
+            name, raw = m.group(1), m.group(2).strip()
+            params = _split_top_level(raw) if raw else []
+            required = len([p for p in params if "=" not in p])
+            cls_sigs[name] = (required, len(params))
+        sigs[cls] = cls_sigs
+    assert len(sigs["ThemeHelper"]) >= 25, "only found %d ThemeHelper functions" % len(sigs["ThemeHelper"])
+
+    bad = []
+    checked = 0
+    for gd in sorted(list(ROOT.glob("scripts/**/*.gd")) + list(ROOT.glob("tests/*.gd"))):
+        txt = gd.read_text(encoding="utf-8", errors="replace")
+        for m in re.finditer(r"\b(%s)\.([a-z_0-9]+)\(" % "|".join(AUTOLOAD_SRC), txt):
+            checked += 1
+            cls = m.group(1)
+            fn = m.group(2)
+            fn = m.group(1)
+            if fn not in sigs[cls]:
+                continue
+            i = m.end()
+            depth, quote, esc, args_start = 1, False, False, i
+            while i < len(txt) and depth > 0:
+                ch = txt[i]
+                if quote:
+                    if esc:
+                        esc = False
+                    elif ch == "\\":
+                        esc = True
+                    elif ch == '"':
+                        quote = False
+                elif ch == '"':
+                    quote = True
+                elif ch in "([{":
+                    depth += 1
+                elif ch in ")]}":
+                    depth -= 1
+                i += 1
+            body = txt[args_start:i - 1]
+            if "func(" in body or "func (" in body or "func():" in body or "func():" in body:
+                continue  # lambda argument: commas belong to the closure body
+            nargs = len(_split_top_level(body)) if body.strip() else 0
+            req, total = sigs[cls][fn]
+            if nargs < req or nargs > total:
+                line = txt[:m.start()].count("\n") + 1
+                bad.append("%s:%d %s.%s() got %d args (needs %d..%d)" % (
+                    gd.name, line, cls, fn, nargs, req, total))
+    assert checked >= 400, "arity audit only inspected %d call sites" % checked
+    assert not bad, "Autoload call arity problems: %s" % sorted(set(bad))[:12]

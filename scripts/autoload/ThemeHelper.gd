@@ -196,11 +196,13 @@ func make_hud_plate_style(bg: Color = COL_BG_DARK, border: Color = COL_BORDER) -
 	return fb
 
 
-func make_hud_pill_style(bg: Color, border: Color) -> StyleBox:
+## Drop-in for make_pill_style() on anchored HUD chrome: same arguments, but the
+## kit pill is painted with tight padding so a label inside never grows the box.
+func make_hud_pill_style(bg: Color, border: Color, corner: int = 10, pad_x: int = 12, pad_y: int = 5) -> StyleBox:
 	var tight := _slim_skin("pill", 0, _skin_tint(bg, border), 1.0, 0.55)
 	if tight != null:
 		return tight
-	return make_pill_style(bg, border, 10, 12, 5)
+	return make_pill_style(bg, border, corner, pad_x, pad_y)
 
 
 ## Big atmospheric plate for modal backgrounds (kit "backdrop" texture).
