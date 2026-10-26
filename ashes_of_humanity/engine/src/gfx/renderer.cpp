@@ -746,12 +746,13 @@ void Renderer::render() {
       glGenBuffers(1, &uvbo);
       glGenBuffers(1, &uibo);
       glBindVertexArray(uvao);
+      // UI vertex layout: vec2 position, vec2 uv, vec4 colour (all floats).
       glEnableVertexAttribArray(0);
-      glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 28, (void*)0);
+      glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 32, (void*)0);
       glEnableVertexAttribArray(1);
-      glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 28, (void*)8);
+      glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 32, (void*)8);
       glEnableVertexAttribArray(2);
-      glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE, 28, (void*)16);
+      glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 32, (void*)16);
     }
     for (const auto& b : m_uiBatches) {
       glBindVertexArray(uvao);
