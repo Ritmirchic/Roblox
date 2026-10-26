@@ -445,7 +445,7 @@ func _build_expedition_hud() -> void:
 	_pause_panel.offset_bottom = 150
 	_pause_panel.custom_minimum_size = Vector2(470, 300)
 	_pause_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	_pause_panel.add_theme_stylebox_override("panel", ThemeHelper.make_plaque_style("rare", 0.40, 24))
+	_pause_panel.add_theme_stylebox_override("panel", ThemeHelper.make_modal_style(24, 0.84))
 	_hud_root.add_child(_pause_panel)
 
 	var pvb := VBoxContainer.new()
@@ -510,9 +510,8 @@ func _make_hud_bar(parent: VBoxContainer, loc_key: String, col: Color) -> Progre
 	pb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pb.custom_minimum_size = Vector2(0, 13)
 	pb.show_percentage = false
-	var fill := ThemeHelper.make_panel_style(col, col.lightened(0.3), 4, 1, 0)
-	fill.shadow_size = 0
-	pb.add_theme_stylebox_override("fill", fill)
+	pb.add_theme_stylebox_override("fill", ThemeHelper.make_hud_bar_style(col, true))
+	pb.add_theme_stylebox_override("background", ThemeHelper.make_hud_bar_style(col, false))
 	hb.add_child(pb)
 
 	var vl := Label.new()
@@ -611,75 +610,39 @@ func _draw_hud_world_overlays() -> void:
 	if not is_instance_valid(player_ship) or not is_instance_valid(_cam):
 		return
 
-	# CROSSHAIR #2: Exact 3D Terminal Bullet Impact Sight (zero 2D lag — shows the exact point where the bullet lands!)
+	# CROSSHAIR #1: Primary Steering & Aiming Reticle (Cyan) - the single sight.
+	var aim_screen_pos: Vector2 = center + _smoothed_stick * STEER_RING_RADIUS_PX
+	if aim_screen_pos.distance_to(center) > 4.0:
+		_overlay_canvas.draw_line(center, aim_screen_pos, Color(0.28, 0.86, 1.0, 0.28 * xh_a), 1.5)
+	var aim_col := Color(0.28, 0.92, 1.0, 0.88 * xh_a)
+	_overlay_canvas.draw_arc(aim_screen_pos, 15.0, 0.0, TAU, 32, aim_col, 1.8)
+	_overlay_canvas.draw_arc(aim_screen_pos, 23.0, 0.0, TAU, 40, Color(0.28, 0.92, 1.0, 0.22 * xh_a), 1.2)
+	_overlay_canvas.draw_line(aim_screen_pos + Vector2(-22, 0), aim_screen_pos + Vector2(-15, 0), aim_col, 1.8)
+	_overlay_canvas.draw_line(aim_screen_pos + Vector2(15, 0), aim_screen_pos + Vector2(22, 0), aim_col, 1.8)
+	_overlay_canvas.draw_line(aim_screen_pos + Vector2(0, -22), aim_screen_pos + Vector2(0, -15), aim_col, 1.8)
+	_overlay_canvas.draw_line(aim_screen_pos + Vector2(0, 15), aim_screen_pos + Vector2(0, 22), aim_col, 1.8)
+	_overlay_canvas.draw_circle(aim_screen_pos, 2.0, Color(0.75, 0.98, 1.0, 0.95 * xh_a))
+
+	# Firing solution is reported as a readout on reticle #1 - no second marker.
 	var ballistics := player_ship.get_ballistic_sight_info()
-	var impact_world: Vector3 = ballistics["world_pos"]
-	if not _cam.is_position_behind(impact_world):
-		var raw_pipper: Vector2 = _cam.unproject_position(impact_world)
-		var on_screen := (
-			raw_pipper.x >= 16.0 and raw_pipper.x <= vp.x - 16.0
-			and raw_pipper.y >= 16.0 and raw_pipper.y <= vp.y - 16.0
-		)
-		var pipper_pos := Vector2(
-			clampf(raw_pipper.x, 20.0, vp.x - 20.0),
-			clampf(raw_pipper.y, 20.0, vp.y - 20.0)
-		)
-
-		var hit_kind := str(ballistics["hit_kind"])
-		var pip_col := Color(1.0, 0.78, 0.22, 0.96)
-		if hit_kind == "magnetic_enemy":
-			pip_col = Color(0.96, 0.38, 1.0, 0.98)
-		elif hit_kind == "enemy":
-			pip_col = Color(0.24, 1.0, 0.54, 0.98)
-		elif hit_kind == "asteroid":
-			pip_col = Color(0.52, 0.98, 0.82, 0.95)
-
-		var p_rad := 11.5 if hit_kind in ["enemy", "magnetic_enemy"] else 9.0
-		pip_col.a *= xh_a
-		var draw_col := pip_col if on_screen else Color(pip_col.r, pip_col.g, pip_col.b, 0.55 * xh_a)
-		if hit_kind == "magnetic_enemy":
-			_overlay_canvas.draw_arc(pipper_pos, p_rad + 4.8, 0.0, TAU, 32, Color(0.32, 0.95, 1.0, 0.78), 1.6)
-		_overlay_canvas.draw_arc(pipper_pos, p_rad, 0.0, TAU, 28, draw_col, 2.2)
-		var d_in := p_rad * 0.72
-		var d_out := p_rad + 5.5
-		for sx in [-1.0, 1.0]:
-			for sy in [-1.0, 1.0]:
-				var diag := Vector2(sx, sy).normalized()
-				_overlay_canvas.draw_line(pipper_pos + diag * d_in, pipper_pos + diag * d_out, draw_col, 2.0)
-		_overlay_canvas.draw_circle(pipper_pos, 2.8, draw_col.lightened(0.25))
-
-		if hit_kind in ["enemy", "magnetic_enemy", "asteroid"] and on_screen and ThemeHelper.font_mono:
-			var prefix := "MAG " if hit_kind == "magnetic_enemy" else ""
-			var dist_txt := "%s%dm" % [prefix, int(round(float(ballistics["distance"])))]
-			_overlay_canvas.draw_string(ThemeHelper.font_mono, pipper_pos + Vector2(16, 5), dist_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, draw_col)
-
-		var sec_impacts: Array = ballistics.get("secondary_impacts", [])
-		for sec_item in sec_impacts:
-			var sec_w: Vector3 = sec_item as Vector3
-			if not _cam.is_position_behind(sec_w):
-				var sec_sp: Vector2 = _cam.unproject_position(sec_w)
-				if sec_sp.distance_to(pipper_pos) > 8.0 and sec_sp.x >= 16.0 and sec_sp.x <= vp.x - 16.0 and sec_sp.y >= 16.0 and sec_sp.y <= vp.y - 16.0:
-					var scol := Color(pip_col.r, pip_col.g, pip_col.b, 0.72)
-					_overlay_canvas.draw_arc(sec_sp, 5.0, 0.0, TAU, 20, scol, 1.5)
-					_overlay_canvas.draw_circle(sec_sp, 1.8, scol.lightened(0.2))
-
-	if bool(ballistics.get("has_lead", false)) and is_instance_valid(player_ship.locked_enemy):
-		var lead_w: Vector3 = ballistics["lead_world_pos"]
-		var en_w: Vector3 = player_ship.locked_enemy.global_position
-		if not _cam.is_position_behind(lead_w) and not _cam.is_position_behind(en_w):
-			var lead_sp := _cam.unproject_position(lead_w)
-			var en_sp := _cam.unproject_position(en_w)
-			if lead_sp.distance_to(en_sp) > 6.0:
-				var lcol := Color(1.0, 0.45, 0.24, 0.82)
-				_overlay_canvas.draw_line(en_sp, lead_sp, Color(1.0, 0.45, 0.24, 0.40), 1.4)
-				var pts := PackedVector2Array([
-					lead_sp + Vector2(0, -8),
-					lead_sp + Vector2(8, 0),
-					lead_sp + Vector2(0, 8),
-					lead_sp + Vector2(-8, 0),
-					lead_sp + Vector2(0, -8),
-				])
-				_overlay_canvas.draw_polyline(pts, lcol, 1.8)
+	var hit_kind := str(ballistics.get("hit_kind", ""))
+	var range_label := ""
+	var range_col := Color(0.66, 0.86, 0.98, 0.9 * xh_a)
+	if hit_kind == "magnetic_enemy":
+		range_label = "MAG LOCK %dm" % int(round(float(ballistics.get("distance", 0.0))))
+		range_col = Color(0.96, 0.42, 1.0, 0.95 * xh_a)
+	elif hit_kind == "enemy":
+		range_label = "TARGET %dm" % int(round(float(ballistics.get("distance", 0.0))))
+		range_col = Color(0.30, 1.0, 0.58, 0.95 * xh_a)
+	elif hit_kind == "asteroid":
+		range_label = "ROCK %dm" % int(round(float(ballistics.get("distance", 0.0))))
+		range_col = Color(0.58, 0.98, 0.86, 0.92 * xh_a)
+	if not range_label.is_empty() and ThemeHelper.font_mono:
+		_overlay_canvas.draw_string(ThemeHelper.font_mono, aim_screen_pos + Vector2(28, 20),
+			range_label, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, range_col)
+		if is_instance_valid(player_ship.locked_enemy):
+			_overlay_canvas.draw_string(ThemeHelper.font_mono, aim_screen_pos + Vector2(28, 36),
+				"LOCKED", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1.0, 0.78, 0.25, 0.9 * xh_a))
 
 	var scan_range := float(player_ship.stats.get("scanner_range", 0.0))
 	if scan_range > 1.0:

@@ -102,10 +102,7 @@ func _build_shell() -> void:
 	add_child(_modal_box)
 	ThemeHelper.fill_full_rect(_modal_box, 32.0, 62.0, 32.0, 16.0)
 	_modal_box.mouse_filter = Control.MOUSE_FILTER_STOP
-	_modal_box.add_theme_stylebox_override(
-		"panel",
-		ThemeHelper.make_plaque_style("rare", 0.42, 22)
-	)
+	_modal_box.add_theme_stylebox_override("panel", ThemeHelper.make_modal_style(22, 0.78))
 
 	var main_vb := VBoxContainer.new()
 	main_vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -113,10 +110,13 @@ func _build_shell() -> void:
 	main_vb.add_theme_constant_override("separation", 8)
 	_modal_box.add_child(main_vb)
 
-	# Top Bar: Title + Toast + Live Balances + Close [ESC]
+	# Top Bar: Title + Toast + Live Balances + Close [ESC] — machined command rail
+	var hdr_rail := ThemeHelper.make_header_rail(ThemeHelper.COL_BORDER, 6)
+	hdr_rail.name = "StationCommandRail"
+	main_vb.add_child(hdr_rail)
 	var hdr := HBoxContainer.new()
 	hdr.add_theme_constant_override("separation", 12)
-	main_vb.add_child(hdr)
+	hdr_rail.add_child(hdr)
 
 	_title_lbl = Label.new()
 	_title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -166,9 +166,7 @@ func _build_shell() -> void:
 	_nav_strip.add_theme_constant_override("separation", 6)
 	main_vb.add_child(_nav_strip)
 
-	var sep := HSeparator.new()
-	sep.modulate = Color(0.22, 0.72, 1.0, 0.40)
-	main_vb.add_child(sep)
+	main_vb.add_child(ThemeHelper.make_divider(Color(0.22, 0.72, 1.0, 0.40)))
 
 	# Pure Container body root — NEVER mixes anchors with Container children!
 	_body_root = MarginContainer.new()
@@ -205,10 +203,11 @@ func _rebuild_nav_strip() -> void:
 		b.clip_text = true
 		b.custom_minimum_size = Vector2(0, 36)
 		if tid == current_tab:
-			ThemeHelper.style_accent_button(b, Color(0.18, 0.76, 1.0) if tid != "launch" else Color(0.16, 0.82, 0.52))
+			ThemeHelper.style_nav_tab(b, true)
 		elif tid == "launch":
 			ThemeHelper.style_accent_button(b, Color(0.14, 0.62, 0.42))
 		else:
+			ThemeHelper.style_nav_tab(b, false)
 			ThemeHelper.wire_button_fx(b)
 		b.pressed.connect(func(): open_tab(tid))
 		_nav_strip.add_child(b)
@@ -1692,7 +1691,10 @@ func _add_settings_group(parent: Control, title: String, accent: Color) -> VBoxC
 		hdr.add_theme_font_override("font", ThemeHelper.font_bold)
 	hdr.add_theme_font_size_override("font_size", 15)
 	hdr.add_theme_color_override("font_color", accent)
-	vb.add_child(hdr)
+	var hdr_rail := ThemeHelper.make_header_rail(accent, 4)
+	hdr_rail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vb.add_child(hdr_rail)
+	hdr_rail.add_child(hdr)
 	return vb
 
 

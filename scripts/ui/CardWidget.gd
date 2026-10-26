@@ -42,7 +42,7 @@ func setup_card(data: Dictionary, owned: bool, copies: int = 1, equipped: bool =
 	_outer_sb = StyleBoxFlat.new()
 	_outer_sb.bg_color = bg_col
 	_outer_sb.border_color = Color(0.25, 0.96, 0.62) if equipped else _base_border_col
-	_outer_sb.set_border_width_all(3 if (equipped or _rarity_tier >= 4) else 2)
+	_outer_sb.set_border_width_all(0 if ThemeHelper.skin_available() else (3 if (equipped or _rarity_tier >= 4) else 2))
 	_outer_sb.set_corner_radius_all(13)
 	_outer_sb.content_margin_left = 8
 	_outer_sb.content_margin_right = 8
@@ -190,6 +190,18 @@ func setup_card(data: Dictionary, owned: bool, copies: int = 1, equipped: bool =
 	bonus_lbl.add_theme_font_size_override("font_size", 12 if compact else 13)
 	bonus_lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.36) if owned else Color(0.55, 0.62, 0.72))
 	bonus_pill.add_child(bonus_lbl)
+
+	# Kit frame overlay: chamfered collector border with corner brackets, top tab
+	# and the etched info band, tinted by rarity. Drawn last so it sits on top.
+	var skin_frame := get_node_or_null("SkinFrame_card_frame") as TextureRect
+	if skin_frame == null and ThemeHelper.skin_available():
+		skin_frame = ThemeHelper.make_skin_overlay("card_frame", rcol.lightened(0.42) if owned else Color(0.46, 0.54, 0.66, 0.75))
+		if skin_frame != null:
+			add_child(skin_frame)
+			ThemeHelper.fill_full_rect(skin_frame, -3.0, -3.0, -3.0, -3.0)
+	if skin_frame != null:
+		skin_frame.visible = true
+		skin_frame.self_modulate = rcol.lightened(0.42) if owned else Color(0.46, 0.54, 0.66, 0.75)
 
 	if not has_meta("card_signals_wired"):
 		set_meta("card_signals_wired", true)

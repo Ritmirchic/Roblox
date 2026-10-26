@@ -28,6 +28,7 @@ func _ready() -> void:
 	_test_save_load_and_corruption_recovery()
 	await _test_multilingual_localization_and_gui_non_overlap()
 	_test_expanded_settings_and_hall()
+	_test_ui_skin_kit()
 	await _test_achievement_hall3d()
 
 	print("=== TEST SUMMARY: %d PASSED, %d FAILED ===" % [_passed, _failed])
@@ -362,7 +363,7 @@ func _test_live_3d_gameplay_mining_combat_magnets() -> void:
 				var travel_dir := (pr.global_position - spawn_p).normalized()
 				_check(travel_dir.dot(aim_d) > 0.96, "Projectile flies accurately along aimed 3D vector " + str(aim_d))
 
-	# Crosshair #2 (Terminal Bullet Impact Sight) end-to-end 3D accuracy test:
+	# Firing solution (drives reticle #1 readout + homing) end-to-end 3D accuracy test:
 	# 1) Open-space terminal range check
 	for old_p in exp_world.projectiles_root.get_children():
 		old_p.queue_free()
@@ -379,9 +380,9 @@ func _test_live_3d_gameplay_mining_combat_magnets() -> void:
 	for _s in range(20):
 		await get_tree().physics_frame
 	var open_sight := ship.get_ballistic_sight_info()
-	_check(str(open_sight["hit_kind"]) == "none" and absf(float(open_sight["distance"]) - 210.0 * 2.8) < 1.0, "Crosshair #2 open-space point equals exact bullet max flight distance")
+	_check(str(open_sight["hit_kind"]) == "none" and absf(float(open_sight["distance"]) - 210.0 * 2.8) < 1.0, "Firing solution open-space point equals exact bullet max flight distance")
 
-	# 2) Off-bore 3D Asteroid impact: verify real fired Projectile3D lands at exact Crosshair #2 world_pos!
+	# 2) Off-bore 3D Asteroid impact: verify real fired Projectile3D lands at the exact sighted world_pos!
 	var target_ast := Asteroid3D.new()
 	var ast_pos := test_ship_origin + Vector3(18.0, 6.0, -64.0)
 	target_ast.setup(GameData.sectors[0], ast_pos, 1.8)
@@ -395,7 +396,7 @@ func _test_live_3d_gameplay_mining_combat_magnets() -> void:
 
 	var ast_sight := ship.get_ballistic_sight_info()
 	var predicted_impact: Vector3 = ast_sight["world_pos"]
-	_check(str(ast_sight["hit_kind"]) == "asteroid", "Crosshair #2 detects off-bore 3D Asteroid surface along barrel ray")
+	_check(str(ast_sight["hit_kind"]) == "asteroid", "Firing solution detects off-bore 3D Asteroid surface along barrel ray")
 
 	var hit_record := {"hit": false, "pos": Vector3.ZERO}
 	ship.current_energy = 120.0
@@ -419,7 +420,7 @@ func _test_live_3d_gameplay_mining_combat_magnets() -> void:
 			if bool(hit_record["hit"]):
 				break
 	var impact_err := (hit_record["pos"] as Vector3).distance_to(predicted_impact)
-	_check(bool(hit_record["hit"]) and impact_err < 0.20, "Fired Projectile3D hits exact 3D point shown by Crosshair #2 (err < 0.20m)")
+	_check(bool(hit_record["hit"]) and impact_err < 0.20, "Fired Projectile3D hits the exact sighted 3D point (err < 0.20m)")
 	if is_instance_valid(target_ast):
 		target_ast.queue_free()
 	await get_tree().process_frame
@@ -490,7 +491,7 @@ func _test_live_3d_gameplay_mining_combat_magnets() -> void:
 	await get_tree().physics_frame
 
 	var mag_sight := ship.get_ballistic_sight_info()
-	_check(str(mag_sight["hit_kind"]) == "magnetic_enemy", "Crosshair #2 snaps onto off-bore enemy when Magnetic Homing Radar is installed")
+	_check(str(mag_sight["hit_kind"]) == "magnetic_enemy", "Firing solution snaps onto off-bore enemy when Magnetic Homing Radar is installed")
 
 	var mag_hit := {"hit_enemy": false}
 	ship.current_energy = 120.0
@@ -831,6 +832,58 @@ func _test_expanded_settings_and_hall() -> void:
 
 func _dir_remove(path: String) -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func _test_ui_skin_kit() -> void:
+	# v2.2.0: the interface must visibly run on the generated 9-slice skin kit.
+	var kit: Array = ["panel_main.png", "panel_inset.png", "header_bar.png", "btn_normal.png",
+		"btn_hover.png", "btn_pressed.png", "btn_disabled.png", "tab_on.png", "tab_off.png",
+		"slider_back.png", "slider_fill.png", "slider_grab.png", "check_on.png", "check_off.png",
+		"bar_back.png", "bar_fill.png", "pill.png", "card_frame.png", "keycap.png", "divider.png",
+		"backdrop.png"]
+	var present: int = 0
+	for f in kit:
+		if ResourceLoader.exists("res://assets/ui/" + f):
+			present += 1
+	_check(present == kit.size(), "UI skin kit complete (%d/%d textures)" % [present, kit.size()])
+	_check(ThemeHelper.skin_available(), "ThemeHelper reports the skin kit as available")
+
+	var panel_sb: StyleBox = ThemeHelper.make_panel_style()
+	_check(panel_sb is StyleBoxTexture, "make_panel_style returns a 9-slice plate")
+	if panel_sb is StyleBoxTexture:
+		var st := panel_sb as StyleBoxTexture
+		_check(st.texture != null, "panel plate has a texture")
+		_check(is_equal_approx(st.texture_margin_left, 30.0), "panel 9-slice margin matches the chamfer")
+		_check(st.content_margin_left > st.texture_margin_left, "panel content sits inside the chamfer")
+		_check(st.axis_stretch_horizontal == StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH,
+			"panel plate stretches instead of tiling")
+
+	var pill_sb: StyleBox = ThemeHelper.make_pill_style(Color(0.02, 0.05, 0.11, 0.9), ThemeHelper.COL_CYAN, 9, 12, 5)
+	_check(pill_sb is StyleBoxTexture, "roomy pills use the kit pill")
+	var tiny_sb: StyleBox = ThemeHelper.make_pill_style(Color(0.02, 0.05, 0.11, 0.9), ThemeHelper.COL_CYAN, 6, 4, 2)
+	_check(tiny_sb is StyleBoxFlat, "micro badges keep the flat fallback (no squashed artwork)")
+
+	var th := ThemeHelper.main_theme
+	_check(th.get_stylebox("panel", "PanelContainer") is StyleBoxTexture, "theme panels skinned")
+	_check(th.get_stylebox("normal", "Button") is StyleBoxTexture, "theme buttons skinned")
+	_check(th.get_stylebox("tab_selected", "TabBar") is StyleBoxTexture, "theme tabs skinned")
+	_check(th.get_stylebox("slider", "HSlider") is StyleBoxTexture, "theme sliders skinned")
+	_check(th.get_stylebox("fill", "ProgressBar") is StyleBoxTexture, "theme progress fill skinned")
+	_check(th.get_stylebox("normal", "LineEdit") is StyleBoxTexture, "theme line edits skinned")
+
+	var rail := ThemeHelper.make_header_rail(ThemeHelper.COL_CYAN, 6)
+	_check(rail is PanelContainer and rail.get_theme_stylebox("panel") is StyleBoxTexture,
+		"header rail builds with the kit plate")
+	rail.free()
+	var div := ThemeHelper.make_divider()
+	_check(div is PanelContainer, "divider uses the kit rule")
+	div.free()
+	var bar_fill := ThemeHelper.make_hud_bar_style(Color(0.2, 0.9, 0.5), true)
+	_check(bar_fill is StyleBoxTexture, "HUD gauge fill uses the kit bar")
+	var frame := ThemeHelper.make_skin_overlay("card_frame", Color.WHITE)
+	_check(frame != null, "card frame overlay builds")
+	if frame != null:
+		frame.free()
 
 
 func _test_achievement_hall3d() -> void:

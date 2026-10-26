@@ -199,7 +199,7 @@ func _show_main_menu() -> void:
 	left_card.offset_right = 564
 	left_card.offset_top = 24
 	left_card.offset_bottom = -24
-	left_card.add_theme_stylebox_override("panel", ThemeHelper.make_plaque_style("rare", 0.46, 24))
+	left_card.add_theme_stylebox_override("panel", ThemeHelper.make_modal_style(24, 0.80))
 	root.add_child(left_card)
 
 	var sc := ScrollContainer.new()
@@ -316,7 +316,7 @@ func _show_main_menu() -> void:
 	_new_game_confirm.offset_top = -110
 	_new_game_confirm.offset_bottom = 110
 	_new_game_confirm.custom_minimum_size = Vector2(480, 220)
-	_new_game_confirm.add_theme_stylebox_override("panel", ThemeHelper.make_plaque_style("secret", 0.44, 22))
+	_new_game_confirm.add_theme_stylebox_override("panel", ThemeHelper.make_modal_style(22, 0.88))
 	root.add_child(_new_game_confirm)
 
 	var nvb := VBoxContainer.new()

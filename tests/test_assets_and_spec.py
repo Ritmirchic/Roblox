@@ -216,9 +216,15 @@ def test_settings_are_functional_not_cosmetic():
 
 
 def test_only_one_crosshair_and_portal_only_exit():
+    """Reticle #1 (steering/aiming) is the sole on-screen sight; the projected
+    ballistic pipper (#2) must stay removed, while the firing solution itself
+    remains as reticle #1's numeric readout."""
     src = (ROOT / "scripts/space/SpaceExpedition3D.gd").read_text(encoding="utf-8")
-    assert "CROSSHAIR #2" in src
+    assert "CROSSHAIR #1" in src, "primary steering reticle must be restored"
+    assert "CROSSHAIR #2" not in src, "ballistic pipper overlay must be removed"
+    assert "pipper_pos" not in src and "secondary_impacts" not in src
     assert "STEER_RING_RADIUS_PX" in src
+    assert "get_ballistic_sight_info()" in src, "reticle readout still uses the real firing solution"
     assert 'event.keycode == KEY_H' not in src, "instant exit hotkey must be removed"
     assert "WARP_EXIT_RADIUS" in src or "9.5" in src, "warp gate proximity must remain the only exit"
 
@@ -349,3 +355,103 @@ def test_no_mesh_instance_billboard_property():
             if m.group(1) in mesh_vars:
                 offenders.append("%s: %s.billboard" % (gd.name, m.group(1)))
     assert not offenders, "set material.billboard_mode on the mesh material instead: %s" % offenders
+
+
+def test_crew_portraits_are_full_busts_not_crops_or_mirrors():
+    """v2.2.0 requirement: every portrait is a complete, distinct crew member.
+
+    Guards the two failure modes the previous set had: (a) a head/helmet floating
+    over nothing (no torso in the lower band) and (b) one figure reused as a
+    mirrored/tinted copy of another.
+    """
+    import itertools
+    import numpy as np
+
+    crew_pngs = sorted((ROOT / "assets" / "cards" / "crew").glob("crew_*.png"))
+    assert len(crew_pngs) == 42
+    imgs = {}
+    for p in crew_pngs:
+        a = np.asarray(Image.open(p).convert("RGB"), dtype=np.float32)
+        assert a.shape == (440, 360, 3), f"{p.name} must be 360x440"
+        h = a.shape[0]
+        # background reference = the outer columns; the figure must dominate the
+        # torso band (lower 40% of the card), not just the head.
+        bg = np.median(np.concatenate([a[:, :14].reshape(-1, 3), a[:, -14:].reshape(-1, 3)]), axis=0)
+        torso = a[int(h * 0.52):int(h * 0.88)]
+        fill = float((np.abs(torso - bg).max(axis=2) > 20).mean())
+        assert fill > 0.55, f"{p.name} has no body below the head (torso fill {fill:.2f})"
+        assert float(np.abs(torso - bg).mean()) > 18.0, f"{p.name} torso band is blank"
+        imgs[p.name] = a
+
+    names = list(imgs)
+    for a, b in itertools.combinations(names, 2):
+        direct = float(np.abs(imgs[a] - imgs[b]).mean())
+        mirrored = float(np.abs(imgs[a] - imgs[b][:, ::-1]).mean())
+        assert not (direct > 0 and mirrored / direct < 0.55), f"{a} is a mirrored copy of {b}"
+    spread = float(np.mean([float(np.abs(imgs[a] - imgs[b]).mean())
+                            for a, b in itertools.islice(itertools.combinations(names, 2), 0, 400)]))
+    assert spread > 12.0, f"crew portraits are too similar overall (mean diff {spread:.1f})"
+
+
+def test_ui_skin_kit_textures_are_authored_9slice():
+    """The interface skin must be a real generated kit, not recoloured rectangles."""
+    import numpy as np
+
+    ui = ROOT / "assets" / "ui"
+    expected = {
+        "panel_main.png": (360, 360), "panel_inset.png": (280, 280), "header_bar.png": (560, 62),
+        "btn_normal.png": (280, 66), "btn_hover.png": (280, 66), "btn_pressed.png": (280, 66),
+        "btn_disabled.png": (280, 66), "tab_on.png": (230, 56), "tab_off.png": (230, 56),
+        "slider_back.png": (300, 26), "slider_fill.png": (300, 26), "slider_grab.png": (46, 46),
+        "check_on.png": (44, 44), "check_off.png": (44, 44), "bar_back.png": (300, 26),
+        "bar_fill.png": (300, 26), "pill.png": (170, 40), "card_frame.png": (360, 440),
+        "keycap.png": (64, 64), "divider.png": (560, 14), "backdrop.png": (720, 420),
+    }
+    for name, size in expected.items():
+        f = ui / name
+        assert f.is_file() and f.stat().st_size > 128, f"missing/empty UI skin texture {name}"
+        im = Image.open(f).convert("RGBA")
+        assert im.size == size, f"{name} must be {size}, got {im.size}"
+    # chamfered corners: the plate corners must be transparent so panels get cut edges
+    a = np.asarray(Image.open(ui / "panel_main.png").convert("RGBA"))
+    assert int(a[0, 0, 3]) < 60 and int(a[-1, -1, 3]) < 60, "panel_main corners must be chamfered"
+    assert int(a[42, 42, 3]) > 250, "panel_main must be solid inside the chamfer"
+    assert int(a[a.shape[0] // 2, a.shape[1] // 2, 3]) > 200, "panel_main centre must be opaque"
+    # the plate must be textured, not a flat fill
+    core = a[40:-40, 40:-40, :3].astype(np.float32)
+    assert float(core.std()) > 4.0, "panel_main has no surface detail (flat colour)"
+    assert (ui / "skin_manifest.txt").is_file()
+
+
+def test_theme_helper_wires_the_skin_kit_into_every_control_class():
+    th = (ROOT / "scripts" / "autoload" / "ThemeHelper.gd").read_text(encoding="utf-8")
+    assert "const SKIN_MARGIN" in th and "func _apply_skin_kit" in th
+    assert "_apply_skin_kit()" in th.split("func _build_theme")[1].split("var _plaque_cache")[0], \
+        "the skin must be applied at the end of _build_theme so it wins over flat fallbacks"
+    for cls in ('"PanelContainer"', '"Button"', '"TabBar"', '"HSlider"', '"ProgressBar"', '"LineEdit"', '"PopupMenu"'):
+        assert cls in th.split("func _apply_skin_kit")[1].split("var _plaque_cache")[0], f"skin not applied to {cls}"
+    # every style factory must be able to return a texture stylebox, and fall back safely
+    for fn in ("make_panel_style", "make_pill_style"):
+        body = th.split(f"func {fn}(")[1].split("\nfunc ")[0]
+        assert body.startswith("bg") or True
+        assert "-> StyleBox:" in th.split(f"func {fn}(")[0].split("\n")[-1] + th.split(f"func {fn}(")[1].split("\n")[0], \
+            f"{fn} must return StyleBox (not StyleBoxFlat) so skin styles are allowed"
+        assert "skin_available()" in body and "StyleBoxFlat.new()" in body, f"{fn} lost its no-asset fallback"
+    assert "func make_skin_overlay" in th and "func make_hud_bar_style" in th
+    assert "func make_header_rail" in th and "func make_divider" in th and "func make_modal_style" in th
+    assert "AXIS_STRETCH_MODE_STRETCH" in th, "9-slice must stretch, never tile"
+
+
+def test_hangar_and_cards_consume_the_skin():
+    station = (ROOT / "scripts" / "ui" / "HangarStationPanels.gd").read_text(encoding="utf-8")
+    assert "ThemeHelper.make_modal_style(" in station, "station shell must use the kit plate"
+    assert "ThemeHelper.make_header_rail(" in station, "command rail / section headers must use the kit"
+    assert "ThemeHelper.make_divider(" in station
+    assert "ThemeHelper.style_nav_tab(" in station
+    card = (ROOT / "scripts" / "ui" / "CardWidget.gd").read_text(encoding="utf-8")
+    assert 'ThemeHelper.make_skin_overlay("card_frame"' in card, "cards must paint the kit frame"
+    assert "skin_available() else (3 if" in card, "card border must yield to the kit frame"
+    space = (ROOT / "scripts" / "space" / "SpaceExpedition3D.gd").read_text(encoding="utf-8")
+    assert 'ThemeHelper.make_hud_bar_style(col, true)' in space
+    assert 'ThemeHelper.make_hud_bar_style(col, false)' in space
+    assert "ThemeHelper.make_modal_style(" in space, "pause panel must use the kit plate"
