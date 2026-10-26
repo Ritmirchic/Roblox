@@ -266,6 +266,9 @@ def test_every_tr_ui_key_exists_in_all_ten_languages():
 # parser accepts them, so they must be banned statically or they only explode
 # inside the real engine (as Control.SIDE_* and Color(Color, float) did).
 GODOT4_BAD_SYMBOLS = [
+    # Removed in Godot 4 but still familiar from 3.x: they parse fine and only
+    # blow up inside the engine (an aborted _build_hud once nulled every later node).
+    "height_for_width", "fit_to_width", ".valign", "max_width_visible",
     "Color.ONE", "Color.ZERO", "Color.BLACK_TRANSPARENT",
     "Control.SIDE_LEFT", "Control.SIDE_TOP", "Control.SIDE_RIGHT", "Control.SIDE_BOTTOM",
     "set_content_margin_side", "ThemeType", "StyleBoxTexture.TEXTURE_MARGIN",

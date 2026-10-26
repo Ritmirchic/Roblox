@@ -418,7 +418,8 @@ func _build_expedition_hud() -> void:
 	_alert_lbl.offset_left = 340
 	_alert_lbl.offset_right = -340
 	_alert_lbl.offset_top = 306
-	_alert_lbl.height_for_width = 40
+	_alert_lbl.custom_minimum_size = Vector2(0, 40)
+	_alert_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_alert_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_alert_lbl.clip_text = true
 	_alert_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
