@@ -3,7 +3,8 @@ name: fetch-godot-toolchain
 # CI relay: GitHub-hosted runners have full network egress, unlike the dev
 # sandbox. Downloads official MIT-licensed Godot engine + Windows export
 # templates, splits large binaries into git-pushable chunks, commits them to
-# the `toolchain-bin` branch. On failure, pushes fetch.log for diagnosis.
+# the `toolchain-bin` branch. Every step logs into fetch.log, which is pushed
+# back on failure for offline diagnosis (sandbox cannot read Actions logs).
 on:
   workflow_dispatch:
   push:
@@ -21,29 +22,55 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Fetch Godot editor and export templates
-        id: fetch
+      - name: Download editor
+        id: editor
         continue-on-error: true
         run: |
+          exec > fetch.log 2>&1
           set -x
-          which curl unzip git
+          which curl unzip git sha256sum split
           BASE="https://github.com/godotengine/godot/releases/download/4.7.2-stable"
           mkdir -p engine templates
           curl -fL --retry 3 --retry-delay 2 \
             "$BASE/Godot_v4.7.2-stable_linux.x86_64.zip" \
             -o engine/godot-linux-x86_64.zip
+          ls -lh engine/
+
+      - name: Download templates
+        id: templates
+        continue-on-error: true
+        run: |
+          exec >> fetch.log 2>&1
+          set -x
+          BASE="https://github.com/godotengine/godot/releases/download/4.7.2-stable"
           curl -fL --retry 3 --retry-delay 2 \
             "$BASE/Godot_v4.7.2-stable_export_templates.tpz" -o /tmp/tpl.tpz
+          ls -lh /tmp/tpl.tpz
+
+      - name: Extract Windows templates
+        id: extract
+        continue-on-error: true
+        run: |
+          exec >> fetch.log 2>&1
+          set -x
           mkdir -p /tmp/tplx
           unzip -q /tmp/tpl.tpz -d /tmp/tplx
-          ls -la /tmp/tplx/templates | head -20
+          ls -la /tmp/tplx/templates | head -30
           cp /tmp/tplx/templates/version.txt templates/
           for n in windows_release_x86_64 windows_debug_x86_64; do
             cp "/tmp/tplx/templates/$n.exe" templates/
             cp "/tmp/tplx/templates/$n.pck" templates/
           done
+          ls -lh templates/
           curl -fL "https://raw.githubusercontent.com/godotengine/godot/master/LICENSE.txt" \
             -o GODOT-LICENSE.txt
+
+      - name: Checksums and chunking
+        id: chunk
+        continue-on-error: true
+        run: |
+          exec >> fetch.log 2>&1
+          set -x
           sha256sum engine/* templates/* GODOT-LICENSE.txt | tee SHA256SUMS
           find engine templates -type f -size +80M -print0 | while IFS= read -r -d '' f; do
             split -b 80M -d -a 3 "$f" "$f.part"
@@ -52,19 +79,26 @@ jobs:
           printf '%s\n' '# Godot 4.7.2 stable toolchain (relayed via GitHub Actions)' '' \
             'Unmodified official Godot Engine releases, MIT licensed (GODOT-LICENSE.txt).' \
             'Reassemble *.partNNN with cat; checksums in SHA256SUMS.' > README-BINARIES.md
+          find . -name "*.part*" -o -name "*.zip" -o -name "*.pck" -o -name "*.exe" | head
 
       - name: Push failure log
-        if: steps.fetch.outcome == 'failure'
+        if: steps.editor.outcome == 'failure' || steps.templates.outcome == 'failure' || steps.extract.outcome == 'failure' || steps.chunk.outcome == 'failure'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add fetch.log 2>/dev/null || true
+          git add fetch.log
           git commit -m "Add fetch failure log" || true
           git push || true
 
-      - name: Check fetch result
+      - name: Check step results
         run: |
-          if [ "${{ steps.fetch.outcome }}" = "failure" ]; then exit 1; fi
+          for s in editor templates extract chunk; do
+            echo "$s=${{ steps[s].outcome }}"
+          done
+          if [ "${{ steps.editor.outcome }}" != "success" ] \
+            || [ "${{ steps.templates.outcome }}" != "success" ] \
+            || [ "${{ steps.extract.outcome }}" != "success" ] \
+            || [ "${{ steps.chunk.outcome }}" != "success" ]; then exit 1; fi
 
       - name: Commit to toolchain-bin branch
         run: |
