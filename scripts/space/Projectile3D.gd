@@ -150,6 +150,15 @@ func _acquire_magnetic_enemy() -> Node3D:
 					best = en_n
 	return best
 
+static func lock_guidance_turn(cur_dir: Vector3, desired: Vector3, spd: float, remaining: float) -> float:
+	## Guidance authority (rad/s) for lock-directed fire. Zero once the round is lined
+	## up, so it flies the last metres straight instead of wobbling around the hull.
+	var err := cur_dir.angle_to(desired)
+	if err < 0.05:
+		return 0.0
+	return clampf((spd / maxf(6.0, remaining)) * err * 1.9 + 2.2, 2.2, 15.0)
+
+
 func _physics_process(delta: float) -> void:
 	_lifetime -= delta
 	if _lifetime <= 0.0:
@@ -183,10 +192,7 @@ func _physics_process(delta: float) -> void:
 				# Proportional navigation onto the marked hull: authority scales with bearing
 				# error over remaining time of flight, so rounds converge instead of orbiting
 				# and stop correcting once they are lined up.
-				var lock_err := cur_dir.angle_to(desired)
-				eff_turn = clampf((speed / maxf(6.0, rem_d)) * lock_err * 1.9 + 2.2, 2.2, 15.0)
-				if lock_err < 0.05:
-					eff_turn = 0.0
+				eff_turn = lock_guidance_turn(cur_dir, desired, speed, rem_d)
 			elif magnetic_homing:
 				# Speed-matched magnetic curvature + strong inverse-distance terminal attraction near hull
 				eff_turn = maxf(turn_rate, (speed / 20.0) * (turn_rate / 7.8))
