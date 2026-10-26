@@ -164,14 +164,10 @@ func make_plaque_style(rarity: String = "rare", dark: float = 0.55, pad: int = 1
 		# STRETCH (default) paints the whole plate across the panel: no tiling.
 		sb.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
 		sb.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
-		sb.border_width_left = 0
-		sb.border_width_top = 0
-		sb.border_width_right = 0
-		sb.border_width_bottom = 0
-		sb.set_content_margin_side(Control.SIDE_LEFT, float(pad))
-		sb.set_content_margin_side(Control.SIDE_TOP, float(pad))
-		sb.set_content_margin_side(Control.SIDE_RIGHT, float(pad))
-		sb.set_content_margin_side(Control.SIDE_BOTTOM, float(pad))
+		sb.content_margin_left = float(pad)
+		sb.content_margin_top = float(pad)
+		sb.content_margin_right = float(pad)
+		sb.content_margin_bottom = float(pad)
 		out = sb
 	else:
 		out = make_panel_style(Color(0.04, 0.06, 0.11, 0.96), COL_BORDER, 13, 2, pad)

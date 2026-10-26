@@ -254,3 +254,25 @@ def test_every_tr_ui_key_exists_in_all_ten_languages():
         if len(langs) != 10:
             missing.append("%s (only %s)" % (key, ",".join(sorted(langs))))
     assert not missing, "Localization keys with missing languages: %s" % missing[:12]
+
+
+# Identifiers that look plausible but do not exist in Godot 4.3. gdtoolkit's
+# parser accepts them, so they must be banned statically or they only explode
+# inside the real engine (as Control.SIDE_* and Color(Color, float) did).
+GODOT4_BAD_SYMBOLS = [
+    "Control.SIDE_LEFT", "Control.SIDE_TOP", "Control.SIDE_RIGHT", "Control.SIDE_BOTTOM",
+    "set_content_margin_side", "ThemeType", "StyleBoxTexture.TEXTURE_MARGIN",
+    "VP_RENDER_TARGET", "MainLoop.", "GDScript.NATIVE",
+]
+
+
+def test_no_nonexistent_godot4_identifiers():
+    offenders = []
+    for gd in list(ROOT.glob("scripts/**/*.gd")) + list(ROOT.glob("tests/*.gd")):
+        src = gd.read_text(encoding="utf-8", errors="replace")
+        for bad in GODOT4_BAD_SYMBOLS:
+            if bad in src:
+                offenders.append("%s: %s" % (gd.name, bad))
+        for m in re.finditer(r"Color\(\s*[A-Za-z_][\w.\[\]]*\s*,\s*[\d.]+\s*\)", src):
+            offenders.append("%s: Color(Color, alpha) -> %s" % (gd.name, m.group(0)))
+    assert not offenders, "Invalid Godot 4 API usage: %s" % offenders[:8]
