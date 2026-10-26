@@ -29,7 +29,7 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          pip install pillow pygltflib "gdtoolkit==4.*" pytest
+          pip install pillow pygltflib "gdtoolkit==4.*" pytest fonttools
           $ptOut = pytest -v --tb=short tests/test_assets_and_spec.py 2>&1
           $ptExit = $LASTEXITCODE
           $ptOut | ForEach-Object { Write-Host $_ }
