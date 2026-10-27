@@ -33,6 +33,13 @@ jobs:
           sha256sum ASHES_OF_HUMANITY_WINDOWS.zip ASHES_OF_HUMANITY_SOURCE.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
+      - name: Print payload hashes
+        run: |
+          echo "--- windows payload ---"
+          sha256sum release/windows/*
+          echo "--- bundle ---"
+          sha256sum release/web/game.js
+
       - name: Publish assets to the release
         uses: softprops/action-gh-release@v2
         with:
