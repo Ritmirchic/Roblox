@@ -4,6 +4,49 @@ A complete standalone 3D space game: modular ship engineering on a real 3D grid,
 magnetic recovery, orbital combat, a collectible crew-card economy, a live sector market and UTC-rotating
 achievements. No external runtimes required.
 
+## v2.5.0 — Crew Cards Are Painted Now: Kind Machines to Murder Machines
+
+### The procedural rig is gone; the set is authored art
+The crew portraits were the last part of this game still produced by maths. All 42 are now
+**separately authored paintings** - one image per card, each directed from that card's own identity:
+its name, its role, its biography and its **signature tool** (resonance cleaver-hammer, twin plasma
+accelerators, a monolith splitter, a phalanx deflector, a prism-tipped analysis spear, micro-welder
+swarms, magnet grab-claws, a zero-point tap lance, a reality-anchor gauntlet). Nothing is mirrored,
+tinted or re-framed from a neighbour.
+
+### The ladder is the art direction
+- **Common** - rounded, plain-spoken utility machines with big soft optic eyes: honest dents, canvas
+  harness, tools built for work.
+- **Uncommon** - the same friendly frame in olive military plating, first war scars, heavier tooling.
+- **Rare** - professional soldiers: faceted edges, kill notches, repaired visors, cold blue discipline.
+- **Epic** - killing machines: black-violet laminate armour, spikes, exposed cores, a tokamak burning in
+  the chest, arms replaced by siege hardware.
+- **Legendary** - executioners in scorched gold and obsidian: war horns, cracked visors, capes of welded
+  metal, entire forearms as weapons.
+- **Mythic** - monstrous but still humanoid: faceless helms with a single vertical wound of light,
+  radiator maws, singularity cores on the shoulders, ribcage cages holding a bound black hole.
+- **Secret** - the two worst things in the belt: a void scientist whose face is an event horizon with
+  one dead-white eye, and a progenitor war god waking a dead dreadnought behind it.
+Every stage keeps a two-arms/legs/head humanoid silhouette, so the cards still read as a crew and not
+as abstract shapes.
+
+### Assembly, not generation
+`tools/assemble_crew_cards.py` is now the only thing that writes `assets/cards/crew/`. It frames each
+painting with a subject-aware crop (the silhouette is located against its own border, and the window
+is biased to keep the helmet off the top edge - a cropped head is the worst thing a crew card can do),
+then unifies the set with a light key-art vignette and one deterministic PNG per card. The 42 master
+paintings are committed under `assets/cards/crew_src/` so the set can be re-framed without touching the
+art, and `export_presets.cfg` excludes them from the shipped build so the game stays the same size.
+The three superseded procedural portrait generators (`crew_robot.py`, `render_crew_portraits.py`,
+`render_crew_unique.py`) were deleted, because leaving them behind only invites someone to render the
+authored set away again.
+
+### Test truth
+The full-bust contract in `tests/test_assets_and_spec.py` was updated for painted art: a torso band now
+passes either by separating from its background *or* by being structurally busy across the width, since
+elite key art is deliberately dark armour in dark smoke and luminance alone cannot see that. A head
+floating over nothing still fails, as do mirrored twins and duplicate digests.
+
 ## v2.4.1 — Two Fake Controls Deleted
 
 ### The pause menu no longer lies
