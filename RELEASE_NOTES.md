@@ -4,6 +4,57 @@ A complete standalone 3D space game: modular ship engineering on a real 3D grid,
 magnetic recovery, orbital combat, a collectible crew-card economy, a live sector market and UTC-rotating
 achievements. No external runtimes required.
 
+## v2.5.1 — Twenty-Two Screenshots, One Pass Over Everything They Exposed
+
+Every frame of the play-through review went in. Below is what actually changed, and what is knowingly left open.
+
+### Hall of Fame (3D)
+- The plaques were scattered over a whole sphere on the golden angle, so half the hall sat behind the camera and
+  the room read as a black void with two lit cards. The layout is now an **amphitheater**: rows fan out in front of
+  the entrance, each tier higher and deeper, so the collected set reads from one spot and stays in frame.
+- The bottom hint lived in a fixed 520 px box clipped at the right edge, so its first words were cut at every
+  resolution ("...йте - осмотреться..."). It now spans the window and centers.
+- Ambient and sky floor lifted slightly so pillars and floor read as a room instead of darkness.
+
+### Flight
+- Losing window focus now **pauses the flight**, and the pause panel gained a red EXIT TO DESKTOP control, so a run
+  is never a trap. It deliberately saves nothing and banks nothing: the warp portal stays the only payout, and a
+  test pins that rule.
+- The pause panel states the extraction rule using the game's own localized copy plus the live cargo readout.
+- The target plaque over the locked enemy was 52 px wide and truncated real names ("SCOUT DR..."). It is 118 px,
+  centered, with the health bar widened to match.
+- Ship readability: module models get a 1.16 scale margin and a small random yaw, so a turret reads as a turret
+  instead of another white hull cell; the chase camera default moved from 17 m to 14.5 m.
+- Sectors no longer float in a flat gradient with a hard horizon band: a **2048x1024 nebula panorama** (authored
+  for this build: equirectangular dust in two colours plus three star layers) is the sky now, rotated per sector
+  so each sector still reads differently, with the procedural sky kept as fallback.
+
+### Crew cards and the pack ceremony
+- Locked and duplicate cards were crushed to `Color(0.24, 0.28, 0.36)`, which turned the crew grid and the pack
+  result row into black rectangles. The silhouette stays readable now while still clearly marked "not yours".
+- The name row got its own 22 px height and the portrait gave up 10 px, so localized names are no longer clipped
+  by the bottom of the card.
+- The burst flash peaked at alpha 0.80 over the whole modal - a grey wash. It peaks at 0.34 (0.14 under reduced
+  motion), and the pack aura got a 44 px soft shadow instead of a hard-edged ellipse outline.
+- Odds chips have a minimum width, so "Secret: 0.060%" stops folding mid-token.
+
+### Hangar panels
+- Settings groups no longer stretch vertically - that stretch was the empty framed panel above ПИЛОТИРОВАНИЕ.
+- Launch panel: an odd sector count left half the grid empty; that cell now carries the live cargo/refinery
+  summary and the market rule, both from existing localized copy.
+- Affordance order fixed: "fly to sector" keeps the green accent, an unaffordable "unlock sector" drops to a
+  secondary wire button and is visibly dimmed; the same dimming was missing on "smelt & sell" with an empty hold.
+
+### Menu
+- The main menu printed "v2.1.0" on a 2.5.0 build. Version strings are single-sourced now, and a test fails the
+  build if any localized menu version drifts from `config/version`.
+
+### Known, not fixed in this pass
+- Shop pack cards still sit narrow at 1920 (dead side margins) - presentation only, nothing is hidden behind it.
+- Still open on the Steam-readiness list: no rebind screen / no `[input]` map, a single save slot with the backup
+  file unexposed, no music tracks, machine translation for TR/PT/ZH/JA/KO waiting on human QA, no colourblind
+  lock target, no photosensitivity note.
+
 ## v2.5.0 — Crew Cards Are Painted Now: Kind Machines to Murder Machines
 
 ### The procedural rig is gone; the set is authored art

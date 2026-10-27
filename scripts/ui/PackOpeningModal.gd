@@ -101,10 +101,13 @@ func _build_ui() -> void:
 	_pack_aura.pivot_offset = Vector2(180, 240)
 	_pack_aura.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var aura_sb := StyleBoxFlat.new()
-	aura_sb.bg_color = Color(0.18, 0.72, 1.0, 0.16)
-	aura_sb.border_color = Color(0.32, 0.88, 1.0, 0.45)
-	aura_sb.set_border_width_all(2)
+	aura_sb.bg_color = Color(0.18, 0.72, 1.0, 0.1)
+	aura_sb.border_color = Color(0.32, 0.88, 1.0, 0.28)
+	aura_sb.set_border_width_all(1)
 	aura_sb.set_corner_radius_all(180)
+	aura_sb.shadow_color = Color(0.22, 0.76, 1.0, 0.3)
+	aura_sb.shadow_size = 44
+	aura_sb.shadow_offset = Vector2.ZERO
 	aura_sb.shadow_color = Color(0.20, 0.82, 1.0, 0.45)
 	aura_sb.shadow_size = 36
 	_pack_aura.add_theme_stylebox_override("panel", aura_sb)
@@ -150,7 +153,7 @@ func _build_ui() -> void:
 	_burst_flash = ColorRect.new()
 	add_child(_burst_flash)
 	ThemeHelper.fill_full_rect(_burst_flash)
-	_burst_flash.color = Color(0.85, 0.96, 1.0, 0.0)
+	_burst_flash.color = Color(0.62, 0.9, 1.0, 0.0)
 	_burst_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func play_ceremony(pack_id: String, results: Array[Dictionary], unlocked_fifth: bool) -> void:
@@ -202,7 +205,7 @@ func play_ceremony(pack_id: String, results: Array[Dictionary], unlocked_fifth: 
 	tw.tween_property(_center_pack, "scale", Vector2(1.32, 1.32), 0.16 * fast)
 
 	tw.tween_callback(func(): stage = Stage.PACK_BURST)
-	tw.tween_property(_burst_flash, "color:a", 0.80 if not ThemeHelper.reduced_motion else 0.25, 0.08)
+	tw.tween_property(_burst_flash, "color:a", 0.34 if not ThemeHelper.reduced_motion else 0.14, 0.07)
 	tw.tween_callback(func():
 		_center_pack.visible = false
 		_pack_aura.visible = false

@@ -56,18 +56,18 @@ func _build_environment() -> void:
 	var env := Environment.new()
 	var sky := Sky.new()
 	var smat := ProceduralSkyMaterial.new()
-	smat.sky_top_color = Color(0.008, 0.013, 0.032)
-	smat.sky_horizon_color = Color(0.02, 0.04, 0.08)
+	smat.sky_top_color = Color(0.014, 0.02, 0.045)
+	smat.sky_horizon_color = Color(0.05, 0.07, 0.13)
 	smat.ground_bottom_color = Color(0.004, 0.008, 0.018)
 	smat.ground_horizon_color = Color(0.015, 0.025, 0.05)
 	sky.sky_material = smat
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.12, 0.16, 0.24)
+	env.ambient_light_color = Color(0.16, 0.21, 0.3)
 	env.ambient_light_energy = 1.0
 	env.glow_enabled = true
-	env.glow_intensity = 0.6
+	env.glow_intensity = 0.75
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.03, 0.05, 0.10)
 	env.fog_density = 0.006
@@ -264,17 +264,16 @@ func _build_hud() -> void:
 	dvb.add_child(_dossier_body)
 
 	_hint_lbl = Label.new()
-	_hint_lbl.anchor_left = 1.0
+	_hint_lbl.anchor_left = 0.0
 	_hint_lbl.anchor_right = 1.0
 	_hint_lbl.anchor_top = 1.0
 	_hint_lbl.anchor_bottom = 1.0
-	_hint_lbl.offset_left = -520
-	_hint_lbl.offset_right = -26
-	_hint_lbl.offset_top = -54
-	_hint_lbl.offset_bottom = -22
+	_hint_lbl.offset_left = 16
+	_hint_lbl.offset_right = -16
+	_hint_lbl.offset_top = -52
+	_hint_lbl.offset_bottom = -20
 	_hint_lbl.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_hint_lbl.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	_hint_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_hint_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hint_lbl.clip_text = true
 	_hint_lbl.add_theme_font_size_override("font_size", 13)
 	_hint_lbl.add_theme_color_override("font_color", Color(0.62, 0.78, 0.94))
@@ -315,8 +314,15 @@ func _rebuild_cards() -> void:
 		return
 
 	var count := collected.size()
-	# Even spherical distribution using the golden angle
-	var golden := 2.399963229728653
+	# Композиция амфитеатра: ряды разворачиваются веером перед входом, каждый
+	# следующий ряд выше и дальше — зал читается целиком с одной точки, а не
+	# разбегается за спину по золотому углу, как это было в сфере.
+	var per_row := clampi(int(ceil(float(count) / 4.0)), 6, 11)
+	var hall_radius := 7.2
+	var row_rise := 2.0
+	var row_depth := 1.9
+	var base_y := 0.95
+	var arc := deg_to_rad(150.0)
 	for i in range(count):
 		var t: Dictionary = collected[i]
 		var rarity: String = str(t.get("rarity", "Common"))
@@ -325,11 +331,16 @@ func _rebuild_cards() -> void:
 		if not ResourceLoader.exists(art_path):
 			art_path = "res://assets/cards/achievements/ach_01.png"
 
-		var phi := acos(clampf(1.0 - 2.0 * (float(i) + 0.5) / float(count), -1.0, 1.0))
-		var theta := float(i) * golden
-		var px := CARD_RADIUS * sin(phi) * cos(theta)
-		var py := 1.5 + CARD_RADIUS * cos(phi) * 0.55
-		var pz := CARD_RADIUS * sin(phi) * sin(theta)
+		var row := int(i / per_row)
+		var slot := i % per_row
+		var in_row := mini(per_row, count - row * per_row)
+		var denom := maxf(1.0, float(in_row - 1))
+		var spread := (float(slot) - float(in_row - 1) * 0.5) / denom
+		var ang := spread * arc * 0.5
+		var rr := hall_radius + float(row) * row_depth
+		var px := sin(ang) * rr
+		var py := base_y + float(row) * row_rise
+		var pz := cos(ang) * rr
 
 		var card := _make_achievement_billboard(art_path, rcol, Vector3(px, py, pz))
 		card.name = "HallCard_%d" % i

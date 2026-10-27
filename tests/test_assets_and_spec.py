@@ -880,3 +880,90 @@ def test_rarity_ladder_is_a_collector_ladder():
     assert "GameData.roll_salvage_rarity(randf(), heavy)" in exp, "combat must roll the salvage ladder"
     assert 'GameData.RARITY_ORDER.find(str(c["rarity"])) >= 2' not in exp, \
         "salvage must not pick uniformly from everything Rare and above"
+
+
+# ---------------------------------------------------------------- v2.5.1 review batch
+def test_menu_version_matches_project_version():
+    """The menu must never print a stale build number again."""
+    proj = (ROOT / "project.godot").read_text(encoding="utf-8")
+    m = re.search(r'config/version="([0-9.]+)"', proj)
+    assert m, "project.godot must carry config/version"
+    ver = m.group(1)
+    loc = (ROOT / "scripts/autoload/Localization.gd").read_text(encoding="utf-8")
+    blk = re.search(r'"menu_version": \{(.*?)\n\t\}', loc, re.S)
+    assert blk, "menu_version block missing"
+    langs = re.findall(r'"([a-z]{2})": "v([0-9.]+)', blk.group(1))
+    assert len(langs) == 10, f"menu_version must cover all 10 languages, got {len(langs)}"
+    for code, v in langs:
+        assert v == ver, f"menu_version prints v{v} in {code} while the build is {ver}"
+    stale = set(re.findall(r'"v(\d+\.\d+\.\d+) ', loc))
+    assert stale == {ver}, f"stale version strings shipped in Localization: {sorted(stale)}"
+
+
+def test_hall_of_fame_is_an_amphitheater_with_a_readable_hint():
+    src = (ROOT / "scripts/space/AchievementHall3D.gd").read_text(encoding="utf-8")
+    assert "golden" not in src, "sphere packing hid half the hall behind the camera"
+    assert "row_rise" in src and "hall_radius" in src
+    i = src.index("_hint_lbl = Label.new()")
+    blk = src[i:i + 900]
+    assert "anchor_left = 0.0" in blk and "anchor_right = 1.0" in blk
+    assert "-520" not in blk, "bottom hint must span the window, not clip its own head"
+
+
+def test_pause_menu_can_leave_flight_without_faking_extraction():
+    src = (ROOT / "scripts/space/SpaceExpedition3D.gd").read_text(encoding="utf-8")
+    assert "_pause_exit_btn" in src and 'L.tr_ui("menu_exit")' in src
+    assert "DisplayServer.window_is_focused()" in src, "losing window focus must pause the flight"
+    body = src[src.index("func _on_pause_quit_to_desktop"):src.index("func _complete_expedition_and_return")]
+    assert "get_tree().quit()" in body
+    assert "SaveManager" not in body and "sell_all_cargo" not in body, \
+        "quitting must not bank an unextracted haul - the warp portal is the only payout"
+    assert "_update_pause_hint()" in src and 'L.tr_ui("warp_gate_3d")' in src
+
+
+def test_flight_target_plaque_is_wide_enough_for_real_names():
+    src = (ROOT / "scripts/space/SpaceExpedition3D.gd").read_text(encoding="utf-8")
+    assert "HORIZONTAL_ALIGNMENT_CENTER, 118" in src, "target name plaque was cut to 52 px"
+    assert "Vector2(118.0, 4)" in src
+
+
+def test_nebula_panorama_is_a_real_equirectangular_texture():
+    p = ROOT / "assets/textures/sky/nebula_2k.png"
+    assert p.is_file(), "space sectors need the authored nebula backdrop"
+    with Image.open(p) as im:
+        w, h = im.size
+        assert (w, h) == (2048, 1024) and w == 2 * h
+        assert im.mode == "RGB"
+    src = (ROOT / "scripts/space/SpaceExpedition3D.gd").read_text(encoding="utf-8")
+    assert "nebula_2k.png" in src and "PanoramaSkyMaterial" in src
+    assert "background_sky_rotation" in src, "each sector rotates the nebula to stay distinct"
+
+
+def test_locked_crew_art_stays_readable_and_name_row_fits():
+    src = (ROOT / "scripts/ui/CardWidget.gd").read_text(encoding="utf-8")
+    m = re.search(r"if not owned:\s*\n(?:\s*#[^\n]*\n)*\s*tex_rect\.modulate = Color\(([^)]*)\)", src)
+    assert m, "locked portrait dimming missing"
+    vals = [float(x.strip()) for x in m.group(1).split(",")]
+    assert vals[0] >= 0.38 and vals[1] >= 0.42 and vals[2] >= 0.5, f"locked art too dark: {vals}"
+    assert "name_lbl.custom_minimum_size = Vector2(0, 22)" in src
+    assert "Vector2(0, 148 if compact else 164)" in src, "portrait must yield room to the footer"
+
+
+def test_sector_grid_has_no_dead_cell_and_fly_stays_the_accent():
+    src = (ROOT / "scripts/ui/HangarStationPanels.gd").read_text(encoding="utf-8")
+    assert "GameData.sectors.size() % 2 == 1" in src, "odd sector count left half the panel empty"
+    assert 'L.tr_ui("cargo_refinery_status"' in src
+    fly_i = src.index('lbtn.text = L.tr_ui("launch_expedition_btn")')
+    unlock_i = src.index('lbtn.text = L.tr_ui("unlock_sector_btn"')
+    seg = src[fly_i:unlock_i + 1500]
+    assert "style_accent_button(lbtn, Color(0.18, 0.85, 0.52))" in seg
+    assert "wire_button_fx(lbtn)" in seg, "an unaffordable unlock must not outshine the fly action"
+    assert "sell_btn.modulate = Color(0.6, 0.64, 0.72)" in src, "an empty hold must look empty, not offer +0 CR"
+
+
+def test_pack_burst_flash_is_a_bloom_not_a_wash():
+    src = (ROOT / "scripts/ui/PackOpeningModal.gd").read_text(encoding="utf-8")
+    m = re.search(r'"color:a", ([0-9.]+) if not ThemeHelper\.reduced_motion else ([0-9.]+)', src)
+    assert m, "burst flash peak missing"
+    assert float(m.group(1)) <= 0.45 and float(m.group(2)) <= 0.2, "flash must not grey out the whole modal"
+    assert "aura_sb.shadow_size" in src, "aura needs a soft falloff instead of a hard ellipse"

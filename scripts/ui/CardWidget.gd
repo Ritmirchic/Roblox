@@ -104,7 +104,7 @@ func setup_card(data: Dictionary, owned: bool, copies: int = 1, equipped: bool =
 	# 2. Rounded Full-Bleed Portrait Viewport (takes center stage!)
 	var port_frame := PanelContainer.new()
 	port_frame.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	port_frame.custom_minimum_size = Vector2(0, 154 if compact else 174)
+	port_frame.custom_minimum_size = Vector2(0, 148 if compact else 164)
 	port_frame.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
 	port_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var pf_sb := StyleBoxFlat.new()
@@ -122,7 +122,9 @@ func setup_card(data: Dictionary, owned: bool, copies: int = 1, equipped: bool =
 	if ResourceLoader.exists(p_path):
 		tex_rect.texture = load(p_path)
 	if not owned:
-		tex_rect.modulate = Color(0.24, 0.28, 0.36, 0.88)
+		# Незакрытая карта должна оставаться различимой силуэтом: прежний
+		# modulate превращал сетку экипажа в ряды чёрных прямоугольников.
+		tex_rect.modulate = Color(0.44, 0.5, 0.62, 0.94)
 	elif ResourceLoader.exists("res://shaders/card_foil.gdshader"):
 		_foil_mat = ShaderMaterial.new()
 		_foil_mat.shader = load("res://shaders/card_foil.gdshader")
@@ -200,6 +202,7 @@ func setup_card(data: Dictionary, owned: bool, copies: int = 1, equipped: bool =
 	var name_lbl := Label.new()
 	name_lbl.text = str(data.get("name", "Specialist"))
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.custom_minimum_size = Vector2(0, 22)
 	name_lbl.clip_text = true
 	name_lbl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	if ThemeHelper.font_bold:

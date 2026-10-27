@@ -898,6 +898,7 @@ func _build_packs_tab() -> void:
 			chip.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(rcol.darkened(0.78), rcol, 6, 8, 3))
 			var cl := Label.new()
 			cl.text = "%s: %s" % [L.rarity_name(r), _odds_text(pct)]
+			chip.custom_minimum_size = Vector2(126, 0)
 			cl.add_theme_font_size_override("font_size", 12)
 			cl.add_theme_color_override("font_color", rcol.lightened(0.28))
 			chip.add_child(cl)
@@ -1412,6 +1413,8 @@ func _build_launch_tab() -> void:
 	sell_btn.text = L.tr_ui("sell_cargo_btn", [preview_val])
 	sell_btn.disabled = cargo_units <= 0
 	ThemeHelper.style_accent_button(sell_btn, Color(0.95, 0.72, 0.18))
+	if cargo_units <= 0:
+		sell_btn.modulate = Color(0.6, 0.64, 0.72)
 	sell_btn.pressed.connect(func():
 		var gained: int = ShipGrid.sell_all_cargo()
 		if gained > 0:
@@ -1674,8 +1677,15 @@ func _build_launch_tab() -> void:
 			var ucost := int(s["unlock_cost"])
 			var req_c := int(s["required_cells"])
 			lbtn.text = L.tr_ui("unlock_sector_btn", [ucost, req_c])
-			lbtn.disabled = (ShipGrid.credits < ucost) or (ShipGrid.purchased_expansion_cells < req_c)
-			ThemeHelper.style_accent_button(lbtn, Color(0.22, 0.68, 0.95))
+			var can_buy: bool = (ShipGrid.credits >= ucost) and (ShipGrid.purchased_expansion_cells >= req_c)
+			lbtn.disabled = not can_buy
+			# Открытие сектора — вторичное действие рядом с «ВЫЛЕТ» в уже доступный сектор,
+			# поэтому оно не перетягивает акцент; недоступность показана затемнением.
+			if can_buy:
+				ThemeHelper.style_accent_button(lbtn, Color(0.55, 0.66, 0.82))
+			else:
+				ThemeHelper.wire_button_fx(lbtn)
+				lbtn.modulate = Color(0.6, 0.64, 0.72)
 			lbtn.pressed.connect(func():
 				var ures: Dictionary = ShipGrid.unlock_sector(sidx_cap)
 				if bool(ures.get("ok", false)):
@@ -1686,6 +1696,43 @@ func _build_launch_tab() -> void:
 					show_toast(L.localize_reason(str(ures.get("reason", ""))), true)
 			)
 		svb.add_child(lbtn)
+
+	if GameData.sectors.size() % 2 == 1:
+		# Нечётное число секторов оставило бы пустую половину панели: в свободную
+		# ячейку кладётся живая сводка трюма и правила рынка — та же копия, что и
+		# в переработке, поэтому здесь нет ни одного выдуманного текста.
+		var filler := PanelContainer.new()
+		filler.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		filler.custom_minimum_size = Vector2(360, 156)
+		filler.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(ThemeHelper.COL_BG_CARD, Color(0.95, 0.72, 0.18, 0.52), 13, 2, 14))
+		sgrid.add_child(filler)
+
+		var fvb := VBoxContainer.new()
+		fvb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fvb.add_theme_constant_override("separation", 9)
+		filler.add_child(fvb)
+
+		var fusd: int = ShipGrid.get_current_cargo_units()
+		var fstats: Dictionary = ShipGrid.compute_ship_stats()
+		var fval: int = ShipGrid.get_cargo_sale_value()
+		var fsum := Label.new()
+		fsum.text = L.tr_ui("cargo_refinery_status", [fusd, int(fstats["cargo_capacity"]), fval])
+		fsum.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fsum.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		if ThemeHelper.font_bold:
+			fsum.add_theme_font_override("font", ThemeHelper.font_bold)
+		fsum.add_theme_font_size_override("font_size", 14)
+		fsum.add_theme_color_override("font_color", Color(0.98, 0.86, 0.56))
+		fvb.add_child(fsum)
+
+		var fhint := Label.new()
+		fhint.text = L.tr_ui("mkt_hint")
+		fhint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fhint.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		fhint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		fhint.add_theme_font_size_override("font_size", 12)
+		fhint.add_theme_color_override("font_color", ThemeHelper.COL_MUTED)
+		fvb.add_child(fhint)
 
 	ThemeHelper.animate_grid_stagger(sgrid, 0.025, 6)
 
@@ -1925,7 +1972,6 @@ func _add_settings_group(parent: Control, title: String, accent: Color) -> VBoxC
 	var card := PanelContainer.new()
 	card.name = "SettingsGroup_%s" % title.left(12)
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	card.custom_minimum_size = Vector2(330, 0)
 	card.add_theme_stylebox_override("panel", ThemeHelper.make_panel_style(ThemeHelper.COL_BG_CARD, Color(accent.r, accent.g, accent.b, 0.62), 13, 2, 16))
 	parent.add_child(card)

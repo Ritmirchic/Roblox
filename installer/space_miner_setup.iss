@@ -2,7 +2,7 @@
 #define MyAppName "SPACE MINER: BUILD & CONQUER"
 #define MySafeFolderName "SPACE MINER - BUILD & CONQUER"
 #define MyAppExeName "SPACE_MINER.exe"
-#define MyAppVersion "2.5.0"
+#define MyAppVersion "2.5.1"
 #define MyAppPublisher "Orbital Forge Interactive"
 
 [Setup]

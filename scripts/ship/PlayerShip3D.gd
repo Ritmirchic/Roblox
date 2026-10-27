@@ -177,7 +177,12 @@ func rebuild_from_grid() -> void:
 		if ResourceLoader.exists(mpath):
 			var ps: PackedScene = load(mpath)
 			if ps:
-				pivot.add_child(ps.instantiate())
+				var inst := ps.instantiate()
+				# Оборудование тонуло на фоне ячеек корпуса: небольшой запас масштаба и
+				# случайный доворот читают силуэт модуля, а не белый куб на сетке.
+				inst.scale = Vector3.ONE * 1.16
+				inst.rotation.y = randf_range(-0.13, 0.13)
+				pivot.add_child(inst)
 
 		# Muzzle marker at front (-Z) of module/turret
 		var muzzle := Marker3D.new()

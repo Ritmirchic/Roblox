@@ -20,7 +20,7 @@ var _lightning_beam: MeshInstance3D
 var _cam_pivot: Node3D
 var _cam: Camera3D
 var _cam_dist: float = 17.0
-var _target_cam_dist: float = 17.0
+var _target_cam_dist: float = 14.5
 var _cam_yaw_off: float = 0.0
 var _cam_pitch_off: float = -10.0
 var _cam_bank_deg: float = 0.0
@@ -79,6 +79,9 @@ var _min_ach_lbl: Label
 var _hazard_warn_lbl: Label
 var _hint_lbl: Label
 var _pause_panel: PanelContainer
+var _pause_exit_btn: Button
+var _pause_hint_lbl: Label
+var _window_focused: bool = true
 var _pause_title_lbl: Label
 var _pause_lang_lbl: Label
 var _pause_res_btn: Button
@@ -127,6 +130,17 @@ func _build_sector_environment() -> void:
 	sky.sky_material = sky_mat
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
+	# Живой космос вместо плоского градиента: 2K-панорама туманности. Каждый сектор
+	# поворачивает её на свой угол, поэтому различие секторов сохраняется; цветная
+	# процедурная скинка остаётся запасным вариантом, если текстура не найдена.
+	var nebula_path := "res://assets/textures/sky/nebula_2k.png"
+	if ResourceLoader.exists(nebula_path):
+		var pano := PanoramaSkyMaterial.new()
+		pano.panorama = load(nebula_path)
+		var pano_sky := Sky.new()
+		pano_sky.sky_material = pano
+		env.sky = pano_sky
+		env.background_sky_rotation = Vector3(0.0, deg_to_rad(float(sector_def.get("index", 0)) * 57.0), 0.0)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = sector_def["ambient_color"]
 	env.ambient_light_energy = 1.05
@@ -670,6 +684,18 @@ func _build_expedition_hud() -> void:
 		_set_mouse_flight_mode(true)
 	)
 	pvb.add_child(_pause_res_btn)
+	
+	_pause_hint_lbl = Label.new()
+	_pause_hint_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_pause_hint_lbl.add_theme_font_size_override("font_size", 12)
+	_pause_hint_lbl.add_theme_color_override("font_color", ThemeHelper.COL_MUTED)
+	pvb.add_child(_pause_hint_lbl)
+
+	_pause_exit_btn = Button.new()
+	_pause_exit_btn.custom_minimum_size = Vector2(0, 44)
+	ThemeHelper.style_accent_button(_pause_exit_btn, Color(1.0, 0.38, 0.30))
+	_pause_exit_btn.pressed.connect(_on_pause_quit_to_desktop)
+	pvb.add_child(_pause_exit_btn)
 
 	ThemeHelper.animate_entry(_status_box, 0.0, Vector2(0.96, 0.96))
 	ThemeHelper.animate_entry(_radar_box, 0.04, Vector2(0.96, 0.96))
@@ -722,6 +748,8 @@ func _apply_hud_localization() -> void:
 	_pause_title_lbl.text = L.tr_ui("pause_title")
 	_pause_lang_lbl.text = L.tr_ui("settings_language") + ":"
 	_pause_res_btn.text = L.tr_ui("pause_resume")
+	_pause_exit_btn.text = L.tr_ui("menu_exit")
+	_update_pause_hint()
 	if is_instance_valid(_gate_lbl_3d):
 		_gate_lbl_3d.text = L.tr_ui("warp_gate_3d")
 
@@ -948,11 +976,11 @@ func _draw_hud_world_overlays() -> void:
 						_overlay_canvas.draw_line(Vector2(hx, hy), Vector2(hx - sx * arm_len, hy), gcol, 2.6)
 						_overlay_canvas.draw_line(Vector2(hx, hy), Vector2(hx, hy - sy * arm_len), gcol, 2.6)
 					_overlay_canvas.draw_circle(ep, 2.6, Color(0.34, 1.0, 0.58, 0.9))
-					_overlay_canvas.draw_rect(Rect2(ep + Vector2(-26, -bracket_half - 12), Vector2(52.0, 4)), Color(0.06, 0.20, 0.12, 0.9), true)
-					_overlay_canvas.draw_rect(Rect2(ep + Vector2(-26, -bracket_half - 12), Vector2(52.0 * hp_pct, 4)), Color(0.36, 1.0, 0.60), true)
+					_overlay_canvas.draw_rect(Rect2(ep + Vector2(-59, -bracket_half - 12), Vector2(118.0, 4)), Color(0.06, 0.20, 0.12, 0.9), true)
+					_overlay_canvas.draw_rect(Rect2(ep + Vector2(-59, -bracket_half - 12), Vector2(118.0 * hp_pct, 4)), Color(0.36, 1.0, 0.60), true)
 					if ThemeHelper.font_bold:
-						_overlay_canvas.draw_string(ThemeHelper.font_bold, ep + Vector2(-26, -bracket_half - 18),
-							str(en3d.display_name).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, 52, 11, Color(0.62, 1.0, 0.78, 0.95))
+						_overlay_canvas.draw_string(ThemeHelper.font_bold, ep + Vector2(-59, -bracket_half - 19),
+							str(en3d.display_name).to_upper(), HORIZONTAL_ALIGNMENT_CENTER, 118, 11, Color(0.62, 1.0, 0.78, 0.96))
 				else:
 					var col := Color(1.0, 0.55, 0.22, 0.78)
 					var sz := 15.0
@@ -1009,6 +1037,13 @@ func _draw_radar_minimap() -> void:
 # FLIGHT LOOP, CAMERA ANTI-CLIPPING, HAZARDS & EXTRACTION
 # ==============================================================================
 func _process(delta: float) -> void:
+	var focused_now := DisplayServer.window_is_focused()
+	if not focused_now and _window_focused and not _pause_panel.visible and not _extracting:
+		_pause_panel.visible = true
+		_set_mouse_flight_mode(false)
+		_update_pause_hint()
+	_window_focused = focused_now
+
 	_tick_achievement_toast(delta)
 	_tick_hud_alert(delta)
 	if not is_instance_valid(player_ship) or _extracting:
@@ -1302,6 +1337,29 @@ func _toggle_manual_target_lock() -> void:
 	_manual_locked_enemy = best
 	player_ship.locked_enemy = best
 	AudioManager.play_sfx("ui_click", 0.04, 0.6)
+
+func _update_pause_hint() -> void:
+	# Панель паузы объясняет правило выхода существующими строками: сдача груза
+	# только через варп-портал, а в трюме прямо сейчас столько-то единиц.
+	if not is_instance_valid(_pause_hint_lbl):
+		return
+	var cargo_txt := ""
+	if _bar_val_lbls.has("hud_cargo"):
+		cargo_txt = str((_bar_val_lbls["hud_cargo"] as Label).text)
+	if cargo_txt.is_empty():
+		_pause_hint_lbl.text = L.tr_ui("warp_gate_3d")
+	else:
+		_pause_hint_lbl.text = "%s  •  %s" % [L.tr_ui("warp_gate_3d"), cargo_txt]
+
+
+func _on_pause_quit_to_desktop() -> void:
+	# Выход через меню не сохраняет и не выдаёт добычу рейса: сдача возможна только
+	# через варп-портал, поэтому кнопка честно закрывает игру.
+	if _extracting:
+		return
+	AudioManager.play_sfx("ui_click", 0.02, 0.5)
+	get_tree().quit()
+
 
 func _complete_expedition_and_return() -> void:
 	if _extracting:
