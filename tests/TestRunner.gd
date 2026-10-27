@@ -1222,7 +1222,7 @@ func _test_card_foils_and_lock_combat() -> void:
 		for txt in pause_btn_texts:
 			if str(txt).to_upper().contains(promised.to_upper()):
 				liar = true
-		_check(not liar, "Pause menu offers no button that cannot do what its label promises (%s)" % ", ".join(pause_btn_texts))
+		_check(not liar, "Pause menu offers no button that cannot do what its label promises: %s" % str(pause_btn_texts))
 	for en in exp2.enemies_root.get_children():
 		en.queue_free()
 	exp2.queue_free()
