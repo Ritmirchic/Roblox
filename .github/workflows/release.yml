@@ -27,6 +27,10 @@ jobs:
       - name: Package Windows build and source archive
         run: node tools/package.mjs
 
+      - name: Run the automated gameplay suite against the packaged build
+        timeout-minutes: 20
+        run: node tools/test-runner.mjs --url=file://$PWD/release/windows/AshesOfHumanity.html
+
       - name: Write checksums
         run: |
           cd release
