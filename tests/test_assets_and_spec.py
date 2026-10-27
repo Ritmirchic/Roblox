@@ -936,7 +936,8 @@ def test_nebula_panorama_is_a_real_equirectangular_texture():
         assert im.mode == "RGB"
     src = (ROOT / "scripts/space/SpaceExpedition3D.gd").read_text(encoding="utf-8")
     assert "nebula_2k.png" in src and "PanoramaSkyMaterial" in src
-    assert "background_sky_rotation" in src, "each sector rotates the nebula to stay distinct"
+    assert "env.sky_rotation" in src, "each sector rotates the nebula to stay distinct"
+    assert "background_sky_rotation" not in src, "that property name is Godot 3"
 
 
 def test_locked_crew_art_stays_readable_and_name_row_fits():

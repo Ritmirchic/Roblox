@@ -140,7 +140,7 @@ func _build_sector_environment() -> void:
 		var pano_sky := Sky.new()
 		pano_sky.sky_material = pano
 		env.sky = pano_sky
-		env.background_sky_rotation = Vector3(0.0, deg_to_rad(float(sector_def.get("index", 0)) * 57.0), 0.0)
+		env.sky_rotation = Vector3(0.0, deg_to_rad(float(sector_def.get("index", 0)) * 57.0), 0.0)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = sector_def["ambient_color"]
 	env.ambient_light_energy = 1.05
