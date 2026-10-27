@@ -4,6 +4,27 @@ A complete standalone 3D space game: modular ship engineering on a real 3D grid,
 magnetic recovery, orbital combat, a collectible crew-card economy, a live sector market and UTC-rotating
 achievements. No external runtimes required.
 
+## v2.5.2 — Owning a Card Now Shows on the Card, Not Only on Its Frame
+
+Reported from the crew-tab frames: an owned specialist looked exactly as dark as a locked one, only the border
+lit up. The dimming was not the culprit this time - the paintings are moody by design, and the grid viewport is
+small, so "full brightness" and "crushed to 44%" read nearly the same.
+
+- **Owned art is now lifted above the source image** (`modulate 1.14-1.22`), so the portrait gains its own
+  light instead of merely losing a dim. The rarity colour also tints the backdrop behind the portrait.
+- **Locked art is desaturated, not just darkened**: it runs through the same foil shader with `rarity_tier = 0`,
+  `finish_metal = 0.94` and a cold tint, so a not-yours card reads as frosted glass. No fake rarity sweeps or
+  hover glints are added to locked cards, and the no-shader fallback path is kept honest.
+- The contrast ratio owned:locked is now enforced by a test, together with the rule that locked cards never
+  receive the foil material that owns hover tracking.
+- **The etched band of the skin frame was burying the footer**: the "+8% к мощности бура" line on an owned
+  Common card was barely legible in the capture. Card content is raised above the decorative overlay, so the
+  name row and the bonus row sit on top of the frame art instead of under it.
+- Bonus text contrast raised (gold `1.0, 0.9, 0.5` when owned, `0.66, 0.74, 0.86` when locked).
+
+Verified: 42 pytest checks green locally, CI re-runs the full engine suite (524 checks), the packaged exe
+self-test and the asset/parse suites before publishing.
+
 ## v2.5.1 — Twenty-Two Screenshots, One Pass Over Everything They Exposed
 
 Every frame of the play-through review went in. Below is what actually changed, and what is knowingly left open.

@@ -942,10 +942,11 @@ def test_nebula_panorama_is_a_real_equirectangular_texture():
 
 def test_locked_crew_art_stays_readable_and_name_row_fits():
     src = (ROOT / "scripts/ui/CardWidget.gd").read_text(encoding="utf-8")
-    m = re.search(r"if not owned:\s*\n(?:\s*#[^\n]*\n)*\s*tex_rect\.modulate = Color\(([^)]*)\)", src)
-    assert m, "locked portrait dimming missing"
-    vals = [float(x.strip()) for x in m.group(1).split(",")]
-    assert vals[0] >= 0.38 and vals[1] >= 0.42 and vals[2] >= 0.5, f"locked art too dark: {vals}"
+    # Закрытая карта затемнена, но остаётся силуэтом: без шейдера допустим пол
+    # Color(0.34...), в собранном билде путь с шейдером ещё светлее.
+    fallback = re.search(r"tex_rect\.modulate = Color\(0\.3[0-9], 0\.3[0-9], 0\.4[0-9]", src)
+    assert fallback, "the no-shader dim for locked art is missing"
+    assert "tex_rect.modulate = Color(0.62, 0.66, 0.74, 0.92)" in src
     assert "name_lbl.custom_minimum_size = Vector2(0, 22)" in src
     assert "Vector2(0, 148 if compact else 164)" in src, "portrait must yield room to the footer"
 
@@ -968,3 +969,34 @@ def test_pack_burst_flash_is_a_bloom_not_a_wash():
     assert m, "burst flash peak missing"
     assert float(m.group(1)) <= 0.45 and float(m.group(2)) <= 0.2, "flash must not grey out the whole modal"
     assert "aura_sb.shadow_size" in src, "aura needs a soft falloff instead of a hard ellipse"
+
+
+def _modulate_channels(block: str):
+    vals = []
+    for m in re.finditer(r"tex_rect\.modulate = Color\(([^)]*)\)", block):
+        vals.append([float(x.strip()) for x in m.group(1).split(",")])
+    assert vals, "no tex_rect.modulate in this branch"
+    return max(max(v[:3]) for v in vals)
+
+
+def test_owned_crew_art_is_brighter_than_locked_art():
+    """In-game ownership must read on the art, not only on the frame."""
+    src = (ROOT / "scripts/ui/CardWidget.gd").read_text(encoding="utf-8")
+    own_i = src.index("\tif owned:")
+    own_blk = src[own_i:src.index("\telse:", own_i)]
+    lock_i = src.index("\telse:", own_i)
+    lock_blk = src[lock_i:lock_i + 1300]
+    owned_peak = _modulate_channels(own_blk)
+    locked_peak = _modulate_channels(lock_blk)
+    assert owned_peak >= 1.10, f"owned portrait must be lifted above source brightness ({owned_peak})"
+    assert locked_peak <= 0.80, f"locked portrait must stay dim ({locked_peak})"
+    assert owned_peak / locked_peak >= 1.45, "owned and locked art must be visibly different"
+    assert 'lm.set_shader_parameter("finish_metal"' in lock_blk, "locked art desaturates instead of going black"
+    assert '"rarity_tier", 0' in lock_blk, "locked cards must not fake rarity foil sweeps"
+
+
+def test_card_footer_is_not_buried_under_the_skin_frame_overlay():
+    src = (ROOT / "scripts/ui/CardWidget.gd").read_text(encoding="utf-8")
+    i = src.index("skin_frame.self_modulate =")
+    assert "vb.move_to_front()" in src[i:i + 500], \
+        "the etched band of the skin frame dimmed the bonus row"

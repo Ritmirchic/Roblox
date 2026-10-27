@@ -108,7 +108,7 @@ func setup_card(data: Dictionary, owned: bool, copies: int = 1, equipped: bool =
 	port_frame.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
 	port_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var pf_sb := StyleBoxFlat.new()
-	pf_sb.bg_color = Color(0.02, 0.03, 0.07, 1.0)
+	pf_sb.bg_color = (rcol.darkened(0.55) if owned else Color(0.02, 0.03, 0.07, 1.0))
 	pf_sb.set_corner_radius_all(9)
 	port_frame.add_theme_stylebox_override("panel", pf_sb)
 	vb.add_child(port_frame)
@@ -121,24 +121,41 @@ func setup_card(data: Dictionary, owned: bool, copies: int = 1, equipped: bool =
 	var p_path: String = str(data.get("portrait", ""))
 	if ResourceLoader.exists(p_path):
 		tex_rect.texture = load(p_path)
-	if not owned:
-		# Незакрытая карта должна оставаться различимой силуэтом: прежний
-		# modulate превращал сетку экипажа в ряды чёрных прямоугольников.
-		tex_rect.modulate = Color(0.44, 0.5, 0.62, 0.94)
-	elif ResourceLoader.exists("res://shaders/card_foil.gdshader"):
-		_foil_mat = ShaderMaterial.new()
-		_foil_mat.shader = load("res://shaders/card_foil.gdshader")
-		_foil_mat.set_shader_parameter("rarity_tier", _rarity_tier)
-		_foil_mat.set_shader_parameter("reduced_motion", 1.0 if ThemeHelper.reduced_motion else 0.0)
-		_foil_mat.set_shader_parameter("hover_amount", 0.0)
-		_foil_mat.set_shader_parameter("finish_sheen", float(foil.get("sheen", 0.0)))
-		_foil_mat.set_shader_parameter("finish_prism", float(foil.get("prism", 0.0)))
-		_foil_mat.set_shader_parameter("finish_sparkle", float(foil.get("sparkle", 0.0)))
-		_foil_mat.set_shader_parameter("finish_glow", _foil_glow)
-		_foil_mat.set_shader_parameter("finish_metal", float(foil.get("metal", 0.0)))
-		var ft: Color = _foil_col
-		_foil_mat.set_shader_parameter("finish_tint", Vector3(ft.r, ft.g, ft.b))
-		tex_rect.material = _foil_mat
+	var foil_shader_available := ResourceLoader.exists("res://shaders/card_foil.gdshader")
+	if owned:
+		# Своя карта светится ярче самой картины: тёмный арт Common иначе
+		# неотличим от закрытой, и факт владения читается только по обводке.
+		tex_rect.modulate = Color(1.14, 1.16, 1.22, 1.0)
+		if foil_shader_available:
+			_foil_mat = ShaderMaterial.new()
+			_foil_mat.shader = load("res://shaders/card_foil.gdshader")
+			_foil_mat.set_shader_parameter("rarity_tier", _rarity_tier)
+			_foil_mat.set_shader_parameter("reduced_motion", 1.0 if ThemeHelper.reduced_motion else 0.0)
+			_foil_mat.set_shader_parameter("hover_amount", 0.0)
+			_foil_mat.set_shader_parameter("finish_sheen", float(foil.get("sheen", 0.0)))
+			_foil_mat.set_shader_parameter("finish_prism", float(foil.get("prism", 0.0)))
+			_foil_mat.set_shader_parameter("finish_sparkle", float(foil.get("sparkle", 0.0)))
+			_foil_mat.set_shader_parameter("finish_glow", _foil_glow)
+			_foil_mat.set_shader_parameter("finish_metal", float(foil.get("metal", 0.0)))
+			var ft: Color = _foil_col
+			_foil_mat.set_shader_parameter("finish_tint", Vector3(ft.r, ft.g, ft.b))
+			tex_rect.material = _foil_mat
+	else:
+		# Чужая карта — силуэт за матовым стеклом: тот же шейдер, но без редкости
+		# и бликов, только десатурация и холодное затемнение. Без шейдера остаётся
+		# честное затемнение modulate.
+		if foil_shader_available:
+			tex_rect.modulate = Color(0.62, 0.66, 0.74, 0.92)
+			var lm := ShaderMaterial.new()
+			lm.shader = load("res://shaders/card_foil.gdshader")
+			lm.set_shader_parameter("rarity_tier", 0)
+			lm.set_shader_parameter("reduced_motion", 1.0)
+			lm.set_shader_parameter("hover_amount", 0.0)
+			lm.set_shader_parameter("finish_metal", 0.94)
+			lm.set_shader_parameter("finish_tint", Vector3(0.6, 0.66, 0.78))
+			tex_rect.material = lm
+		else:
+			tex_rect.modulate = Color(0.34, 0.37, 0.44, 0.9)
 	port_frame.add_child(tex_rect)
 
 	# Floating Badges inside Portrait Corners (Copies / Equipped / Locked)
@@ -233,7 +250,7 @@ func setup_card(data: Dictionary, owned: bool, copies: int = 1, equipped: bool =
 	bonus_lbl.custom_minimum_size = Vector2(168 if compact else 184, 34)
 	bonus_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	bonus_lbl.add_theme_font_size_override("font_size", 12 if compact else 13)
-	bonus_lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.36) if owned else Color(0.55, 0.62, 0.72))
+	bonus_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5) if owned else Color(0.66, 0.74, 0.86))
 	bonus_pill.add_child(bonus_lbl)
 
 	if owned and _foil_rank > 0:
@@ -260,6 +277,10 @@ func setup_card(data: Dictionary, owned: bool, copies: int = 1, equipped: bool =
 	if skin_frame != null:
 		skin_frame.visible = true
 		skin_frame.self_modulate = rcol.lightened(0.42) if owned else Color(0.46, 0.54, 0.66, 0.75)
+		# Трафаретная полоса рамки лежит поверх карточки и глушила строку бонуса
+		# (на скриншотах «+8% к мощности бура» у своей карты была еле видна),
+		# поэтому контент поднимается над декоративным оверлеем.
+		vb.move_to_front()
 
 	if not has_meta("card_signals_wired"):
 		set_meta("card_signals_wired", true)
