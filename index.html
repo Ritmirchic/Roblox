@@ -10,24 +10,58 @@
 <style>
   html,body{margin:0;height:100%;background:#060706;overflow:hidden}
   #boot{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    background:#060706;z-index:200;font-family:"Arial Narrow",Arial,sans-serif;color:#b3ac9a;transition:opacity .6s}
+    background:#060706;z-index:200;font-family:"Arial Narrow",Arial,sans-serif;color:#b3ac9a;transition:opacity .6s;
+    padding:24px;box-sizing:border-box;text-align:center}
   #boot h1{margin:0;font-size:15px;letter-spacing:.6em;font-weight:400;text-transform:uppercase}
-  #boot p{margin:18px 0 0;font-size:10px;letter-spacing:.28em;color:#5c5a51;text-transform:uppercase}
-  #boot .bar{width:220px;height:1px;background:#20241e;margin-top:26px;position:relative;overflow:hidden}
-  #boot .bar i{position:absolute;inset:0;width:40%;background:#c9963f;animation:slide 1.4s infinite ease-in-out}
-  @keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(320%)}}
-  #boot.error{color:#d4664c}
-  #boot.error .bar{display:none}
+  #boot .sub{margin:14px 0 0;font-size:10px;letter-spacing:.28em;color:#5c5a51;text-transform:uppercase}
+  #boot .bar{width:260px;height:2px;background:#20241e;margin-top:24px;position:relative;overflow:hidden}
+  #boot .bar i{position:absolute;left:0;top:0;bottom:0;width:2%;background:#c9963f;transition:width .35s}
+  #boot .row{margin-top:10px;display:flex;gap:14px;font-size:9.5px;letter-spacing:.22em;color:#6d6a5e;text-transform:uppercase}
+  #boot .hint{margin-top:16px;font-size:10px;letter-spacing:.14em;color:#57544b;max-width:520px;line-height:1.8}
+  #boot .hint a{color:#c9963f}
+  #boot.error{justify-content:flex-start;padding-top:56px;overflow:auto;color:#c9c2b0}
+  #boot.error h1{color:#d4664c;font-size:13px}
+  #boot .panel-body{max-width:640px;font-size:12px;line-height:1.85;letter-spacing:.04em;color:#a9a292}
+  #boot .panel-body code{background:#151812;padding:1px 5px;color:#c9963f;font-size:11px}
+  #boot .panel-body p{margin:10px 0}
+  #boot .muted{color:#6d6a5e;font-size:11px}
+  #boot .panel-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:20px 0 8px}
+  #boot .panel-actions button{background:#12150f;border:1px solid #3a4032;color:#c9c2b0;font:inherit;font-size:10px;
+    letter-spacing:.18em;padding:9px 14px;cursor:pointer;text-transform:uppercase}
+  #boot .panel-actions button:hover{border-color:#c9963f;color:#e2d6b4}
+  #boot pre{max-width:640px;width:100%;text-align:left;font-size:10px;line-height:1.6;color:#6d6a5e;
+    background:#0b0d09;border:1px solid #1d211a;padding:12px;white-space:pre-wrap;margin:16px 0 40px}
 </style>
 </head>
 <body>
 <div id="ui"></div>
 <div id="boot">
   <h1>ASHES OF HUMANITY</h1>
-  <p>LAST SIGNAL</p>
-  <div class="bar"><i></i></div>
+  <div class="sub">LAST SIGNAL</div>
+  <div class="bar"><i id="boot-fill"></i></div>
+  <div class="row"><span id="boot-step">INITIALISING</span><span id="boot-pct">0%</span></div>
+  <div class="hint" id="boot-hint">Preparing the engine. The world is generated on your machine: 15–60 seconds on a laptop.</div>
 </div>
 <noscript><div style="color:#c9963f;padding:40px;font-family:sans-serif">This game requires JavaScript and a WebGL2-capable browser.</div></noscript>
-<script type="module" src="./dist/game.js"></script>
+<script src="./dist/game.js" defer></script>
+<script>
+// Last-resort watchdog: if the bundle never executes (missing file, blocked
+// script, ancient browser) say so instead of spinning forever.
+setTimeout(function () {
+  if (window.game || !document.getElementById('boot') || document.getElementById('boot').className === 'error') return;
+  var b = document.getElementById('boot');
+  b.className = 'error';
+  b.innerHTML = '<h1>THE GAME SCRIPT DID NOT LOAD</h1>' +
+    '<div class="panel-body">' +
+    '<p><code>./dist/game.js</code> could not be loaded or executed.</p>' +
+    '<p class="muted">If you opened this folder directly from disk, use the packaged file ' +
+    '<b>Ashes of Humanity.html</b> instead (it has everything inside), or start the local server ' +
+    'with <code>npm run serve</code> and open <code>http://localhost:8080</code>.</p>' +
+    '<p class="muted">If you are running the built copy inside <code>dist/</code>, make sure ' +
+    '<code>game.js</code> sits next to this page.</p>' +
+    '<p class="muted">Browser console (F12) will name the exact reason.</p>' +
+    '</div>';
+}, 12000);
+</script>
 </body>
 </html>

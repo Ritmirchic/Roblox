@@ -2,7 +2,7 @@
   "name": "ashes-of-humanity-last-signal",
   "version": "1.0.0",
   "private": true,
-  "description": "ASHES OF HUMANITY: LAST SIGNAL \u2014 a 3D open-world post-apocalyptic survival action RPG",
+  "description": "ASHES OF HUMANITY: LAST SIGNAL — a 3D open-world post-apocalyptic survival action RPG",
   "type": "module",
   "scripts": {
     "serve": "node tools/serve.js",
@@ -11,10 +11,10 @@
     "qa:browser": "node tools/browser_test.js"
   },
   "dependencies": {
-    "three": "0.169.0"
+    "three": "^0.169.0"
   },
   "devDependencies": {
-    "esbuild": "0.24.0",
+    "esbuild": "^0.24.0",
     "jsdom": "^25.0.1"
   }
 }

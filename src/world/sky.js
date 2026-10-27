@@ -56,9 +56,11 @@ void main() {
   col += sunColor * pow(sd, 9000.0) * 9.0;
   col += sunColor * pow(sd, 40.0) * 0.20 * (1.0 - haze);
   col += sunColor * pow(sd, 3.0) * 0.06;
-  // horizon haze band
-  float band = exp(-abs(h) * 9.0) * haze;
-  col = mix(col, horizonColor * 1.06, band * 0.55);
+  // horizon haze band: dusty, slightly darker than the sky itself so the far
+  // hills do not sit on a white sheet
+  float band = exp(-abs(h) * 16.0) * haze;
+  vec3 dust = horizonColor * vec3(0.86, 0.80, 0.72);
+  col = mix(col, dust, band * 0.62);
   // clouds
   if (h > -0.02) {
     vec2 cp = d.xz / max(h + 0.14, 0.08) * 0.55 + vec2(time * 0.0035, time * 0.0022);
@@ -80,8 +82,8 @@ void main() {
 }`;
 
 const WEATHER = {
-  clear: { name: 'Clear', fog: 0.0016, cloud: 0.28, rain: 0, wind: 0.15, wet: 0, haze: 0.35, light: 1.0 },
-  overcast: { name: 'Overcast', fog: 0.0034, cloud: 0.72, rain: 0, wind: 0.35, wet: 0.15, haze: 0.6, light: 0.72 },
+  clear: { name: 'Clear', fog: 0.0026, cloud: 0.28, rain: 0, wind: 0.15, wet: 0, haze: 0.35, light: 1.0 },
+  overcast: { name: 'Overcast', fog: 0.0038, cloud: 0.72, rain: 0, wind: 0.35, wet: 0.15, haze: 0.6, light: 0.72 },
   rain_light: { name: 'Light Rain', fog: 0.0042, cloud: 0.8, rain: 0.35, wind: 0.45, wet: 0.6, haze: 0.7, light: 0.6 },
   rain_heavy: { name: 'Heavy Rain', fog: 0.0062, cloud: 0.94, rain: 0.9, wind: 0.8, wet: 1.0, haze: 0.85, light: 0.45 },
   storm: { name: 'Thunderstorm', fog: 0.0075, cloud: 1.0, rain: 1.0, wind: 1.0, wet: 1.0, haze: 0.9, light: 0.32 },
@@ -149,12 +151,19 @@ export class Sky {
         const amp = ring === 0 ? 52 : 96;
         return base + (o1 * 0.58 + o2 * 0.29 + o3 * 0.13) * amp;
       };
+      const colors = [];
+      const hMax = (ring === 0 ? 46 : 74) + (ring === 0 ? 52 : 96);
       for (let i = 0; i <= segs; i++) {
         const a = (i / segs) * Math.PI * 2;
         const h = heightAt(a, ring);
         const x = Math.cos(a) * radius, z = Math.sin(a) * radius;
         const x2 = Math.cos(a) * (radius + 60), z2 = Math.sin(a) * (radius + 60);
         positions.push(x, -40, z, x2, h, z2);
+        // vertical gradient: haze pools at the foot of the ridge, the crest is
+        // the darkest part of the silhouette
+        const crest = Math.min(1, Math.max(0, h / hMax));
+        const foot = 0.98, top = 0.30 + crest * 0.5;
+        colors.push(foot, foot, foot, top, top, top);
       }
       for (let i = 0; i < segs; i++) {
         const a = i * 2, b = i * 2 + 1, c = i * 2 + 2, d = i * 2 + 3;
@@ -162,9 +171,11 @@ export class Sky {
       }
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
       g.setIndex(indices);
       const m = new THREE.MeshBasicMaterial({
         color: ring === 0 ? 0x2c3438 : 0x3a434a,
+        vertexColors: true,
         fog: false, side: THREE.DoubleSide, depthWrite: true,
       });
       const mesh = new THREE.Mesh(g, m);
@@ -177,26 +188,33 @@ export class Sky {
   }
 
   buildRain() {
-    const count = 6000;
-    const pos = new Float32Array(count * 3);
+    // Streaks, not dots: a point sprite at this scale reads as snowfall (or
+    // stars at night). Each drop is a short two-vertex segment.
+    const count = 3200;
+    const pos = new Float32Array(count * 6);
     const vel = new Float32Array(count);
+    const lens = new Float32Array(count);
     for (let i = 0; i < count; i++) {
-      pos[i * 3] = (Math.random() - 0.5) * 60;
-      pos[i * 3 + 1] = Math.random() * 26;
-      pos[i * 3 + 2] = (Math.random() - 0.5) * 60;
+      const x = (Math.random() - 0.5) * 60;
+      const y = Math.random() * 26;
+      const z = (Math.random() - 0.5) * 60;
       vel[i] = 22 + Math.random() * 14;
+      const len = 0.32 + Math.random() * 0.34;
+      lens[i] = len;
+      pos[i * 6] = x; pos[i * 6 + 1] = y; pos[i * 6 + 2] = z;
+      pos[i * 6 + 3] = x + 0.06; pos[i * 6 + 4] = y + len; pos[i * 6 + 5] = z + 0.05;
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const mat = new THREE.PointsMaterial({
-      color: 0xa8bcc8, size: 0.06, transparent: true, opacity: 0.0,
-      sizeAttenuation: true, depthWrite: false, fog: false,
+    const mat = new THREE.LineBasicMaterial({
+      color: 0x9fb4c2, transparent: true, opacity: 0.0, depthWrite: false, fog: false,
     });
-    const pts = new THREE.Points(geo, mat);
-    pts.frustumCulled = false;
-    pts.userData.vel = vel;
-    this.scene.add(pts);
-    return pts;
+    const rain = new THREE.LineSegments(geo, mat);
+    rain.frustumCulled = false;
+    rain.userData.vel = vel;
+    rain.userData.len = lens;
+    this.scene.add(rain);
+    return rain;
   }
 
   setWeather(name, instant = false) {
@@ -267,11 +285,13 @@ export class Sky {
     this.starsVisible = saturate(1 - dayAmt * 2.2) * (1 - wx.cloud * 0.8);
     this.uniforms.starAmount.value = this.starsVisible;
 
-    // fog + light
+    // fog + light. The fog colour is deliberately a little darker and dirtier
+    // than the horizon: matching it exactly made the fogged edge of the map read
+    // as a bright white band under the sky.
     if (sceneRef) {
       if (!sceneRef.fog) sceneRef.fog = new THREE.FogExp2(0x8c9298, 0.004);
-      sceneRef.fog.color.copy(hor);
-      sceneRef.fog.density = wx.fog;
+      sceneRef.fog.color.copy(hor).multiplyScalar(0.62 + 0.10 * dayAmt).lerp(new THREE.Color(0x4a4a44), 0.18);
+      sceneRef.fog.density = wx.fog * 1.15;
     }
     if (sunLight) {
       sunLight.position.copy(playerPos).addScaledVector(this.sunDir, 120);
@@ -282,19 +302,26 @@ export class Sky {
       sunLight.castShadow = true;
     }
     if (hemiLight) {
-      hemiLight.color.copy(top).lerp(new THREE.Color(0xffffff), 0.15);
+      // at night mix hard toward moonlit blue: the raw night sky colour is so
+      // dark that ambient light alone left the ground black
+      hemiLight.color.copy(top).lerp(new THREE.Color(0x93a8c8), 0.22 + (1 - dayAmt) * 0.45);
       hemiLight.groundColor.setRGB(0.14, 0.12, 0.1).multiplyScalar(0.6 + dayAmt);
-      hemiLight.intensity = 0.34 + dayAmt * 1.05 + wx.light * 0.2;
+      // night has no sun: without a floor here the ground goes pitch black and
+      // the player cannot see a metre ahead.
+      hemiLight.intensity = 0.60 + dayAmt * 0.85 + wx.light * 0.2;
     }
     // dome follows camera
     if (camera) this.dome.position.copy(camera.position);
     if (this.farRidges) this.farRidges.forEach((m, i) => {
       // aerial perspective: blend the ridge toward the horizon rather than
       // letting exponential fog clip it to white
-      const haze = i === 0 ? 0.42 : 0.6;
-      const c = hor.clone().multiplyScalar(i === 0 ? 0.40 : 0.50);
-      c.lerp(new THREE.Color(0x0b1016), 0.30 + (1 - dayAmt) * 0.45);
-      c.lerp(hor, wx.cloud * 0.12 * dayAmt);
+      // the far ring is hazier (closer to the horizon colour) than the near one
+      const near = i === 0;
+      const c = hor.clone().multiplyScalar(near ? 0.30 : 0.42);
+      c.lerp(new THREE.Color(0x0b1016), 0.18 + (1 - dayAmt) * 0.55);
+      const dust = new THREE.Color(0x2a2620);
+      c.lerp(dust, (1 - dayAmt) * 0.25 + wx.wet * 0.1);
+      c.lerp(hor, wx.cloud * 0.10 * dayAmt);
       m.material.color.copy(c);
     });
 
@@ -306,14 +333,20 @@ export class Sky {
       if (this.rain.visible && playerPos) {
         const pos = this.rain.geometry.attributes.position;
         const vel = this.rain.userData.vel;
-        const n = pos.count;
+        const n = vel.length;
+        const lens = this.rain.userData.len;
         const windX = this.sunDir.x * wx.wind * 6;
+        const windZ = this.sunDir.z * wx.wind * 2;
         for (let i = 0; i < n; i++) {
-          let y = pos.getY(i) - vel[i] * dt;
-          let x = pos.getX(i) + windX * dt;
-          let z = pos.getZ(i) + this.sunDir.z * wx.wind * 2 * dt;
+          const b = i * 6;
+          let y = pos.getY(b);
+          let x = pos.getX(b);
+          let z = pos.getZ(b);
+          y -= vel[i] * dt; x += windX * dt; z += windZ * dt;
           if (y < -2) { y = 24 + Math.random() * 6; x = (Math.random() - 0.5) * 60; z = (Math.random() - 0.5) * 60; }
-          pos.setXYZ(i, x, y, z);
+          const len = lens[i];
+          pos.setXYZ(b, x, y, z);
+          pos.setXYZ(b + 1, x + 0.06, y + len, z + 0.05);
         }
         pos.needsUpdate = true;
         this.rain.position.set(playerPos.x, playerPos.y, playerPos.z);

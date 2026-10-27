@@ -497,11 +497,12 @@ input[type=range]::-moz-range-thumb{width:10px;height:14px;background:var(--ambe
 
 #mainmenu{background:radial-gradient(ellipse at 50% 120%,rgba(60,52,34,.4),rgba(5,6,5,.96));flex-direction:column;z-index:50}
 .mm-title{text-align:center;margin-bottom:6px}
-.mm-title h1{margin:0;font-size:64px;letter-spacing:.24em;font-weight:300;text-transform:uppercase;
+.mm-title h1{margin:0;font-size:clamp(26px,5.4vw,64px);letter-spacing:clamp(.1em,.24em,.24em);font-weight:300;
+  text-transform:uppercase;white-space:nowrap;padding:0 18px;
   color:#ded6c0;text-shadow:0 2px 50px rgba(0,0,0,.9)}
-.mm-title h2{margin:6px 0 0;font-size:13px;letter-spacing:.9em;color:var(--amber);font-weight:400;text-transform:uppercase}
+.mm-title h2{margin:6px 0 0;font-size:clamp(9px,1.3vw,13px);letter-spacing:clamp(.4em,.9em,.9em);color:var(--amber);font-weight:400;text-transform:uppercase}
 .mm-sub{margin-top:22px;font-size:10px;letter-spacing:.34em;color:var(--dimmer);text-transform:uppercase}
-.mm-menu{margin-top:38px;display:flex;flex-direction:column;gap:4px;width:270px}
+.mm-menu{margin-top:clamp(18px,3vh,38px);display:flex;flex-direction:column;gap:4px;width:min(270px,74vw)}
 .mm-menu .btn{text-align:left;padding:12px 18px;font-size:11px;letter-spacing:.26em}
 .mm-foot{position:absolute;bottom:26px;left:0;right:0;text-align:center;font-size:9.5px;letter-spacing:.26em;color:var(--dimmer);text-transform:uppercase}
 .mm-build{position:absolute;top:26px;right:30px;font-size:9.5px;letter-spacing:.2em;color:var(--dimmer);text-align:right;line-height:1.7}

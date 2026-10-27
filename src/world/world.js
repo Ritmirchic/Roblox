@@ -15,6 +15,7 @@ import { Furniture, Street, vehicle, buildTreeGeometries, rockGeo } from './prop
 import { M, mat, plain } from '../core/materials.js';
 import { REGIONS, BOSSES, LOOT, MUTANTS, regionAt } from '../game/data.js';
 import { RNG, clamp, lerp, smoothstep, dist2, hash2 } from '../core/util.js';
+import { getTextureSet, listMaterials } from '../core/textures.js';
 
 // ------------------------------------------------------------
 // Collider grid (spatial hash)
@@ -714,28 +715,53 @@ export class World {
   // ==================================================================
   async generate(onProgress = () => {}) {
     const t0 = Date.now();
+    const nextTick = () => new Promise((r) => setTimeout(r, 0));
+    const report = (name, pct) => { try { onProgress(name, pct); } catch (e) { /* UI must never break loading */ } };
     const step = async (name, fn, p) => {
-      onProgress(name, p);
-      await new Promise((r) => setTimeout(r, 0));
-      fn();
+      report(name, p);
+      await nextTick();
+      await fn();
     };
-    await step('planning', () => this.plan(), 0.02);
-    await step('terrain', () => this.buildTerrain(), 0.10);
-    await step('shelter', () => this.buildShelter(this.builder), 0.18);
-    await step('buildings', () => this.materializeBuildings(this.layout.buildings, null), 0.30);
-    await step('props', () => this.materializeProps(), 0.50);
-    await step('vegetation', () => this.materializeVegetation(), 0.66);
-    await step('camps', () => this.materializeCamps(), 0.74);
-    await step('arenas', () => this.materializeArenas(), 0.84);
-    await step('lighting', () => this.materializeLights(), 0.92);
-    await step('finalize', () => this.finalize(), 0.98);
-    onProgress('ready', 1);
+
+    // Bake every material up front, one texture per tick. Doing it lazily made
+    // the first building alone stall for several seconds with a frozen bar.
+    await step('baking materials', async () => {
+      const names = listMaterials();
+      for (let i = 0; i < names.length; i++) {
+        try { getTextureSet(names[i]); } catch (e) { console.warn('texture failed', names[i], e); }
+        report('baking materials', 0.005 + 0.035 * (i / names.length));
+        if (i % 2 === 1) await nextTick();
+      }
+    }, 0.005);
+
+    await step('planning', () => this.plan(), 0.04);
+    await step('terrain', () => this.buildTerrain((f, label) => report(label || 'building terrain', 0.06 + f * 0.34)), 0.06);
+    await step('shelter', () => this.buildShelter(this.builder), 0.40);
+
+    // buildings are materialised in batches so the progress bar keeps moving
+    await step('buildings', async () => {
+      const list = this.layout.buildings;
+      const BATCH = 6;
+      for (let i = 0; i < list.length; i += BATCH) {
+        this.materializeBuildings(list.slice(i, i + BATCH), null);
+        report('raising the ruins', 0.44 + 0.26 * Math.min(1, (i + BATCH) / Math.max(1, list.length)));
+        await nextTick();
+      }
+    }, 0.44);
+
+    await step('props', () => this.materializeProps(), 0.70);
+    await step('vegetation', () => this.materializeVegetation(), 0.80);
+    await step('camps', () => this.materializeCamps(), 0.86);
+    await step('arenas', () => this.materializeArenas(), 0.90);
+    await step('lighting', () => this.materializeLights(), 0.93);
+    await step('finalize', () => this.finalize(), 0.96);
+    report('ready', 1);
     this.genMs = Date.now() - t0;
     return this;
   }
 
-  buildTerrain() {
-    this.terrain.build(this.scene);
+  async buildTerrain(onProgress) {
+    await this.terrain.build(this.scene, { onProgress });
     this.water = [];
     this.water.push(this.makeWater(0.62, -3.1, 'river'));
     this.water.push(this.makeWater(0.5, this.terrain.lake.level, 'lake'));
@@ -1355,6 +1381,11 @@ export class World {
   materializeLights() {
     this.lights = [];
     for (const l of this.layout.lights) {
+      // three.js r155+ uses physical light units: a bare "5" candela bulb is
+      // almost invisible in a room. Scale the authored values into a range
+      // that actually reads on screen, stronger for close interior fixtures.
+      const gain = l.range <= 12 ? 14 : l.range <= 24 ? 9 : 6;
+      l.intensity *= gain;
       const light = new THREE.PointLight(l.color, l.intensity, l.range, 2.0);
       light.position.set(l.x, l.y, l.z);
       light.userData.base = l.intensity;

@@ -21,7 +21,11 @@ await mkdir(outdir, { recursive: true });
 const options = {
   entryPoints: [path.join(root, 'src/main.js')],
   bundle: true,
-  format: 'esm',
+  // IIFE (classic script) instead of an ES module: module scripts are blocked
+  // by CORS when the page is opened from file://, which left players staring at
+  // a loading splash that could never finish.
+  format: 'iife',
+  charset: 'utf8',
   target: ['es2020'],
   outfile: path.join(outdir, 'game.js'),
   minify: !dev,
@@ -50,8 +54,9 @@ if (watch) {
   const js = await readFile(path.join(outdir, 'game.js'), 'utf8');
   // NB: use a replacer function. A replacement string would expand `$&`, `$'`
   // and friends that appear inside minified JS and silently corrupt the bundle.
-  const single = local.replace('<script type="module" src="./game.js"></script>',
-    () => `<script type="module">\n${js}\n</script>`);
+  const tag = '<script src="./game.js" defer></script>';
+  if (!local.includes(tag)) throw new Error('index.html is missing the game script tag');
+  const single = local.replace(tag, () => `<script>\n${js}\n</script>`);
   await writeFile(path.join(outdir, 'ashes_of_humanity.html'), single);
 
   const bundle = await stat(path.join(outdir, 'game.js'));

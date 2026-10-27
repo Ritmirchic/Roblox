@@ -145,9 +145,26 @@ GENS.concrete = (w, h, seed = 11) => {
   const fbm = makeFbm(N), fbm2 = makeFbm(N2);
   const R = new RNG(seed + 5);
   const pits = [];
-  for (let i = 0; i < Math.round(w * h * 0.0025); i++) pits.push([R.int(0, w - 1), R.int(0, h - 1), R.range(0.6, 2.2), R.range(0.25, 0.8)]);
+  for (let i = 0; i < Math.round(w * h * 0.0011); i++) pits.push([R.int(0, w - 1), R.int(0, h - 1), R.range(1.2, 3.4), R.range(0.16, 0.5)]);
   const stains = [];
   for (let i = 0; i < 7; i++) stains.push([R.range(0, 1), R.range(0, 1), R.range(0.04, 0.22), R.range(0.35, 0.9)]);
+  // Stamp the pits into a map once: testing every pixel against every pit was
+  // 170 M distance checks and made this single texture take five seconds.
+  const pitMap = new Float32Array(w * h);
+  for (const [px, py, pr, pa] of pits) {
+    const r = Math.ceil(pr);
+    for (let yy = -r; yy <= r; yy++) {
+      const y2 = ((py + yy) % h + h) % h;
+      for (let xx = -r; xx <= r; xx++) {
+        const d2 = xx * xx + yy * yy;
+        if (d2 > pr * pr) continue;
+        const x2 = ((px + xx) % w + w) % w;
+        const v = pa * (1 - Math.sqrt(d2) / pr);
+        const i = y2 * w + x2;
+        if (v > pitMap[i]) pitMap[i] = v;
+      }
+    }
+  }
   T.setAll((T, x, y, u, v) => {
     const mott = fbm(u, v, 6, 5);
     const fine = fbm2(u, v, 32, 3);
@@ -170,14 +187,11 @@ GENS.concrete = (w, h, seed = 11) => {
       stain = Math.max(stain, smoothstep(1 - d / sr) * sa * 0.5);
     }
     base *= 1 - stain;
-    // pitting
-    let pit = 0;
-    for (const [px, py, pr, pa] of pits) {
-      const dx = Math.min(Math.abs(x - px), w - Math.abs(x - px));
-      const dy = Math.min(Math.abs(y - py), h - Math.abs(y - py));
-      if (dx * dx + dy * dy < pr * pr) { pit = Math.max(pit, pa); }
-    }
-    hgt -= pit * 0.35; base -= pit * 0.18;
+    // pitting (pre-stamped map, see above)
+    const pit = pitMap[y * w + x];
+    // shallow, soft pits: deep ones turned the concrete into a starfield under
+    // a low light because the normal map amplified every speck
+    hgt -= pit * 0.10; base -= pit * 0.10;
     // slight warm/cool variation
     T.setC(x, y, base * 1.0, base * 0.99 + streak * 0.02, base * 0.96 + 0.01);
     T.H[y * w + x] = hgt;
@@ -935,13 +949,13 @@ export const MATERIAL_RECIPES = {
   denim: { gen: GENS.denim, size: 256, normalScale: 1.0 },
   leather: { gen: GENS.leather, size: 256, normalScale: 1.0 },
   sand: { gen: GENS.sand, size: 256, normalScale: 1.0 },
-  rock: { gen: GENS.rock, size: 512, normalScale: 1.0 },
+  rock: { gen: GENS.rock, size: 384, normalScale: 1.0 },
   bark: { gen: GENS.bark, size: 256, normalScale: 1.0 },
   leaves: { gen: GENS.leaves, size: 256, normalScale: 1.0, alpha: true },
   blood: { gen: GENS.blood, size: 256, normalScale: 1.0, alpha: true, decal: true },
   bullet: { gen: GENS.bullet, size: 128, normalScale: 1.0, alpha: true, decal: true },
   hazard: { gen: GENS.hazard, size: 256, normalScale: 1.0 },
-  flesh: { gen: GENS.flesh, size: 512, normalScale: 1.0 },
+  flesh: { gen: GENS.flesh, size: 256, normalScale: 1.0 },
   armor: { gen: GENS.armor, size: 256, normalScale: 1.0 },
   nest: { gen: GENS.nest, size: 256, normalScale: 1.0 },
   radiation: { gen: GENS.radiation, size: 256, normalScale: 1.0, emissive: true },

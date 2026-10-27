@@ -26,7 +26,26 @@ npm install
 npm run build
 npm run serve        # http://localhost:8080
 ```
-`index.html` loads `dist/game.js` as an ES module, so it must be served over HTTP.
+`index.html` loads `dist/game.js` as a classic (IIFE) script, so it also works when the
+repository is opened straight from disk; the dev server is only there for convenience.
+
+### Downloads
+
+| File | Contents |
+|---|---|
+| [`release/ASHES_OF_HUMANITY_WINDOWS.zip`](release/ASHES_OF_HUMANITY_WINDOWS.zip) | the playable game: one self-contained HTML file, `PLAY.bat`, README, screenshots |
+| [`release/ASHES_OF_HUMANITY_SOURCE.zip`](release/ASHES_OF_HUMANITY_SOURCE.zip) | the full source tree (`src/`, `tools/`, built `dist/`, package manifests) |
+| [`release/SHA256SUMS.txt`](release/SHA256SUMS.txt) | checksums for both archives |
+
+The archives are rebuilt with `node tools/build.js && node tools/package.js`.
+
+### If the game does not start
+
+The loading screen is deliberate about what is happening: it names the generation step and
+shows a percentage. If a step fails the panel turns into an error report with a **Copy report**
+button and the browser/driver details. A build that never receives its script shows
+"THE GAME SCRIPT DID NOT LOAD" after 12 seconds, and a machine without WebGL2 shows
+"WEBGL2 IS NOT AVAILABLE" — never a silent blank screen.
 
 **Requirements:** a WebGL2-capable desktop browser, keyboard and mouse. Headphones recommended.
 **Optional URL flags:** `?lite=1` (low-end profile: no shadows, shorter draw distance, lower
@@ -98,12 +117,14 @@ world events, save/load, every UI screen, HUD and the finale boss.
 
 The browser suite drives the **built** game in Chromium (SwiftShader) through four short
 sessions and writes screenshots to `qa/browser/`: title screen, shelter/surface/camp/dialogue,
-combat/weather/boss/save-load, and all interface screens. It requires the dev-only packages
-`puppeteer-core` and `@sparticuz/chromium`.
+combat/weather/boss/save-load, and all interface screens. `node tools/qa_shots.js` boots the
+single-file build the way a player would (`file://`) and writes the release screenshots.
+Both require the dev-only packages `puppeteer-core` and `@sparticuz/chromium`.
 
 ## Measured on this machine
 
-* World generation: ≈ 30 s in Node, ≈ 25–30 s in Chromium (progress bar shown).
+* World generation: ≈ 10 s in Node, ≈ 10 s in Chromium on a 2-core CPU with software GL
+  (the loading screen reports each step, e.g. `baking materials 5.4 s`).
 * Static world: ≈ 1.34 M triangles, ≈ 340 draw calls with shadows off / ≈ 1 500 with shadows on.
 * 33 POIs, 920 loot spots, 1 000 doors, 18 000+ collision boxes.
 

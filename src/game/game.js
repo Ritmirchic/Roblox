@@ -102,7 +102,7 @@ export class Game {
     this.ui.setLoading(2, 'building renderer');
 
     if (!this.headless) {
-      this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      this.renderer = new THREE.WebGLRenderer({ antialias: !this.lite, powerPreference: 'high-performance' });
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2) * this.settings.renderScale);
       this.renderer.setSize(window.innerWidth, window.innerHeight);
       this.renderer.shadowMap.enabled = this.settings.shadows;
@@ -1507,10 +1507,11 @@ export class Game {
     const indoor = this.world.isIndoor(p.x, p.y + 1.2, p.z);
     this.indoor = indoor;
     if (!indoor) return;
-    if (this.sun) this.sun.intensity *= 0.34;
-    this.hemi.intensity = Math.max(this.hemi.intensity, 0.55);
-    this.hemi.color.setHex(0x77828f);
-    this.hemi.groundColor.setHex(0x30281e);
+    if (this.sun) this.sun.intensity *= 0.30;
+    // a room with no sunlight and no bounce light needs a healthy ambient floor
+    this.hemi.intensity = Math.max(this.hemi.intensity * 1.6, 0.95);
+    this.hemi.color.setHex(0x9aa4ae);
+    this.hemi.groundColor.setHex(0x4a3f31);
   }
 
   updateFlashlight() {
@@ -1585,7 +1586,18 @@ export class Game {
       const raw = typeof localStorage !== 'undefined' && localStorage.getItem('aohl_settings');
       if (raw) Object.assign(this.settings, JSON.parse(raw));
     } catch (e) { /* ignore */ }
-    this.difficulty = this.settings.difficulty === 'story' ? 0.7 : this.settings.difficulty === 'ashes' ? 1.35 : 1;
+    // a corrupted or hand-edited save must never make the renderer unusable
+    const s = this.settings;
+    const num = (v, lo, hi, dflt) => (typeof v === 'number' && isFinite(v) ? clamp(v, lo, hi) : dflt);
+    s.renderScale = num(s.renderScale, 0.25, 1, 1);
+    s.fov = num(s.fov, 55, 110, 75);
+    s.viewDistance = num(s.viewDistance, 0.25, 1.5, 1);
+    s.sensitivity = num(s.sensitivity, 0.2, 3, 1);
+    s.brightness = num(s.brightness, 0.5, 2, 1);
+    s.master = num(s.master, 0, 1, 0.8);
+    s.music = num(s.music, 0, 1, 0.55);
+    s.sfx = num(s.sfx, 0, 1, 0.85);
+    this.difficulty = s.difficulty === 'story' ? 0.7 : s.difficulty === 'ashes' ? 1.35 : 1;
   }
 
   saveSettings() {

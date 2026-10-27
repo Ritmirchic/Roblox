@@ -175,11 +175,15 @@ export class Terrain {
       h = 4 + N.fbm2(u * 2.6, v * 2.6, 5, 64) * 12 + N2.fbm2(u * 9, v * 9, 3, 256) * 2.5;
       h += N3.ridged(u * 3.2, v * 3.2, 3, 128) * 7;
     }
-    // world-edge mountains to fence the playable area
-    const edgeX = Math.max(0, Math.abs(x) - 620) / 80;
-    const edgeZ = Math.max(0, Math.abs(z) - 420) / 80;
-    const edge = Math.max(edgeX, edgeZ);
-    h += smoothstep(edge) * 65;
+    // world-edge mountains to fence the playable area. They start further in
+    // and are broken up by ridged noise: an unbroken smooth ramp read as a
+    // bright grey wall standing on the horizon.
+    const edgeX = Math.max(0, Math.abs(x) - 560) / 130;
+    const edgeZ = Math.max(0, Math.abs(z) - 360) / 130;
+    const edge = Math.min(1.6, Math.max(edgeX, edgeZ));
+    const ridgeN = N.ridged(x / 90, z / 90, 4, 200);
+    const jag = N2.fbm2(x / 46, z / 46, 3, 300);
+    h += smoothstep(edge) * (46 + ridgeN * 34 + jag * 14);
 
     // ---- crater ----
     const dc = Math.hypot(x - this.crater.x, z - this.crater.z);
@@ -268,9 +272,10 @@ export class Terrain {
 
   // Material weights: asphalt (roads), gravel (industrial/military), sand (wasteland),
   // rock (steep slopes), dirt (path edges), grass elsewhere.
-  weightsAt(x, z) {
-    const n = this.normalAt(x, z, 1.2);
-    const slope = 1 - n.y;
+  weightsAt(x, z, slopeIn = null) {
+    // slopeIn lets callers that already sampled a height grid skip four extra
+    // heightAt() calls per texel (the splat bake is the hot path here)
+    const slope = slopeIn !== null ? slopeIn : 1 - this.normalAt(x, z, 1.2).y;
     const rd = this.roadDist(x, z);
     const reg = this.regionFactor(x, z);
     let asphalt = rd.d < rd.w * 0.62 ? 1 : (rd.d < rd.w * 1.1 ? 1 - smoothstep((rd.d - rd.w * 0.62) / (rd.w * 0.48)) : 0);
@@ -314,26 +319,51 @@ export class Terrain {
   }
 
   // ---- mesh ------------------------------------------------------------
-  build(scene, opts = {}) {
+  // Async and chunked: the browser gets a slice of event loop between batches
+  // so the loading bar keeps painting and the tab is never flagged as hung.
+  async build(scene, opts = {}) {
     const step = opts.step || 4;
     const chunk = 64;
-    const nx = Math.ceil((this.halfX * 2) / step);
-    const nz = Math.ceil((this.halfZ * 2) / step);
+    const onProgress = typeof opts.onProgress === 'function' ? opts.onProgress : () => {};
+    const nextTick = () => new Promise((r) => setTimeout(r, 0));
     const group = new THREE.Group();
     group.name = 'terrain';
 
-    // splat texture: R grass, G dirt, B sand+gravel, A rock/asphalt
-    const SW = Math.floor((this.halfX * 2) / 1.0), SH = Math.floor((this.halfZ * 2) / 1.0);
+    // splat texture: R grass, G dirt, B sand+gravel, A rock/asphalt.
+    // 3 m per texel is plenty for a blend mask (roads are already blended over
+    // 13 m by roadDist) and it is nine times cheaper to bake than 1 m.
+    const SPLAT_STEP = 4;
+    const SW = Math.floor((this.halfX * 2) / SPLAT_STEP), SH = Math.floor((this.halfZ * 2) / SPLAT_STEP);
     const splat = new Uint8Array(SW * SH * 4);
+    // one height sample per texel, then slope from the grid (instead of four
+    // extra heightAt() calls per texel through normalAt)
+    const hm = new Float32Array(SW * SH);
     for (let j = 0; j < SH; j++) {
+      const z = -this.halfZ + (j + 0.5) * SPLAT_STEP;
+      for (let i = 0; i < SW; i++) hm[j * SW + i] = this.heightAt(-this.halfX + (i + 0.5) * SPLAT_STEP, z);
+      if (j % 24 === 23) { onProgress(0.3 * (j / SH), 'painting the ground'); await nextTick(); }
+    }
+    const slopeAt = (i, j) => {
+      const i0 = Math.max(0, i - 1), i1 = Math.min(SW - 1, i + 1);
+      const j0 = Math.max(0, j - 1), j1 = Math.min(SH - 1, j + 1);
+      const dx = (hm[j * SW + i1] - hm[j * SW + i0]) / ((i1 - i0) * SPLAT_STEP);
+      const dz = (hm[j1 * SW + i] - hm[j0 * SW + i]) / ((j1 - j0) * SPLAT_STEP);
+      return 1 - 1 / Math.sqrt(1 + dx * dx + dz * dz);
+    };
+    for (let j = 0; j < SH; j++) {
+      const z = -this.halfZ + (j + 0.5) * SPLAT_STEP;
       for (let i = 0; i < SW; i++) {
-        const x = -this.halfX + (i + 0.5) * 1, z = -this.halfZ + (j + 0.5) * 1;
-        const w = this.weightsAt(x, z);
+        const x = -this.halfX + (i + 0.5) * SPLAT_STEP;
+        const w = this.weightsAt(x, z, slopeAt(i, j));
         const o = (j * SW + i) * 4;
         splat[o] = Math.round(clamp(w.grass, 0, 1) * 255);
         splat[o + 1] = Math.round(clamp(w.dirt, 0, 1) * 255);
         splat[o + 2] = Math.round(clamp(w.sand + w.rock * 0.15, 0, 1) * 255);
         splat[o + 3] = Math.round(clamp(w.asphalt + w.rock, 0, 1) * 255);
+      }
+      if (j % 24 === 23) {
+        onProgress(0.3 + 0.7 * (j / SH), 'painting the ground');
+        await nextTick();
       }
     }
     const splatTex = new THREE.DataTexture(splat, SW, SH, THREE.RGBAFormat, THREE.UnsignedByteType);
@@ -353,6 +383,8 @@ export class Terrain {
     const chunksZ = Math.ceil((this.halfZ * 2) / chunk);
     const per = Math.ceil(chunk / step);
 
+    let made = 0;
+    const totalChunks = chunksX * chunksZ;
     for (let cz = 0; cz < chunksZ; cz++) {
       for (let cx = 0; cx < chunksX; cx++) {
         const ox = -this.halfX + cx * chunk, oz = -this.halfZ + cz * chunk;
@@ -360,15 +392,29 @@ export class Terrain {
         const pos = geo.attributes.position;
         const uv = geo.attributes.uv;
         const col = new Float32Array(pos.count * 3);
+        const gw = per + 1;
+        // sample the height grid once, then take the slope from it (heightAt is
+        // multi-octave noise; calling it five times per vertex dominated the bake)
+        const hgrid = new Float32Array(gw * gw);
+        const xs = new Float32Array(gw * gw), zs = new Float32Array(gw * gw);
         for (let i = 0; i < pos.count; i++) {
           const lx = pos.getX(i), ly = pos.getY(i);
           const x = ox + lx + chunk / 2, z = oz - ly + chunk / 2;
-          const h = this.heightAt(x, z);
-          pos.setZ(i, h);
+          xs[i] = x; zs[i] = z;
+          hgrid[i] = this.heightAt(x, z);
+          pos.setZ(i, hgrid[i]);
           // world-space UV for splat lookup (0..1 across map)
           uv.setXY(i, (x + this.halfX) / (this.halfX * 2), (z + this.halfZ) / (this.halfZ * 2));
-          // detail UV in metres for tiling textures
-          const w = this.weightsAt(x, z);
+        }
+        const cell = chunk / per;
+        for (let i = 0; i < pos.count; i++) {
+          const gx = i % gw, gz = (i / gw) | 0;
+          const hL = hgrid[gz * gw + Math.max(0, gx - 1)], hR = hgrid[gz * gw + Math.min(gw - 1, gx + 1)];
+          const hD = hgrid[Math.max(0, gz - 1) * gw + gx], hU = hgrid[Math.min(gw - 1, gz + 1) * gw + gx];
+          const dx = (hR - hL) / (2 * cell), dz = (hU - hD) / (2 * cell);
+          const slope = 1 - 1 / Math.sqrt(1 + dx * dx + dz * dz);
+          const x = xs[i], z = zs[i];
+          const w = this.weightsAt(x, z, slope);
           const damp = 0.88 + this.N.fbm2(x / 18, z / 18, 3, 32) * 0.24;
           col[i * 3] = damp * (0.84 + w.sand * 0.2);
           col[i * 3 + 1] = damp;
@@ -384,8 +430,14 @@ export class Terrain {
         mesh.name = `terrain_${cx}_${cz}`;
         mesh.userData.terrain = true;
         group.add(mesh);
+        made++;
+        if (made % 32 === 0) {
+          onProgress(0.62 + 0.38 * (made / totalChunks), 'raising the terrain');
+          await nextTick();
+        }
       }
     }
+    onProgress(1, 'terrain ready');
     if (scene) scene.add(group);
     this.group = group;
     return group;
@@ -394,8 +446,11 @@ export class Terrain {
   makeMaterial(splatTex) {
     const names = ['grass', 'dirt', 'sand', 'asphalt', 'rock'];
     const sets = names.map((n) => getTextureSet(n));
-    const mk = (data, srgb) => {
-      const t = new THREE.DataTexture(data, sets[0].width, sets[0].height, THREE.RGBAFormat, THREE.UnsignedByteType);
+    // every material can have its own resolution: use that set's own size, not
+    // sets[0]'s, or the driver rejects the upload ("ArrayBufferView not big enough")
+    const mk = (data, srgb, set) => {
+      const w = set ? set.width : sets[0].width, h = set ? set.height : sets[0].height;
+      const t = new THREE.DataTexture(data, w, h, THREE.RGBAFormat, THREE.UnsignedByteType);
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
       t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter;
       t.generateMipmaps = true; t.anisotropy = 8;
@@ -405,11 +460,11 @@ export class Terrain {
     };
     const uniforms = {
       splat: { value: splatTex },
-      tGrass: { value: mk(sets[0].albedo, true) }, tDirt: { value: mk(sets[1].albedo, true) },
-      tSand: { value: mk(sets[2].albedo, true) }, tAsphalt: { value: mk(sets[3].albedo, true) },
-      tRock: { value: mk(sets[4].albedo, true) },
-      nRock: { value: mk(sets[4].normal, false) },
-      nDirt: { value: mk(sets[1].normal, false) },
+      tGrass: { value: mk(sets[0].albedo, true, sets[0]) }, tDirt: { value: mk(sets[1].albedo, true, sets[1]) },
+      tSand: { value: mk(sets[2].albedo, true, sets[2]) }, tAsphalt: { value: mk(sets[3].albedo, true, sets[3]) },
+      tRock: { value: mk(sets[4].albedo, true, sets[4]) },
+      nRock: { value: mk(sets[4].normal, false, sets[4]) },
+      nDirt: { value: mk(sets[1].normal, false, sets[1]) },
       tScale: { value: 0.25 },
       wetness: { value: 0.0 },
     };
