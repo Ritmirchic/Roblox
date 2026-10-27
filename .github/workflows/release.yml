@@ -1,0 +1,45 @@
+name: Build Windows release
+
+on:
+  push:
+    tags: ['ashes-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build production bundle
+        run: node tools/build.mjs
+
+      - name: Package Windows build and source archive
+        run: node tools/package.mjs
+
+      - name: Write checksums
+        run: |
+          cd release
+          sha256sum ASHES_OF_HUMANITY_WINDOWS.zip ASHES_OF_HUMANITY_SOURCE.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Publish assets to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ASHES OF HUMANITY: LAST SIGNAL v1.0.0
+          body_path: tools/release-notes.md
+          files: |
+            release/ASHES_OF_HUMANITY_WINDOWS.zip
+            release/ASHES_OF_HUMANITY_SOURCE.zip
+            release/SHA256SUMS.txt
