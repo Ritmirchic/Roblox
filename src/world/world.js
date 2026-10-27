@@ -399,7 +399,11 @@ export class World {
     P.table(b, x - 1, z + 1.8, gy + 0.35, 0, 1.8, 0.9);
     this.addLoot({ profile: 'camp', x: -3 + x, y: gy + 0.35, z: z - 3.4, type: 'bench' });
     this.addLoot({ profile: 'camp', x: x + 1, y: gy + 0.35, z: z - 3.6, type: 'locker' });
-    this.addLight(x - 1, gy + 2.8, z + 1, 0xffb870, 10, 12);
+    // two ceiling lamps so the bunker reads as a lit room, not a black box
+    this.addLight(x - 3.2, gy + 2.9, z + 0.6, 0xffc087, 26, 13);
+    this.addLight(x + 3.2, gy + 2.9, z + 0.6, 0xffc087, 26, 13);
+    b.glow(x - 3.2, gy + 3.0, z + 0.6, 0.34, 0.06, 0.34, 0xffc087, { intensity: 0.75 });
+    b.glow(x + 3.2, gy + 3.0, z + 0.6, 0.34, 0.06, 0.34, 0xffc087, { intensity: 0.75 });
     this.addSafeZone(x, z, 12);
     this.markLocation({ type: 'shelter', x, z, y: gy, name: 'Roadside Shelter', icon: 'shelter' });
     this.game.radioPlaylist = (this.game.radioPlaylist || []).concat([{ x, y: gy + 1.0, z: z + 1.8, id: 'auto' }]);

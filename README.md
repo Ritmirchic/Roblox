@@ -43,6 +43,7 @@ a GPU with WebGL2 (any DirectX 11 class card), 4 GB RAM. No internet needed.
 | `G` | Throw grenade / molotov |
 | `E` | Interact |
 | `F` | Flashlight |
+| `X` | Toggle first / third person |
 | `Tab` `J` `K` `B` `V` `M` `O` | Inventory · Journal · Skills · Crafting · Build · Map · Settings |
 | `Z` | Sleep (needs a roof) |
 | `Esc` | Pause |

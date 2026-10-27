@@ -89,6 +89,8 @@ export class Player {
   setPosition(x, y, z) {
     this.position.set(x, y, z);
     this.model.root.position.copy(this.position);
+    // teleports (spawn, load, respawn) must not glide the camera across the map
+    this.cameraSnap = true;
   }
 
   get eyePosition() {
@@ -349,6 +351,17 @@ export class Player {
     }
   }
 
+  /** True when there is a ceiling/roof close above the player's head. */
+  underRoof() {
+    const p = this.position;
+    const boxes = this.collision.grid.query(p.x - 0.5, p.z - 0.5, p.x + 0.5, p.z + 0.5, this._roofScratch || (this._roofScratch = []));
+    for (const b of boxes) {
+      if (b.tag !== 'ceiling' && b.tag !== 'roof') continue;
+      if (b.minY > p.y + 1.3 && b.minY < p.y + 4.2) return true;
+    }
+    return false;
+  }
+
   updateCamera(dt) {
     const cam = this.camera;
     const headY = this.position.y + (this.crouching ? 1.0 : 1.56);
@@ -360,14 +373,18 @@ export class Player {
     this.camShakeTime += dt;
     const shakeAmt = this.camShake * 0.02 * (1 + this.stress / 200);
 
+    // Tight interiors: a roofed space hides the third-person camera behind walls,
+    // so the camera drops to the head and the model is hidden automatically.
+    const roofed = this.underRoof();
     let desiredPos;
     let fov = this.game.settings?.fov || 78;
-    if (this.viewMode === 'first') {
+    if (this.viewMode === 'first' || roofed) {
       desiredPos = new THREE.Vector3(this.position.x, headY + 0.04, this.position.z);
       this.model.root.visible = false;
+      if (this.aiming && roofed) fov = lerp(fov, this.game.combat?.currentAdsFov ?? 55, this.aimBlend);
       fov = this.aiming ? lerp(fov, this.game.combat?.currentAdsFov ?? 55, this.aimBlend) : fov;
     } else {
-      this.model.root.visible = true;
+      if (!this.cameraCramped) this.model.root.visible = true;
       const dist = lerp(3.15, 1.85, this.aimBlend);
       const side = lerp(0.62, 0.78, this.aimBlend) * this.shoulderSide;
       const up = lerp(0.28, 0.1, this.aimBlend);
@@ -380,13 +397,23 @@ export class Player {
       const dirN = dirToCam.clone().normalize();
       const hit = this.collision.raycast(new THREE.Vector3(this.position.x, headY, this.position.z), dirN, len + 0.35, { step: 0.3 });
       const safeLen = Math.max(0.45, Math.min(len, hit - 0.32));
+      // in tight interiors the shoulder camera would end up inside the head,
+      // so drop the character model instead of clipping through it
+      this.cameraCramped = safeLen < 1.25;
+      this.model.root.visible = !this.cameraCramped;
       desiredPos = new THREE.Vector3(this.position.x, headY, this.position.z).addScaledVector(dirN, safeLen);
       fov = this.aiming ? lerp(fov, this.game.combat?.currentAdsFov ?? 55, this.aimBlend) : fov;
       if (this.sprinting) fov += 5;
     }
-    // smooth camera position (faster when aiming)
+    // smooth camera position (faster when aiming). After a teleport, or if the
+    // camera somehow ends up far from the player, snap instead of flying in.
     const lambda = this.viewMode === 'first' ? 26 : lerp(11, 22, this.aimBlend);
-    this.cameraPos.lerp(desiredPos, 1 - Math.exp(-lambda * dt));
+    if (this.cameraSnap || this.cameraPos.distanceTo(desiredPos) > 12) {
+      this.cameraPos.copy(desiredPos);
+      this.cameraSnap = false;
+    } else {
+      this.cameraPos.lerp(desiredPos, 1 - Math.exp(-lambda * dt));
+    }
 
     // shake
     const t = performance.now() * 0.001;

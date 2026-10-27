@@ -138,8 +138,14 @@ class Game {
       this.refreshDerived();
       this.combat.equipBestWeapon?.('secondary', true);
       this.world.terrain._heightCache.clear();
-      this.player.setPosition(-702, this.world.groundY(-702, -646) + 0.35, -646);
-      this.respawnPoint = { x: -702, y: this.world.groundY(-702, -646) + 0.35, z: -646 };
+      // inside the bunker, between the cot and the workbench
+      const spawnX = -700.5;
+      const spawnZ = -643.0;
+      this.player.setPosition(spawnX, this.world.groundY(spawnX, spawnZ) + 0.35, spawnZ);
+      this.player.yaw = -Math.PI / 2;     // facing the cot
+      this.player.pitch = -0.06;
+      this.player.updateCamera(0.016);
+      this.respawnPoint = { x: spawnX, y: this.world.groundY(spawnX, spawnZ) + 0.35, z: spawnZ };
       this.loadingStage('ARMING THE HORDE');
       this.spawnWorldPopulation();
       this.anchorOpeningQuests();
@@ -521,6 +527,7 @@ class Game {
         case 'KeyO': this.ui.toggle('settings'); break;
         case 'KeyE': if (!this.ui.blocking) this.doInteract(); break;
         case 'KeyF': if (!this.ui.blocking) this.toggleFlashlight(); break;
+        case 'KeyX': if (!this.ui.blocking) this.player.toggleView(); break;
         case 'KeyQ':
           if (this.baseBuilding.selected) this.baseBuilding.cancel();
           else this.combat.cycleWeapon();
