@@ -1214,7 +1214,15 @@ func _test_card_foils_and_lock_combat() -> void:
 	_check(not hud_src.contains("_return_guidance_t"), "Portal guidance overlay retired together with its only trigger")
 	exp2._draw_hud_world_overlays()
 	_check(is_instance_valid(exp2._overlay_canvas), "Flight overlay still draws after the fake controls were removed")
-	_check(not bool(exp2._pause_panel.get_node_or_null("ExtractButton")), "Pause menu has no dead extract button")
+	var pause_btn_texts: Array[String] = []
+	for node in exp2._pause_panel.find_children("*", "Button", true, false):
+		pause_btn_texts.append((node as Button).text)
+	for promised in ["EXTRACT", "HANGAR", "Сохрани", "ВЕРНУТЬСЯ"]:
+		var liar := false
+		for txt in pause_btn_texts:
+			if str(txt).to_upper().contains(promised.to_upper()):
+				liar = true
+		_check(not liar, "Pause menu offers no button that cannot do what its label promises (%s)" % ", ".join(pause_btn_texts))
 	for en in exp2.enemies_root.get_children():
 		en.queue_free()
 	exp2.queue_free()
