@@ -62,8 +62,6 @@ var _heat_bar: ProgressBar
 var _cargo_bar: ProgressBar
 var _power_bar: ProgressBar
 var _threat_bar: ProgressBar
-# "Return to hangar" is a portal action, not a teleport: the button paints guidance.
-var _return_guidance_t: float = 0.0
 # Sector threat: mining and killing pull response wings onto the player.
 var _threat: float = 0.0
 var _salvage_prints: int = 0        # collectible prints claimed this expedition
@@ -79,13 +77,11 @@ var _telemetry_lbl: Label
 var _sector_lbl: Label
 var _min_ach_lbl: Label
 var _hazard_warn_lbl: Label
-var _ret_btn: Button
 var _hint_lbl: Label
 var _pause_panel: PanelContainer
 var _pause_title_lbl: Label
 var _pause_lang_lbl: Label
 var _pause_res_btn: Button
-var _pause_ext_btn: Button
 
 var _extracting: bool = false
 var autopilot_override: bool = false
@@ -604,20 +600,6 @@ func _build_expedition_hud() -> void:
 	_radar_canvas.draw.connect(_draw_radar_minimap)
 	rvb.add_child(_radar_canvas)
 
-	_ret_btn = Button.new()
-	_ret_btn.clip_text = true
-	_ret_btn.custom_minimum_size = Vector2(0, 34)
-	_ret_btn.add_theme_font_size_override("font_size", 13)
-	ThemeHelper.style_accent_button(_ret_btn, Color(0.18, 0.78, 0.56))
-	_ret_btn.pressed.connect(func():
-		_pause_panel.visible = false
-		_set_mouse_flight_mode(true)
-		_return_guidance_t = 12.0
-		_hud_alert(L.tr_ui("hud_return_guidance"), Color(0.36, 0.98, 0.86))
-		AudioManager.play_sfx("ui_click", 0.04, 0.7)
-)
-	rvb.add_child(_ret_btn)
-
 	# 4. Bottom Flight Controls Hint Pill
 	_hint_pill = PanelContainer.new()
 	_hint_pill.name = "FlightHintPill"
@@ -689,15 +671,6 @@ func _build_expedition_hud() -> void:
 	)
 	pvb.add_child(_pause_res_btn)
 
-	_pause_ext_btn = Button.new()
-	_pause_ext_btn.custom_minimum_size = Vector2(0, 44)
-	ThemeHelper.style_accent_button(_pause_ext_btn, Color(0.18, 0.82, 0.52))
-	_pause_ext_btn.pressed.connect(func():
-		_pause_panel.visible = false
-		_set_mouse_flight_mode(true)
-)
-	pvb.add_child(_pause_ext_btn)
-
 	ThemeHelper.animate_entry(_status_box, 0.0, Vector2(0.96, 0.96))
 	ThemeHelper.animate_entry(_radar_box, 0.04, Vector2(0.96, 0.96))
 	ThemeHelper.animate_entry(_min_task_pill, 0.06, Vector2(0.97, 0.97))
@@ -734,6 +707,9 @@ func _make_hud_bar(parent: VBoxContainer, loc_key: String, col: Color) -> Progre
 	_bar_val_lbls[loc_key] = vl
 	return pb
 
+# Extraction stays a portal action on purpose: the pause menu and the flight HUD
+# deliberately have no "return" or "extract" button, because a control that only
+# closes a panel or advertises an unbound hotkey is a lie to the player.
 func _apply_hud_localization() -> void:
 	if not is_instance_valid(_sector_lbl):
 		return
@@ -742,12 +718,10 @@ func _apply_hud_localization() -> void:
 		var l: Label = _bar_name_lbls[k]
 		if is_instance_valid(l):
 			l.text = L.tr_ui(str(k))
-	_ret_btn.text = L.tr_ui("hud_return_hangar")
 	_hint_lbl.text = L.tr_ui("hud_flight_hint")
 	_pause_title_lbl.text = L.tr_ui("pause_title")
 	_pause_lang_lbl.text = L.tr_ui("settings_language") + ":"
 	_pause_res_btn.text = L.tr_ui("pause_resume")
-	_pause_ext_btn.text = L.tr_ui("pause_extract")
 	if is_instance_valid(_gate_lbl_3d):
 		_gate_lbl_3d.text = L.tr_ui("warp_gate_3d")
 
@@ -940,22 +914,6 @@ func _draw_hud_world_overlays() -> void:
 			_overlay_canvas.draw_string(ThemeHelper.font_mono, aim_screen_pos + Vector2(28, 36),
 				"LOCKED", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1.0, 0.78, 0.25, 0.9 * xh_a))
 
-	# Portal guidance: chevrons from the crosshair to the warp gate, with live range.
-	if _return_guidance_t > 0.0 and is_instance_valid(_warp_gate):
-		var gpos: Vector2 = _cam.unproject_position(_warp_gate.global_position)
-		var gdist: float = player_ship.global_position.distance_to(_warp_gate.global_position)
-		var gvec: Vector2 = gpos - center
-		if gvec.length_squared() > 1.0:
-			var gdir: Vector2 = gvec.normalized()
-			var gc := Color(0.36, 0.98, 0.86, 0.86)
-			for si in range(1, 5):
-				var p0: Vector2 = center + gdir * (34.0 + float(si) * 24.0)
-				_overlay_canvas.draw_line(p0, p0 + gdir.rotated(2.55) * 10.0, gc, 2.2)
-				_overlay_canvas.draw_line(p0, p0 + gdir.rotated(-2.55) * 10.0, gc, 2.2)
-			if ThemeHelper.font_mono:
-				_overlay_canvas.draw_string(ThemeHelper.font_mono, gpos + Vector2(-46, 36),
-					"WARP %dm" % int(round(gdist)), HORIZONTAL_ALIGNMENT_CENTER, 92, 12, gc)
-
 	var scan_range := float(player_ship.stats.get("scanner_range", 0.0))
 	if scan_range > 1.0:
 		for ast in asteroids_root.get_children():
@@ -1056,8 +1014,6 @@ func _process(delta: float) -> void:
 	if not is_instance_valid(player_ship) or _extracting:
 		return
 
-	if _return_guidance_t > 0.0:
-		_return_guidance_t = maxf(0.0, _return_guidance_t - delta)
 	_radar_sweep_angle = fmod(_radar_sweep_angle + delta * 2.1, TAU)
 
 	var neb := get_node_or_null("NebulaParticles")

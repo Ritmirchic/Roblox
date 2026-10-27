@@ -4,6 +4,32 @@ A complete standalone 3D space game: modular ship engineering on a real 3D grid,
 magnetic recovery, orbital combat, a collectible crew-card economy, a live sector market and UTC-rotating
 achievements. No external runtimes required.
 
+## v2.4.1 — Two Fake Controls Deleted
+
+### The pause menu no longer lies
+"EXTRACT TO HANGAR (KEEP CARGO)" only hid the pause panel — it never extracted anything, which is
+exactly the kind of dead button this project refuses to ship. It is gone: `SpaceExpedition3D` lost
+`_pause_ext_btn` entirely (no hidden node, no orphaned code path), and the pause menu keeps the two
+controls it can actually honour — *resume flight* and *language*.
+
+### The HUD under the radar no longer advertises a key that does nothing
+"HANGAR [H]" was promising a hotkey that is not bound anywhere: `SpaceExpedition3D._unhandled_input`
+handles Esc/Tab, C, T and Z, never H. The button and its portal-guidance chevron overlay (its only
+trigger) were removed together, so no half-dead feature is left behind. Extraction stays what it has
+always been in this build — fly into the warp portal, which is labelled in-world and tracked on the
+radar, and the flight hint already says exactly that.
+
+### No dead strings
+`pause_extract`, `hud_return_hangar`, `hud_return_guidance` and the stale `hud_flight_controls` block
+(which still documented `[Tab] Cursor` and `[H] Hangar`) were deleted from all ten languages instead of
+being left as unreferenced text. `TestRunner` now asserts the reverse: that those identifiers are absent
+from the HUD source and that the localization file no longer carries those keys, so a future edit cannot
+quietly re-introduce a button with no binding.
+
+### Verified
+`pytest` static/spec suite plus the Godot engine suite run in CI against the exported Windows build and
+the installed `SPACE_MINER.exe` self-test.
+
 ## v2.4.0 — Real Pilots, a Brutality Ladder, and Honest Drop Odds
 
 ### 1. Every crew member is now a *pilot*, not a mannequin in a paint job

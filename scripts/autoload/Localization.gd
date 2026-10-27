@@ -45,18 +45,6 @@ const UI_STRINGS: Dictionary = {
 		"tr": "KÖPRÜ FOLYOLARI: PAZAR +%d%% • RADAR +%d%% • ONARIM +%d%%",
 	},
 
-	"hud_return_guidance": {
-		"ru": "Возврат только через warp-портал — цель обозначена на экране",
-		"en": "Return is portal-only — the gate is marked on screen",
-		"es": "El regreso es solo por portal: la puerta está marcada en pantalla",
-		"de": "Rückkehr nur per Warp-Portal — das Tor ist auf dem Bildschirm markiert",
-		"fr": "Retour uniquement par le portail warp — la porte est marquée à l'écran",
-		"pt": "Retorno somente pelo portal warp — o portão está marcado na tela",
-		"zh": "只能通过跃迁门返航 — 已在屏幕上标出",
-		"ja": "帰還はワープ門のみ — 画面上に目標を表示",
-		"ko": "귀환은 워프 포털로만 — 화면에 표시됨",
-		"tr": "Dönüş yalnızca warp kapısıyla — kapı ekranda işaretlendi",
-	},
 	"hud_threat": {
 		"ru": "УГРОЗА",
 		"en": "THREAT",
@@ -718,18 +706,6 @@ const UI_STRINGS: Dictionary = {
 		"ja": "フライトを再開 [ESC]",
 		"ko": "비행 재개 [ESC]",
 		"tr": "UÇUŞA DEVAM ET [ESC]",
-	},
-	"pause_extract": {
-		"ru": "ВЕРНУТЬСЯ В АНГАР (СОХРАНИТЬ РУДУ)",
-		"en": "EXTRACT TO HANGAR (KEEP CARGO)",
-		"es": "VOLVER AL HANGAR (GUARDAR CARGA)",
-		"de": "ZUM HANGAR ZURÜCKKEHREN (FRACHT SICHERN)",
-		"fr": "RETOURNER AU HANGAR (GARDER LA SOUTE)",
-		"pt": "RETORNAR AO HANGAR (MANTER CARGA)",
-		"zh": "安全跃迁返回机库（保留全部矿石）",
-		"ja": "ハンガーへ帰還（貨物を保持）",
-		"ko": "격납고로 귀환 (화물 보존)",
-		"tr": "HANGARA DÖN (KARGOYU KORU)",
 	},
 	"game_subtitle": {
 		"ru": "МОДУЛЬНАЯ 3D-ИНЖЕНЕРИЯ • ДОБЫЧА РУДЫ • КАРТЫ ЭКИПАЖА",
@@ -1571,22 +1547,6 @@ const UI_STRINGS: Dictionary = {
 	"hud_mag_radar": {
 		"ru": "  •  МАГ-РАДАР: %.0fм", "en": "  •  MAG-RADAR: %.0fm", "es": "  •  MAG-RADAR: %.0fm", "de": "  •  MAG-RADAR: %.0fm", "fr": "  •  RADAR-MAG : %.0fm",
 		"pt": "  •  MAG-RADAR: %.0fm", "zh": "  •  磁力制导: %.0f米", "ja": "  •  磁気誘導: %.0fm", "ko": "  •  자력 유도: %.0fm", "tr": "  •  MAG-RADAR: %.0fm",
-	},
-	"hud_return_hangar": {
-		"ru": "В АНГАР [H]", "en": "HANGAR [H]", "es": "HANGAR [H]", "de": "HANGAR [H]", "fr": "HANGAR [H]",
-		"pt": "HANGAR [H]", "zh": "返回机库 [H]", "ja": "ハンガー帰還 [H]", "ko": "격납고 귀환 [H]", "tr": "HANGARA DÖN [H]",
-	},
-	"hud_flight_controls": {
-		"ru": "[W/S] Тяга  •  [A/D] Стрейф  •  [Space/Ctrl] Вверх/Вниз  •  [Q/E] Крен  •  [Shift] Форсаж  •  [ЛКМ] Огонь  •  [ПКМ] Лазер добычи  •  [Tab] Курсор  •  [H] Ангар",
-		"en": "[W/S] Thrust • [A/D] Strafe • [Space/Ctrl] Up/Down • [Q/E] Roll • [Shift] Boost • [LMB] Fire • [RMB] Mine • [Tab] Cursor • [H] Hangar",
-		"es": "[W/S] Impulso • [A/D] Lateral • [Space/Ctrl] Subir/Bajar • [Shift] Turbo • [BIZ] Fuego • [BDR] Minar • [Tab] Cursor • [H] Hangar",
-		"de": "[W/S] Schub • [A/D] Strafe • [Space/Ctrl] Hoch/Runter • [Shift] Boost • [LMT] Feuer • [RMT] Bergbau • [Tab] Maus • [H] Hangar",
-		"fr": "[W/S] Poussée • [A/D] Latéral • [Espace/Ctrl] Haut/Bas • [Shift] Boost • [ClicG] Tir • [ClicD] Miner • [Tab] Curseur • [H] Hangar",
-		"pt": "[W/S] Impulso • [A/D] Lateral • [Espaço/Ctrl] Subir/Descer • [Shift] Turbo • [BE] Atirar • [BD] Minerar • [Tab] Cursor • [H] Hangar",
-		"zh": "[W/S] 推进 • [A/D] 横移 • [空格/Ctrl] 升降 • [Q/E] 翻滚 • [Shift] 加力 • [左键] 射击 • [右键] 采矿 • [Tab] 鼠标 • [H] 机库",
-		"ja": "[W/S] 推進 • [A/D] 水平移動 • [Space/Ctrl] 上昇/下降 • [Shift] ブースト • [左クリック] 射撃 • [右クリック] 採掘 • [H] 帰還",
-		"ko": "[W/S] 추진 • [A/D] 수평이동 • [Space/Ctrl] 상승/하강 • [Shift] 부스트 • [좌클릭] 사격 • [우클릭] 채굴 • [H] 귀환",
-		"tr": "[W/S] İtiş • [A/D] Yanal • [Boşluk/Ctrl] Yukarı/Aşağı • [Shift] İtici • [Sol] Ateş • [Sağ] Kazı • [Tab] İmleç • [H] Hangar",
 	},
 	"storm_warning": {
 		"ru": "▲ РАЗРЯД ПЛАЗМЕННОГО ШТОРМА! ▲", "en": "▲ PLASMA STORM DISCHARGE! ▲", "es": "▲ ¡TORMENTA DE PLASMA! ▲", "de": "▲ PLASMASTURM-ENTLADUNG! ▲", "fr": "▲ DÉCHARGE DE TEMPÊTE PLASMA ! ▲",
