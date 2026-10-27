@@ -404,6 +404,29 @@ const results = await page.evaluate(async () => {
     return denied && opened && !locked.locked;
   });
 
+  // ---------------------------------------------------------------- camera
+  await checkAsync('camera: snaps behind the player after a teleport', async () => {
+    p.setPosition(60, g.world.groundY(60, -60) + 0.4, -60);
+    await sleep(200);
+    const head = new p.position.constructor(p.position.x, p.position.y + 1.6, p.position.z);
+    const d = p.cameraPos.distanceTo(head);
+    return d < 12 ? true : `camDist=${d.toFixed(2)}`;
+  });
+  check('camera: roofed interiors use the head camera', () => {
+    p.setPosition(-700.5, g.world.groundY(-700.5, -643) + 0.35, -643);
+    const roofed = p.underRoof();
+    for (let i = 0; i < 40; i++) p.updateCamera(0.05);
+    const flat = Math.hypot(p.cameraPos.x - p.position.x, p.cameraPos.z - p.position.z);
+    return roofed && flat < 0.7 ? true : `roofed=${roofed} headDist=${flat.toFixed(2)}`;
+  });
+  check('camera: X toggles first and third person', () => {
+    const before = p.viewMode;
+    p.toggleView();
+    const changed = p.viewMode !== before;
+    p.toggleView();
+    return changed && p.viewMode === before ? true : `before=${before} now=${p.viewMode}`;
+  });
+
   return out;
 });
 

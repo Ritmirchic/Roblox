@@ -652,7 +652,7 @@ class Game {
     this.updateWorldAudio(dt);
 
     // time of day and weather
-    this.sky.update(dt, this.camera, p.position);
+    this.sky.update(dt, this.camera, p.position, { indoor: this.player.underRoof() });
 
     // stamina/health hooks
     this.progression.update?.(dt);

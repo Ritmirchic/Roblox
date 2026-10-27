@@ -353,13 +353,20 @@ export class Player {
 
   /** True when there is a ceiling/roof close above the player's head. */
   underRoof() {
+    if (this._roofTimer === undefined) { this._roofTimer = 0; this._roofCached = false; }
+    this._roofTimer -= this._roofDt || 0.016;
+    if (this._roofTimer > 0) return this._roofCached;
+    this._roofTimer = 0.2;
     const p = this.position;
-    const boxes = this.collision.grid.query(p.x - 0.5, p.z - 0.5, p.x + 0.5, p.z + 0.5, this._roofScratch || (this._roofScratch = []));
-    for (const b of boxes) {
-      if (b.tag !== 'ceiling' && b.tag !== 'roof') continue;
-      if (b.minY > p.y + 1.3 && b.minY < p.y + 4.2) return true;
-    }
-    return false;
+    const up = this._roofUp || (this._roofUp = new THREE.Vector3(0, 1, 0));
+    const hit = this.collision.raycast(
+      new THREE.Vector3(p.x, p.y + this.height * 0.92, p.z),
+      up,
+      4.2,
+      { ignoreTerrain: true, step: 0.4 },
+    );
+    this._roofCached = hit < 4.2;
+    return this._roofCached;
   }
 
   updateCamera(dt) {

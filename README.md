@@ -83,7 +83,7 @@ sector map.
 npm install
 npm run start      # dev server on http://127.0.0.1:8080
 npm run build      # bundles release/web/game.js
-npm test           # 54-check automated gameplay suite (headless Chromium)
+npm test           # 57-check automated gameplay suite (headless Chromium)
 npm run release    # produces the Windows and source archives
 ```
 

@@ -194,7 +194,8 @@ export class SkySystem {
     };
   }
 
-  update(dt, camera, playerPos) {
+  update(dt, camera, playerPos, opts = {}) {
+    this.indoorBlend = THREE.MathUtils.lerp(this.indoorBlend ?? 0, opts.indoor ? 1 : 0, Math.min(1, dt * 3.5));
     this.timeOfDay = (this.timeOfDay + dt / 60) % 24; // 1 real min = 1 game hour
     const hour = this.timeOfDay;
     const g = this._gradient(hour);
@@ -249,6 +250,9 @@ export class SkySystem {
     this.ambient.color.copy(g.ambSky);
     this.ambient.groundColor.setHex(isNight ? 0x0b0d12 : 0x33302a);
     this.ambient.intensity = g.amb * (1 - cloudCover * 0.2) * (isNight ? 1.15 : 1.25) + w.radStorm * 0.05;
+    // interiors get a soft fill so rooms stay readable instead of pitch black
+    this.ambient.intensity *= 1 + (this.indoorBlend ?? 0) * 1.9;
+    this.ambient.color.lerp(new THREE.Color(0xffe4c4), (this.indoorBlend ?? 0) * 0.65);
 
     this.moon.position.copy(playerPos || camera.position).add(nightDir.clone().multiplyScalar(80));
     this.moon.target.position.copy(playerPos || camera.position);
