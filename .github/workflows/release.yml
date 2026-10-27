@@ -37,7 +37,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: ASHES OF HUMANITY: LAST SIGNAL v1.0.0
+          name: "ASHES OF HUMANITY: LAST SIGNAL v1.0.0"
           body_path: tools/release-notes.md
           files: |
             release/ASHES_OF_HUMANITY_WINDOWS.zip
