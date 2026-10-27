@@ -1,0 +1,24 @@
+{
+  "name": "ashes-of-humanity-last-signal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ASHES OF HUMANITY: LAST SIGNAL - original post-apocalyptic survival action RPG (WebGL2 / Three.js)",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "build": "node tools/build.mjs",
+    "electron": "electron .",
+    "test": "node tools/test-runner.mjs",
+    "shots": "node tools/shots.mjs",
+    "release": "node tools/package.mjs"
+  },
+  "dependencies": {
+    "three": "0.180.0"
+  },
+  "devDependencies": {
+    "@sparticuz/chromium": "137.0.1",
+    "esbuild": "0.24.2",
+    "puppeteer-core": "23.11.1"
+  }
+}

@@ -1,0 +1,9 @@
+node_modules/
+release/
+shots/*.png
+!shots/.gitkeep
+*.log
+.tmp/
+dist/
+build/
+out/
