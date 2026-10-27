@@ -815,3 +815,57 @@ def test_lmb_never_mines_and_lock_directs_fire():
     assert "set_lock_state(" in exp, "the locked enemy must be painted green"
     enemy = (ROOT / "scripts" / "space" / "EnemyShip3D.gd").read_text(encoding="utf-8")
     assert "func set_lock_state(" in enemy and "var elite: bool = false" in enemy
+
+
+def test_rarity_ladder_is_a_collector_ladder():
+    """Packs must stay stingy at the top and combat must never print a Secret.
+
+    A pull economy is only worth having if the rare cards stay rare, and the
+    weights asserted here are the exact ones the station discloses - a silent
+    bump upward would be a balance hole and a lie to the player at once.
+    """
+    pm = (ROOT / "scripts" / "autoload" / "PackManager.gd").read_text(encoding="utf-8")
+    order = ["Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic", "Secret"]
+    packs = {}
+    for pid in ("standard", "elite"):
+        seg = pm[pm.index('"id": "%s"' % pid):]
+        seg = seg[seg.index('"weights": {'):]
+        seg = seg[: seg.index("\n\t\t}")]
+        packs[pid] = {m[0]: float(m[1]) for m in re.findall(r'"(\w+)":\s*([\d.]+)', seg)}
+        w = packs[pid]
+        assert list(w.keys()) == order, (pid, list(w.keys()))
+        assert abs(sum(w.values()) - 100.0) < 1e-6, (pid, sum(w.values()))
+        top = w["Legendary"] + w["Mythic"] + w["Secret"]
+        assert top <= (2.0 if pid == "standard" else 12.0), (pid, "Legendary+ share", top)
+        assert w["Secret"] <= (0.10 if pid == "standard" else 0.60), (pid, "Secret share", w["Secret"])
+        if pid == "elite":
+            assert w["Common"] == 0.0, "the vault box never prints a Common"
+            ladder = ["Rare", "Epic", "Legendary", "Mythic", "Secret"]
+        else:
+            assert w["Common"] > 50.0, "a cheap box is mostly working crew"
+            assert w["Uncommon"] > 20.0
+            ladder = order
+        for hi, lo in zip(ladder, ladder[1:]):
+            assert w[hi] > w[lo], (pid, "not a descending ladder", hi, lo)
+        # and it must fall off hard: 2.5x per step mid-ladder, 8x near the top
+        assert w["Epic"] >= w["Legendary"] * 2.5, (pid, "Epic/Legendary gap too small")
+        assert w["Legendary"] >= w["Secret"] * 8.0, (pid, "Secret is not scarce")
+    assert packs["elite"]["Legendary"] > packs["standard"]["Legendary"]
+    assert packs["elite"]["Secret"] > packs["standard"]["Secret"]
+
+    game = (ROOT / "scripts" / "autoload" / "GameData.gd").read_text(encoding="utf-8")
+    salvage = {}
+    for const in ("SALVAGE_RARITY_WEIGHTS", "SALVAGE_RARITY_WEIGHTS_HEAVY"):
+        seg = game[game.index("const %s: Dictionary = {" % const):]
+        seg = seg[: seg.index("\n}")]
+        salvage[const] = {m[0]: float(m[1]) for m in re.findall(r'"(\w+)":\s*([\d.]+)', seg)}
+        w = salvage[const]
+        assert "Secret" not in w, "%s must never pay out a Secret" % const
+        assert w["Rare"] > w["Epic"] >= w["Legendary"] >= w["Mythic"], w
+    assert "func roll_salvage_rarity" in game and "func salvage_chance" in game
+    assert "SALVAGE_PRINTS_PER_EXPEDITION: int = 2" in game
+    exp = (ROOT / "scripts" / "space" / "SpaceExpedition3D.gd").read_text(encoding="utf-8")
+    assert "GameData.SALVAGE_PRINTS_PER_EXPEDITION" in exp, "salvage prints must be capped per expedition"
+    assert "GameData.roll_salvage_rarity(randf(), heavy)" in exp, "combat must roll the salvage ladder"
+    assert 'GameData.RARITY_ORDER.find(str(c["rarity"])) >= 2' not in exp, \
+        "salvage must not pick uniformly from everything Rare and above"

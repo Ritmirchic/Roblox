@@ -66,6 +66,7 @@ var _threat_bar: ProgressBar
 var _return_guidance_t: float = 0.0
 # Sector threat: mining and killing pull response wings onto the player.
 var _threat: float = 0.0
+var _salvage_prints: int = 0        # collectible prints claimed this expedition
 var _response_cd: float = 16.0
 var _wings_called: int = 0
 var _threat_hot: bool = false
@@ -323,8 +324,15 @@ func _on_enemy_defeated(en: EnemyShip3D, world_pos: Vector3) -> void:
 		_spawn_kill_shockwave(world_pos)
 	if not en.elite:
 		return
-	if bool(en.get_meta("salvage_guaranteed", false)) or randf() < 0.30:
-		_grant_salvage_card(world_pos)
+	# A leader of a heavy response wing always pays a print; everyone else rolls
+	# the normal chance. Either way an expedition caps out, so a hot sector can be
+	# hunted for loot but never farmed into a binder.
+	var heavy := bool(en.get_meta("salvage_guaranteed", false))
+	if _salvage_prints >= GameData.SALVAGE_PRINTS_PER_EXPEDITION:
+		return
+	if heavy or randf() < GameData.salvage_chance(heavy):
+		_salvage_prints += 1
+		_grant_salvage_card(world_pos, heavy)
 
 
 # Elite kills get a set-piece read: an expanding command ring over the wreck.
@@ -356,12 +364,19 @@ func _spawn_kill_shockwave(at: Vector3) -> void:
 	tw.tween_callback(ring.queue_free)
 
 
-# Elite wing leaders carry collectible prints: combat feeds the card chase.
-func _grant_salvage_card(at: Vector3) -> void:
+# Elite wing leaders carry collectible prints: combat feeds the card chase -
+# on its own ladder (see GameData.roll_salvage_rarity), which stops at Mythic
+# and only reaches it when a heavy wing leader is the one that died.
+func _grant_salvage_card(at: Vector3, heavy: bool = false) -> void:
+	var ri := GameData.RARITY_ORDER.find(GameData.roll_salvage_rarity(randf(), heavy))
 	var pool: Array[Dictionary] = []
-	for c in GameData.crew_cards:
-		if GameData.RARITY_ORDER.find(str(c["rarity"])) >= 2:
-			pool.append(c)
+	while ri >= 2 and pool.is_empty():
+		var want: String = GameData.RARITY_ORDER[ri]
+		for c in GameData.crew_cards:
+			if str(c["rarity"]) == want:
+				pool.append(c)
+		if pool.is_empty():
+			ri -= 1
 	if pool.is_empty():
 		return
 	var pick: Dictionary = pool[randi() % pool.size()]

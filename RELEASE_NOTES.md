@@ -4,6 +4,52 @@ A complete standalone 3D space game: modular ship engineering on a real 3D grid,
 magnetic recovery, orbital combat, a collectible crew-card economy, a live sector market and UTC-rotating
 achievements. No external runtimes required.
 
+## v2.4.0 — Real Pilots, a Brutality Ladder, and Honest Drop Odds
+
+### 1. Every crew member is now a *pilot*, not a mannequin in a paint job
+The portrait kernel was rebuilt around flight gear: a smooth enclosed pressure helmet with a
+wide visor ground into the shell (tinted glass, matte bezel, slanted optic slits burning behind
+it), a corrugated neck seal, twin life-support hoses into the chest, a harness with a chest band
+and buckles, thigh holsters and a cargo pouch under the belt, and pauldrons seated on the
+deltoid instead of floating beside the head as bowls. The torso is a rounded suit chassis with
+armour cut as thin shells that hug it, so nothing reads as a slab or a scrap-heap. The v2.3
+"pilot shell for pilots only" pass is gone: the shell is the base and role gear is bolted on top.
+
+### 2. The rarity ladder is now a visible brutality ladder
+One scalar (`brut`, 0..1) drives geometry and lighting together, so rarer genuinely means meaner:
+helmet brow rakes down and thickens, jaw fins sweep back, vents multiply and start to burn,
+war horns appear (two, then three, longer each tier), kill notches are sawn into the chin guard,
+the pauldron grows laminate layers and rim spikes, an armour skirt hangs off the shoulder,
+laminated chest plating and a spiked gorget stack up, and from Legendary up command wings and
+burning nozzle embers spread behind the pack. Shading follows: elites are painted darker with a
+hotter trim, get battle scoring scratched across the plate and elite war stripes on the helm, are
+lit with a stronger rim, sit lower to the camera, bloom harder and grade with more contrast. Common
+crew stay plain, useful and slightly scuffed - the difference is readable at a glance.
+
+### 3. Secret and Legendary cards were far too easy - fixed in both income streams
+- **Packs** (per card, and these are exactly the percentages the station discloses): standard box
+  Common 53.5 / Uncommon 28 / Rare 12.5 / Epic 4.5 / Legendary 1.2 / Mythic 0.24 / **Secret 0.06**;
+  the vault box Uncommon 20 / Rare 44 / Epic 26.3 / Legendary 7.5 / Mythic 1.8 / **Secret 0.4** and
+  never a Common. Legendary-or-better used to be a ~20% per-pack event in the standard box (48% in
+  the vault) with a Secret every 5th vault pack; it is now a ~4.4% per-pack event (26%) with a
+  Secret at 1 in 556 standard packs and 1 in 84 vault packs.
+- **Sector salvage**: elite wing leaders previously picked *uniformly from every card Rare and
+  above*, which made Mythics common and handed out a Secret once every twelve prints. Combat now
+  rolls its own ladder (Rare 62 / Epic 30 / Legendary 7 / Mythic 1, heavy-wing leaders on a
+  46/34/16/4 table), **can never print a Secret**, and an expedition caps at 2 prints total, so a
+  hot sector is worth hunting but not farming. Foil finishes are untouched: the chase for silver,
+  holo, glitter and luminous prints still runs through packs.
+
+### 4. Verification
+32 pytest contracts now pin the whole economy (descending ladders with hard caps on the rare tail,
+the salvage ladder excluding Secret, the expedition honouring the cap) and the new engine test
+`_test_drop_odds_are_honest` recomputes the disclosed table from the live weights, proves the roller
+only obeys that table, samples 6,000 real standard-box rolls and 3,000 vault rolls against the
+published percentages, and sweeps the entire 0..1 salvage range to prove a Secret cannot come out of
+a kill. The art set is re-rendered through the same pipeline with 42 unique SHA-256 digests asserted
+in CI, then exported, installed and run through the packaged self-test.
+
+
 ## v2.3.0 — Hard-Surface Robot Crew Art, Foil Mutations, Lock-Directed Combat
 
 ### 1. The crew cards are re-sculpted as detailed robots

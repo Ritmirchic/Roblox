@@ -1,10 +1,14 @@
 """Hard-surface android bust kernel for the SPACE MINER crew cards (v2.3.0).
 
-Everything a card portrait needs is sculpted here as a signed distance field:
-layered armour plates, a recessed sensor face with emissive optics, temple fins,
-crest/headgear per role, ribbed neck pistons, a reactor core in the chest,
-pauldrons with rivets and trim, articulated arms with class tools, and a
-thruster backpack. Shading lives in tools/render_crew_portraits.py.
+Every crew member is a flight pilot: an enclosed pressure helmet with a
+recessed visor cavity, a breathing grille, ear pods and a neck seal, over a
+laminate-plated flight suit with a reactor core in the sternum, riveted
+pauldrons, articulated arms carrying class tools and a thruster backpack.
+One scalar, `brut`, drives the whole escalation ladder - the rarer the card,
+the heavier the armour, the longer the war horns, the more vents that burn, the
+deeper the kill notches cut into the chin guard and (from tier Legendary up)
+command wings spread behind the shoulders. Shading lives in
+tools/render_crew_portraits.py.
 
 Materials (int ids returned by map_robot):
   1 M_CERAMIC  porcelain shell plates        5 M_EMIT   reactor core / optics
@@ -139,7 +143,8 @@ def map_robot(px, py, pz, P, lean_c, lean_s):
     """P layout (16 floats):
     0 twist, 1 chest, 2 bulk, 3 head scale, 4 arm size, 5 shoulder width,
     6 arm swing L, 7 arm swing R, 8 chassis(0-7), 9 headgear(0-7), 10 crest(0-7),
-    11 optics(0-3), 12 backpack(0-3), 13 pauldron(0-3), 14 face width, 15 nobility.
+    11 optics(0-3), 12 backpack(0-3), 13 pauldron(0-3), 14 face width, 15 nobility,
+    16 brut (0..1 rarity-driven aggression: armour mass, horns, vents, notches, wings).
     """
     x, y, z = rot_y(px, py, pz, lean_c, lean_s)
     tw = P[0]
@@ -165,78 +170,101 @@ def map_robot(px, py, pz, P, lean_c, lean_s):
     cw = 0.190 * chest
 
     # ============================ HEAD =====================================
-    # Bold, readable forms: a dome, a chamfered face block, a protruding visor
-    # and a separate chin guard. Micro-detail comes from the shading pass.
-    hrx = 0.096 * hs
-    hry = 0.118 * hs
-    hrz = 0.112 * hs
-    zc = 0.112 * hs                      # front plane of the face block
-    dome = sd_ellip(x, y, z, 0.0, head_y + 0.030 * hs, -0.010 * hs,
-                    hrx * 1.06, hry * 1.10, hrz * 1.06)
-    faceb = sd_rbox(x, y, z, 0.0, head_y - 0.024 * hs, 0.016 * hs,
-                    hrx * 0.94, 0.072 * hs, hrz * 0.72, 0.030 * hs)
-    chin = sd_rbox(x, y, z, 0.0, head_y - 0.100 * hs, 0.048 * hs,
-                   hrx * 0.56 * face_w, 0.030 * hs, hrz * 0.42, 0.018 * hs)
-    helm = _smin(_smin(dome, faceb, 0.026 * hs), chin, 0.016 * hs)
-    # chamfer the temples so the helm tapers toward the jaw
-    for s in (-1.0, 1.0):
-        px0, py0, pz0 = s * hrx * 1.02, head_y - 0.010 * hs, 0.030 * hs
-        cx_, cy_, cz_ = rot_z(x - px0, y - py0, z - pz0, 1.0, -0.40 * s)
-        cut = sd_box(cx_ + px0, cy_ + py0, cz_ + pz0, px0, py0, pz0,
-                     0.055 * hs, 0.30 * hs, 0.30 * hs)
-        helm = max(helm, -cut)
+    # A pilot's pressure helmet as one smooth, readable form: an egg shell that
+    # tapers into a jaw, a wide visor ground into the front of it, ear discs and
+    # a chin bar. Hardware is bolted onto this, never stacked in place of it.
+    brut = float(P[16])
+    hrx = 0.106 * hs
+    hry = 0.128 * hs
+    hrz = 0.122 * hs
+    zc = 0.118 * hs                      # front plane of the face
+    hy = head_y
+    skull = sd_ellip(x, y, z, 0.0, hy + 0.016 * hs, -0.026 * hs,
+                     hrx * 1.02, hry * 0.90, hrz * (1.13 + 0.03 * brut))
+    jaw = sd_ellip(x, y, z, 0.0, hy - 0.076 * hs, 0.024 * hs,
+                   hrx * (0.80 + 0.10 * brut) * face_w, 0.060 * hs, hrz * 0.74)
+    helm = _smin(skull, jaw, 0.036 * hs)
+    for s in (-1.0, 1.0):                # temples tapered: aerodynamic, not spherical
+        px0, py0, pz0 = s * hrx * 1.05, hy - 0.014 * hs, 0.026 * hs
+        cx_, cy_, cz_ = rot_z(x - px0, y - py0, z - pz0, 1.0, -0.30 * s)
+        helm = max(helm, -(sd_box(cx_ + px0, cy_ + py0, cz_ + pz0, px0, py0, pz0,
+                                  0.048 * hs, 0.26 * hs, 0.26 * hs)))
     d = helm
-    mat = M_CERAMIC
+    mat = M_PAINT
 
-    # ---- visor: dark glass standing proud of the face, in a chrome frame -----
-    vz = 0.098 * hs
-    glass = sd_rbox(x, y, z, 0.0, head_y + 0.004 * hs, vz + 0.014 * hs,
-                    hrx * 0.80, 0.0280 * hs, 0.012 * hs, 0.010 * hs)
-    d, mat = _smat(d, glass, mat, M_LENS, 0.004)
-    frame_o = sd_rbox(x, y, z, 0.0, head_y + 0.004 * hs, vz,
-                      hrx * 0.885, 0.0345 * hs, 0.022 * hs, 0.016 * hs)
-    frame_i = sd_rbox(x, y, z, 0.0, head_y + 0.004 * hs, vz + 0.030 * hs,
-                      hrx * 0.80, 0.0285 * hs, 0.026 * hs, 0.014 * hs)
-    frame = max(frame_o, -frame_i)
-    d, mat = _smat(d, frame, mat, M_CHROME, 0.003)
+    # ---- visor: a shallow bowl cut into the shell, filled with tinted glass -
+    cz = 0.070 * hs
+    sp_o = sd_ellip(x, y, z, 0.0, hy + 0.008 * hs, cz,
+                    hrx * 0.985, 0.0560 * hs, 0.0620 * hs)
+    sp_i = sd_ellip(x, y, z, 0.0, hy + 0.008 * hs, cz - 0.050 * hs,
+                    hrx * 0.90, 0.0585 * hs, 0.0600 * hs)
+    d = max(d, -max(sp_o, -sp_i))
+    lp_o = sd_ellip(x, y, z, 0.0, hy + 0.008 * hs, cz - 0.008 * hs,
+                    hrx * 0.960, 0.0548 * hs, 0.0575 * hs)
+    lp_i = sd_ellip(x, y, z, 0.0, hy + 0.008 * hs, cz - 0.064 * hs,
+                    hrx * 0.940, 0.0608 * hs, 0.0570 * hs)
+    d, mat = _smat(d, max(lp_o, -lp_i), mat, M_LENS, 0.002)
+    # a matte bezel rim following the same curvature, so the glass looks fitted
+    bz_o = sd_ellip(x, y, z, 0.0, hy + 0.008 * hs, cz + 0.004 * hs,
+                    hrx * 0.995, 0.0640 * hs, 0.0655 * hs)
+    bz_i = sd_ellip(x, y, z, 0.0, hy + 0.008 * hs, cz - 0.030 * hs,
+                    hrx * 0.950, 0.0580 * hs, 0.0600 * hs)
+    d, mat = _smat(d, max(bz_o, -bz_i), mat, M_GUNMETAL, 0.003)
 
-    # ---- optics inside the visor --------------------------------------------
-    oz = vz + 0.034 * hs
-    if optics == 0:                      # twin angled optics
+    # ---- optics burning just behind the glass ------------------------------
+    oz = 0.126 * hs
+    vbar = sd_rbox(x, y, z, 0.0, head_y + 0.012 * hs, oz - 0.004 * hs,
+                   hrx * 0.62, 0.0088 * hs, 0.0060 * hs, 0.0045 * hs)
+    d, mat = _smat(d, vbar, mat, M_EMIT, 0.005)
+    if optics == 0:                      # twin slanted visor slits
         for s in (-1.0, 1.0):
-            ox = s * 0.0435 * hs * face_w
-            oy = head_y + 0.006 * hs
-            rx_, ry_, rz_ = rot_z(x - ox, y - oy, z - oz, 1.0, 0.24 * s)
+            ox = s * 0.0405 * hs * face_w
+            oy = head_y + 0.010 * hs
+            rx_, ry_, rz_ = rot_z(x - ox, y - oy, z - oz, 1.0, 0.30 * s)
             eye = sd_rbox(rx_ + ox, ry_ + oy, rz_ + oz, ox, oy, oz,
-                          0.0275 * hs, 0.0100 * hs, 0.0090 * hs, 0.0055 * hs)
-            d, mat = _smat(d, eye, mat, M_EMIT, 0.003)
+                          0.0345 * hs, 0.0050 * hs, 0.0050 * hs, 0.0032 * hs)
+            d, mat = _smat(d, eye, mat, M_EMIT, 0.006)
     elif optics == 1:                    # one continuous visor band
-        band = sd_rbox(x, y, z, 0.0, head_y + 0.006 * hs, oz,
-                       hrx * 0.74, 0.0090 * hs, 0.0085 * hs, 0.0050 * hs)
+        band = sd_rbox(x, y, z, 0.0, head_y + 0.010 * hs, oz,
+                       hrx * 0.78, 0.0064 * hs, 0.0055 * hs, 0.0035 * hs)
         d, mat = _smat(d, band, mat, M_EMIT, 0.003)
         for s in (-1.0, 1.0):
-            hud = sd_rbox(x, y, z, s * hrx * 0.66, head_y - 0.010 * hs, oz,
-                          0.0080 * hs, 0.0160 * hs, 0.0070 * hs, 0.0040 * hs)
+            hud = sd_rbox(x, y, z, s * hrx * 0.60, head_y - 0.004 * hs, oz,
+                          0.0046 * hs, 0.0112 * hs, 0.0042 * hs, 0.0024 * hs)
             d, mat = _smat(d, hud, mat, M_EMIT, 0.002)
     elif optics == 2:                    # cyclops lens with a chrome rim
-        big = sd_capsule(x, y, z, 0.0, head_y + 0.006 * hs, vz + 0.004 * hs,
+        big = sd_capsule(x, y, z, 0.0, head_y + 0.006 * hs, oz - 0.004 * hs,
                          0.0, head_y + 0.006 * hs, oz + 0.004 * hs,
-                         0.0235 * hs, 0.0235 * hs)
+                         0.0215 * hs, 0.0215 * hs)
         d, mat = _smat(d, big, mat, M_EMIT, 0.004)
-        rim = sd_ring_v(x, y, z, 0.0, head_y + 0.006 * hs, oz + 0.006 * hs,
-                        0.0265 * hs, 0.0048 * hs)
+        rim = sd_ring_v(x, y, z, 0.0, head_y + 0.006 * hs, oz + 0.005 * hs,
+                        0.0245 * hs, 0.0044 * hs)
         d, mat = _smat(d, rim, mat, M_CHROME, 0.002)
     else:                                # compound optics: 3 lit dots per side
         for s in (-1.0, 1.0):
             for i in range(3):
-                dot = sd_sphere(x, y, z, s * (0.024 + 0.017 * i) * hs * face_w,
-                                head_y + (0.016 - 0.012 * i) * hs, oz, 0.0082 * hs)
-                d, mat = _smat(d, dot, mat, M_EMIT, 0.0025)
+                dot = sd_sphere(x, y, z, s * (0.026 + 0.018 * i) * hs * face_w,
+                                head_y + (0.018 - 0.014 * i) * hs, oz, 0.0056 * hs)
+                d, mat = _smat(d, dot, mat, M_EMIT, 0.005)
 
-    # brow bar over the visor + a nose keel under it
-    brow = sd_rbox(x, y, z, 0.0, head_y + 0.052 * hs, 0.082 * hs,
-                   hrx * 0.97, 0.0120 * hs, hrz * 0.34, 0.008 * hs)
-    d, mat = _smat(d, brow, mat, M_PAINT, 0.006)
+    # brow bar over the visor + a nose keel under it. The brow rakes down and
+    # thickens with the tier, which is what makes an elite helm read mean.
+    bo = sd_ellip(x, y, z, 0.0, head_y + 0.022 * hs, -0.012 * hs,
+                  hrx * (1.010 + 0.02 * brut), hry * 1.025, hrz * (1.040 + 0.02 * brut))
+    bi = sd_ellip(x, y, z, 0.0, head_y + (0.006 + 0.004 * brut) * hs, -0.030 * hs,
+                  hrx * 1.10, hry * 1.15, hrz * 1.12)
+    d, mat = _smat(d, max(bo, -bi), mat, M_GUNMETAL, 0.006)
+    for s in (-1.0, 1.0):                # brow horns: the helmet's "eyebrows"
+        if brut > 0.45:
+            bh = sd_rbox(x, y, z, s * hrx * 0.62, head_y + (0.060 + 0.010 * brut) * hs,
+                         (0.096 + 0.020 * brut) * hs,
+                         0.0140 * hs * (0.5 + brut), 0.0072 * hs, 0.013 * hs, 0.0045 * hs)
+            px0, py0, pz0 = s * hrx * 0.62, head_y + 0.060 * hs, (0.096 + 0.02 * brut) * hs
+            qx, qy, qz = rot_z(x - px0, y - py0, z - pz0, 1.0, -0.42 * s * brut)
+            bh2 = sd_rbox(qx + px0, qy + py0, qz + pz0, px0, py0, pz0,
+                          0.0150 * hs * (0.5 + brut), 0.0068 * hs, 0.012 * hs, 0.004 * hs)
+            d, mat = _smat(d, bh, mat, M_GUNMETAL, 0.004)
+            d, mat = _smat(d, bh2, mat, M_GUNMETAL, 0.003)
     keel = sd_rbox(x, y, z, 0.0, head_y - 0.040 * hs, zc * 0.98,
                    0.0105 * hs, 0.0225 * hs, 0.014 * hs, 0.006 * hs)
     d, mat = _smat(d, keel, mat, M_CERAMIC, 0.004)
@@ -253,21 +281,21 @@ def map_robot(px, py, pz, P, lean_c, lean_s):
             vent = sd_rbox(x, y, z, s * hrx * 0.95, head_y - 0.028 * hs, 0.036 * hs - 0.030 * hs * i,
                            0.0085 * hs, 0.0190 * hs, 0.0240 * hs, 0.005 * hs)
             d, mat = _smat(d, vent, mat, M_GUNMETAL, 0.003)
-        hinge = sd_sphere(x, y, z, s * hrx * 0.92, head_y - 0.058 * hs, -0.008 * hs,
-                          0.0165 * hs)
-        d, mat = _smat(d, hinge, mat, M_CHROME, 0.004)
-        ear = sd_capsule(x, y, z, s * (hrx * 0.94), head_y + 0.024 * hs, -0.012 * hs,
-                         s * (hrx * 1.16), head_y + 0.024 * hs, -0.012 * hs,
-                         0.0265 * hs, 0.0215 * hs)
-        d, mat = _smat(d, ear, mat, M_GUNMETAL, 0.006)
-        ear_dot = sd_sphere(x, y, z, s * (hrx * 1.18), head_y + 0.024 * hs, -0.012 * hs,
-                            0.0100 * hs)
-        d, mat = _smat(d, ear_dot, mat, M_EMIT, 0.003)
+        hinge = sd_sphere(x, y, z, s * hrx * 0.88, head_y - 0.056 * hs, -0.010 * hs,
+                          0.0150 * hs)
+        d, mat = _smat(d, hinge, mat, M_GUNMETAL, 0.010)
+        ear = sd_capsule(x, y, z, s * (hrx * 0.92), head_y + 0.022 * hs, -0.014 * hs,
+                         s * (hrx * 1.05), head_y + 0.022 * hs, -0.014 * hs,
+                         0.0245 * hs, 0.0205 * hs)
+        d, mat = _smat(d, ear, mat, M_GUNMETAL, 0.014)
+        ear_dot = sd_sphere(x, y, z, s * (hrx * 1.06), head_y + 0.022 * hs, -0.014 * hs,
+                            0.0068 * hs)
+        d, mat = _smat(d, ear_dot, mat, M_GOLD if noble else M_CHROME, 0.006)
         px0, py0, pz0 = s * hrx * 1.00, head_y + 0.076 * hs, -0.020 * hs
         sx_, sy_, sz_ = rot_z(x - px0, y - py0, z - pz0, 1.0, -0.22 * s)
         side = sd_rbox(sx_ + px0, sy_ + py0, sz_ + pz0, px0, py0, pz0,
-                       0.0095 * hs, 0.0250 * hs, 0.0470 * hs, 0.0070 * hs)
-        d, mat = _smat(d, side, mat, M_PAINT, 0.005)
+                       0.0085 * hs, 0.0230 * hs, 0.0420 * hs, 0.0110 * hs)
+        d, mat = _smat(d, side, mat, M_PAINT, 0.016)
         # antenna strut rising behind the ear (silhouette break)
         st = sd_capsule(x, y, z, s * hrx * 1.02, head_y + 0.048 * hs, -hrz * 0.66,
                         s * hrx * 1.10, head_y + 0.128 * hs, -hrz * 0.92,
@@ -333,6 +361,51 @@ def map_robot(px, py, pz, P, lean_c, lean_s):
                          0.0072 * hs, 0.019 * hs, (0.034 - 0.004 * i) * hs, 0.0055 * hs)
             d, mat = _smat(d, ff, mat, M_PAINT, 0.004)
 
+    # ---- tier brutality: jaw fins, burning vents, war horns, kill notches ---
+    if brut > 0.10:
+        for s in (-1.0, 1.0):            # cheek/jaw fins swept back for the profile
+            px0, py0, pz0 = s * hrx * 0.92, head_y - 0.056 * hs, 0.026 * hs
+            sx_, sy_, sz_ = rot_z(x - px0, y - py0, z - pz0, 1.0, -(0.30 + 0.45 * brut) * s)
+            jf = sd_rbox(sx_ + px0, sy_ + py0, sz_ + pz0, px0, py0, pz0,
+                         0.0130 * hs * (0.6 + brut), 0.0280 * hs,
+                         hrz * (0.26 + 0.34 * brut), 0.007 * hs)
+            d, mat = _smat(d, jf, mat, M_PAINT, 0.005)
+        nv_ = 2 + int(3.0 * brut)        # helmet vents, lit hotter up the ladder
+        for i in range(nv_):
+            for s in (-1.0, 1.0):
+                slit = sd_rbox(x, y, z, s * hrx * 1.12,
+                               head_y + (0.070 - 0.019 * i) * hs, -hrz * 0.30,
+                               0.0090 * hs, 0.0058 * hs, hrz * 0.26, 0.003 * hs)
+                d, mat = _smat(d, slit, mat, M_EMIT if brut > 0.55 else M_GUNMETAL, 0.0025)
+    if brut > 0.30:                      # war horns: longer, thicker, more of them
+        nh = 2 + int(1.6 * brut)
+        for s in (-1.0, 1.0):
+            for i in range(nh):
+                ln = (0.050 + 0.070 * brut) * (1.0 - 0.20 * i)
+                ax0 = s * hrx * (0.92 + 0.10 * i)
+                ay0 = head_y + (0.098 - 0.028 * i) * hs
+                az0 = (-0.010 - 0.026 * i) * hs
+                horn = sd_capsule(x, y, z, ax0, ay0, az0,
+                                  s * (hrx * 0.92 + ln * 1.30 * hs),
+                                  ay0 + ln * (1.05 + 0.35 * brut) * hs * 1.0,
+                                  az0 - ln * 1.55 * hs,
+                                  0.0170 * hs * (1.0 - 0.20 * i), 0.0032 * hs)
+                d, mat = _smat(d, horn, mat, M_GUNMETAL if noble else M_CERAMIC, 0.005)
+    if brut > 0.48:                      # kill notches sawn into the chin guard
+        nn = 2 + int(4.0 * brut)
+        for i in range(nn):
+            nx0 = -hrx * (0.40 + 0.12 * brut) + 0.0145 * hs * i
+            notch = sd_box(x, y, z, nx0, head_y - 0.098 * hs, zc * 1.02,
+                           0.0052 * hs, 0.0120 * hs, 0.026 * hs)
+            d = max(d, -notch)
+    if brut > 0.52 and crest == 0:       # elites always keep a blade comb
+        for i in range(4):
+            bl = sd_rbox(x, y, z, 0.0, head_y + (0.120 - 0.006 * i) * hs,
+                         (0.016 - 0.028 * i) * hs,
+                         0.0062 * hs, (0.031 - 0.005 * i) * hs, (0.030 - 0.004 * i) * hs,
+                         0.005 * hs)
+            d, mat = _smat(d, bl, mat, M_GOLD if noble else M_PAINT, 0.004)
+
     # ---- role headgear ------------------------------------------------------
     if gear == 1:                        # miner hard hat with a forehead lamp
         hat = sd_ellip(x, y, z, 0.0, head_y + 0.070 * hs, -0.006 * hs,
@@ -350,14 +423,15 @@ def map_robot(px, py, pz, P, lean_c, lean_s):
             knob = sd_sphere(x, y, z, s * hrx * 1.06, head_y + 0.070 * hs, -hrz * 0.30,
                               0.0125 * hs)
             d, mat = _smat(d, knob, mat, M_CHROME, 0.004)
-    elif gear == 2:                      # pilot helmet shell + breathing hoses
-        shell = sd_ellip(x, y, z, 0.0, head_y + 0.010 * hs, -0.006 * hs,
-                         hrx * 1.20, hry * 1.20, hrz * 1.18)
-        shell = max(shell, -(sd_box(x, y, z, 0.0, head_y - 0.030 * hs, hrz * 1.05,
-                                    hrx * 1.3, hry * 1.1, hrz * 0.9)))
-        shell = max(shell, -(sd_rbox(x, y, z, 0.0, head_y + 0.004 * hs, hrz * 1.10,
-                                    hrx * 0.86, 0.0400 * hs, 0.060 * hs, 0.020 * hs)))
-        d, mat = _smat(d, shell, mat, M_CERAMIC, 0.012)
+    elif gear == 2:                      # line pilot: a rail ridging the shell
+        rail = sd_rbox(x, y, z, 0.0, head_y + 0.130 * hs, -0.014 * hs,
+                       0.0085 * hs, 0.0155 * hs, hrz * 0.74, 0.006 * hs)
+        d, mat = _smat(d, rail, mat, M_PAINT, 0.005)
+        for i in range(3):
+            rib = sd_rbox(x, y, z, 0.0, head_y + (0.126 - 0.020 * i) * hs,
+                          (0.030 - 0.052 * i) * hs,
+                          0.0118 * hs, 0.0058 * hs, 0.0160 * hs, 0.0035 * hs)
+            d, mat = _smat(d, rib, mat, M_GUNMETAL, 0.003)
         seam = sd_rbox(x, y, z, 0.0, head_y - 0.046 * hs, hrz * 0.96,
                        hrx * 0.90, 0.010 * hs, 0.016 * hs, 0.006 * hs)
         d, mat = _smat(d, seam, mat, M_GUNMETAL, 0.005)
@@ -367,8 +441,8 @@ def map_robot(px, py, pz, P, lean_c, lean_s):
                               0.0125 * hs, 0.0145 * hs)
             d, mat = _smat(d, hose, mat, M_HOSE, 0.006)
     elif gear == 3:                      # engineer weld mask pushed up on the brow
-        mask = sd_rbox(x, y, z, 0.0, head_y + 0.104 * hs, hrz * 0.62,
-                       hrx * 1.00, 0.038 * hs, 0.046 * hs, 0.018 * hs)
+        mask = sd_rbox(x, y, z, 0.0, head_y + 0.128 * hs, hrz * 0.50,
+                       hrx * 0.92, 0.024 * hs, 0.038 * hs, 0.015 * hs)
         d, mat = _smat(d, mask, mat, M_GUNMETAL, 0.008)
         slit = sd_rbox(x, y, z, 0.0, head_y + 0.106 * hs, hrz * 0.86,
                        hrx * 0.64, 0.0095 * hs, 0.007 * hs, 0.006 * hs)
@@ -415,6 +489,20 @@ def map_robot(px, py, pz, P, lean_c, lean_s):
                           -hrz * 0.60, 0.0075 * hs, 0.0075 * hs, 0.028 * hs, 0.004 * hs)
             d, mat = _smat(d, dfn, mat, M_CERAMIC, 0.004)
 
+    # ---- life-support hoses: the pilot signature, on every crew member ------
+    for s in (-1.0, 1.0):
+        for k in range(2):
+            r0 = 0.0105 * hs * (1.0 + 0.35 * brut) - 0.0022 * k
+            hx0 = s * hrx * (1.04 + 0.06 * k)
+            hz0 = hrz * (0.34 - 0.30 * k)
+            hose = sd_capsule(x, y, z, hx0, head_y - (0.042 + 0.014 * k) * hs, hz0,
+                              s * (hrx * 1.30 + 0.010 * k), head_y - (0.150 + 0.020 * k) * hs,
+                              hz0 * 0.30 - hrz * 0.34, r0, r0 * 1.12)
+            d, mat = _smat(d, hose, mat, M_HOSE, 0.006)
+            fitting = sd_rbox(x, y, z, s * (hrx * 1.06), head_y - 0.150 * hs, hz0 * 0.20,
+                              0.0105 * hs, 0.0105 * hs, 0.0130 * hs, 0.004)
+            d, mat = _smat(d, fitting, mat, M_CHROME, 0.003)
+
     # ============================ NECK =====================================
     neck_r = 0.062 * bulk
     neck = sd_capsule(x, y, z, 0.0, head_y - 0.130 * hs, -0.008 * hs,
@@ -430,26 +518,56 @@ def map_robot(px, py, pz, P, lean_c, lean_s):
                       neck_r + 0.011 * hs - 0.0025 * i, 0.0072 * hs)
         d, mat = _smat(d, col, mat, M_HOSE, 0.003)
 
-    # ============================ TORSO ====================================
-    torso = sd_rbox(x, y, z, 0.0, chest_y + 0.022, 0.004, cw, 0.150, 0.096 * chest, 0.042)
-    waist = sd_rbox(x, y, z, 0.0, 1.058, 0.000, cw * 0.78, 0.084, 0.090 * chest, 0.036)
-    pelvis = sd_rbox(x, y, z, 0.0, hip_y, 0.002, cw * 0.88, 0.080, 0.098 * chest, 0.038)
-    torso = _smin(_smin(torso, waist, 0.052), pelvis, 0.048)
-    d, mat = _smat(d, torso, mat, M_GUNMETAL, 0.010)
+    # ============================ TORSO =====================================
+    # A pressure suit first - one rounded chassis in dark fabric - and then
+    # armour ground as thin shells that hug it, so nothing floats off the body.
+    ta = cw * (1.00 + 0.07 * brut)
+    tb = 0.152
+    tc = 0.098 * chest
+    torso = sd_ellip(x, y, z, 0.0, chest_y + 0.026, 0.002, ta, tb, tc)
+    waist = sd_ellip(x, y, z, 0.0, 1.060, 0.000, ta * 0.80, 0.084, tc * 0.94)
+    pelvis = sd_ellip(x, y, z, 0.0, hip_y, 0.002, ta * 0.90, 0.080, tc * 1.02)
+    torso = _smin(_smin(torso, waist, 0.055), pelvis, 0.050)
+    d, mat = _smat(d, torso, mat, M_HOSE, 0.026)      # the suit: dark, matte cloth
 
-    # layered pectoral plates with a sternum keel
-    pec = sd_rbox(x, y, z, 0.088 * chest, chest_y + 0.060, 0.128 * chest,
-                  0.084 * chest, 0.068, 0.030 * chest, 0.024)
-    pec = _smin(pec, sd_rbox(x, y, z, -0.088 * chest, chest_y + 0.060, 0.128 * chest,
-                             0.084 * chest, 0.068, 0.030 * chest, 0.024), 0.006)
-    keel = sd_rbox(x, y, z, 0.0, chest_y - 0.006, 0.160 * chest,
-                   0.022 * chest, 0.094, 0.014 * chest, 0.012)
-    pec = _smin(pec, keel, 0.006)
-    d, mat = _smat(d, pec, mat, M_PAINT, 0.005)
+    # chest plate: the front slice of a slightly larger, forward-shifted ellipsoid
+    cp_o = sd_ellip(x, y, z, 0.0, chest_y + 0.036, 0.014,
+                    ta * 0.99, 0.138, tc * 1.10)
+    cp_i = sd_ellip(x, y, z, 0.0, chest_y + 0.026, -0.014,
+                    ta * 1.03, 0.158, tc * 1.14)
+    chestplate = max(cp_o, -cp_i)
+    chestplate = max(chestplate, -(sd_box(x, y, z, 0.0, chest_y - 0.150, 0.0,
+                                          0.50, 0.080, 0.40)))
+    d, mat = _smat(d, chestplate, mat, M_PAINT, 0.010)
+    for s in (-1.0, 1.0):                # pectoral plates, raked toward the keel
+        px0, py0, pz0 = s * ta * 0.46, chest_y + 0.052, tc * 1.08
+        qx, qy, qz = rot_z(x - px0, y - py0, z - pz0, 1.0, -0.16 * s)
+        pecl = sd_rbox(qx + px0, qy + py0, qz + pz0, px0, py0, pz0,
+                       0.0660, 0.0480, 0.0260, 0.012)
+        d, mat = _smat(d, pecl, mat, M_PAINT, 0.010)
+    keel = sd_rbox(x, y, z, 0.0, chest_y - 0.010, tc * 1.10,
+                   0.020 * chest, 0.080, 0.012 * chest, 0.009)
+    d, mat = _smat(d, keel, mat, M_GUNMETAL, 0.004)
+    if brut > 0.30:                      # laminated plating: one layer per tier step
+        nl = 1 + int(2.2 * brut)
+        for i in range(nl):
+            la = ta * (0.94 - 0.055 * i)
+            ly0 = chest_y + 0.112 - 0.058 * i
+            lo = sd_ellip(x, y, z, 0.0, ly0, 0.018 + 0.004 * i, la, 0.050, tc * 1.15)
+            li = sd_ellip(x, y, z, 0.0, ly0, -0.012 + 0.004 * i, la * 1.05, 0.064, tc * 1.20)
+            d, mat = _smat(d, max(lo, -li), mat, M_CERAMIC if i % 2 else M_GUNMETAL, 0.005)
+        if brut > 0.62:                  # spiked gorget across the collar
+            for i in range(3):
+                gx0 = (i - 1) * 0.054 * chest
+                gp = sd_rbox(x, y, z, gx0, chest_y + 0.160, 0.052,
+                             0.017 * (1.0 + 0.3 * brut), 0.0150, 0.022, 0.006)
+                d, mat = _smat(d, gp, mat, M_GOLD if noble else M_CHROME, 0.004)
 
-    # yoke / collar plate
-    yoke = sd_rbox(x, y, z, 0.0, chest_y + 0.138, 0.006, cw * 0.86, 0.030, 0.094 * chest, 0.020)
-    d, mat = _smat(d, yoke, mat, M_GUNMETAL, 0.005)
+    # yoke: a shoulder collar ground over the traps, open under the arms
+    yo = sd_ellip(x, y, z, 0.0, chest_y + 0.138, 0.004, ta * 1.02, 0.052, tc * 1.07)
+    yi = sd_ellip(x, y, z, 0.0, chest_y + 0.104, 0.004, ta * 1.08, 0.070, tc * 1.13)
+    yoke = max(yo, -yi)
+    d, mat = _smat(d, yoke, mat, M_GUNMETAL, 0.006)
     for s in (-1.0, 1.0):                # collar struts
         cst = sd_rbox(x, y, z, s * cw * 0.62, chest_y + 0.152, 0.030,
                       0.020 * chest, 0.016, 0.070 * chest, 0.008)
@@ -457,7 +575,7 @@ def map_robot(px, py, pz, P, lean_c, lean_s):
 
     # reactor core in the sternum
     core_cy = chest_y + 0.040
-    core_cz = 0.176 * chest
+    core_cz = tc * 1.16
     bezel = sd_ring_v(x, y, z, 0.0, core_cy, core_cz, 0.040 * chest, 0.0095 * chest)
     d, mat = _smat(d, bezel, mat, M_CHROME, 0.006)
     core = sd_sphere(x, y, z, 0.0, core_cy, core_cz - 0.006, 0.029 * chest)
@@ -469,27 +587,49 @@ def map_robot(px, py, pz, P, lean_c, lean_s):
                        0.036 * chest, 0.0038 * chest, 0.004 * chest)
         d, mat = _smat(d, spoke, mat, M_GOLD if noble else M_CHROME, 0.003)
 
+    # ======================= FLIGHT-SUIT HARNESS ============================
+    # The pilot rig: a chest band, two short shoulder straps and buckles, kept
+    # horizontal so it reads as harness and never as ribbon scrawled on a plate.
+    for s in (-1.0, 1.0):
+        cband = sd_rbox(x, y, z, s * ta * 0.44, chest_y + 0.084, tc * 1.08,
+                        0.0720, 0.0150, 0.0130, 0.006)
+        d, mat = _smat(d, cband, mat, M_HOSE, 0.005)
+        strap = sd_capsule(x, y, z, s * ta * 0.54, chest_y + 0.170, tc * 0.92,
+                           s * ta * 0.48, chest_y + 0.076, tc * 1.06,
+                           0.0180 * (1.0 + 0.20 * brut), 0.0150 * (1.0 + 0.20 * brut))
+        d, mat = _smat(d, strap, mat, M_HOSE, 0.006)
+        bk = sd_rbox(x, y, z, s * ta * 0.28, chest_y + 0.084, tc * 1.14,
+                     0.0150, 0.0122, 0.0090, 0.004)
+        d, mat = _smat(d, bk, mat, M_GOLD if noble else M_CHROME, 0.004)
+        # thigh holster + cargo pouch: the loadout under the belt
+        hol = sd_rbox(x, y, z, s * ta * 0.80, 1.000, tc * 0.66,
+                      0.0240, 0.0440, 0.0280, 0.010)
+        d, mat = _smat(d, hol, mat, M_GUNMETAL, 0.010)
+        pouch = sd_rbox(x, y, z, s * ta * 0.70, 0.926, tc * 0.94,
+                        0.0210, 0.0210, 0.0180, 0.007)
+        d, mat = _smat(d, pouch, mat, M_HOSE, 0.006)
+
     # rib vents on both flanks + shoulder-to-core conduits
     for s in (-1.0, 1.0):
         for i in range(4):
             slat = sd_rbox(x, y, z, s * (cw * 0.95), chest_y + 0.026 - 0.028 * i, 0.020,
                            0.011, 0.0068, 0.046 * chest, 0.005)
             d, mat = _smat(d, slat, mat, M_GUNMETAL, 0.004)
-        cond = sd_capsule(x, y, z, s * 0.118 * chest, chest_y + 0.148, 0.112 * chest,
+        cond = sd_capsule(x, y, z, s * 0.118 * chest, chest_y + 0.148, tc * 1.02,
                           s * 0.046 * chest, core_cy + 0.072, core_cz + 0.006,
                           0.0072 * chest, 0.0060 * chest)
         d, mat = _smat(d, cond, mat, M_HOSE, 0.006)
 
     # abdomen actuators
     for i in range(3):
-        ab = sd_rbox(x, y, z, 0.0, 1.122 - 0.046 * i, 0.130 * chest,
-                     0.058 * chest - 0.006 * i, 0.0150, 0.013, 0.008)
+        ab = sd_rbox(x, y, z, 0.0, 1.122 - 0.046 * i, tc * 1.02,
+                     0.058 * chest - 0.006 * i, 0.0150, 0.011, 0.008)
         d, mat = _smat(d, ab, mat, M_CERAMIC, 0.004)
 
     # belt, buckle and side canisters
-    belt = sd_rbox(x, y, z, 0.0, hip_y + 0.030, 0.0, cw * 0.94, 0.024, 0.148 * chest, 0.016)
+    belt = sd_rbox(x, y, z, 0.0, hip_y + 0.030, 0.0, cw * 0.94, 0.024, tc * 1.14, 0.016)
     d, mat = _smat(d, belt, mat, M_GUNMETAL, 0.006)
-    buck = sd_rbox(x, y, z, 0.0, hip_y + 0.030, 0.176 * chest,
+    buck = sd_rbox(x, y, z, 0.0, hip_y + 0.030, tc * 1.24,
                    0.026 * chest, 0.019, 0.011, 0.006)
     d, mat = _smat(d, buck, mat, M_GOLD if noble else M_CHROME, 0.005)
     for s in (-1.0, 1.0):
@@ -501,22 +641,24 @@ def map_robot(px, py, pz, P, lean_c, lean_s):
 
     # ======================= SHOULDERS + ARMS ================================
     sh_x = cw + 0.028 * shw
-    sh_y = chest_y + 0.130
+    sh_y = chest_y + 0.112
     for s in (-1.0, 1.0):
         ball = sd_sphere(x, y, z, s * sh_x, sh_y, 0.0, 0.054 * bulk)
         d, mat = _smat(d, ball, mat, M_CHROME, 0.010)
-        trap = sd_capsule(x, y, z, s * cw * 0.30, chest_y + 0.176, 0.010,
-                          s * (sh_x - 0.006), sh_y + 0.020, 0.0, 0.030 * shw, 0.042 * shw)
+        trap = sd_capsule(x, y, z, s * cw * 0.30, chest_y + 0.160, 0.010,
+                          s * (sh_x - 0.004), sh_y + 0.026, 0.0, 0.034 * shw, 0.046 * shw)
         d, mat = _smat(d, trap, mat, M_PAINT, 0.012)
 
-        ptop = sh_y + 0.048 + 0.012 * pauld
-        pr = 0.090 * shw * (1.0 + 0.05 * pauld)
-        paul = sd_sphere(x, y, z, s * (sh_x + 0.014), ptop, 0.0, pr)
-        paul = max(paul, -(sd_sphere(x, y, z, s * (sh_x + 0.014), ptop - 0.012, 0.0,
-                                     pr * 0.87)))
-        paul = max(paul, -(sd_box(x, y, z, s * (sh_x + 0.014), ptop - 0.128, 0.0,
-                                  0.22, 0.128, 0.22)))
-        d, mat = _smat(d, paul, mat, M_PAINT, 0.005)
+        ptop = sh_y + 0.014 + 0.010 * pauld + 0.004 * brut
+        pr = 0.104 * shw * (1.0 + 0.05 * pauld + 0.09 * brut)
+        px0 = s * (sh_x + 0.020)
+        py0 = ptop - 0.018
+        qx, qy, qz = rot_z(x - px0, y - py0, z, 1.0, -0.34 * s)
+        paul = sd_ellip(qx + px0, qy + py0, qz, px0, py0, 0.0,
+                        pr * 1.06, pr * (0.62 + 0.05 * brut), pr * (1.00 + 0.05 * pauld))
+        paul = max(paul, -(sd_box(x, y, z, px0, py0 - 0.132, 0.0,
+                                  0.30, 0.132, 0.34)))
+        d, mat = _smat(d, paul, mat, M_PAINT, 0.024)
         if pauld >= 1:
             lv = sd_rbox(x, y, z, s * (sh_x + 0.018), ptop + 0.042, 0.0,
                          0.048 * shw, 0.013, 0.062 * shw, 0.013)
@@ -532,6 +674,27 @@ def map_robot(px, py, pz, P, lean_c, lean_s):
             rv = sd_sphere(x, y, z, s * (sh_x + 0.012), ptop + 0.028,
                            (i - 1) * 0.046 * shw, 0.0072)
             d, mat = _smat(d, rv, mat, M_CHROME, 0.003)
+        if brut > 0.34:                  # a second laminate over the shoulder cap
+            l2 = sd_rbox(x, y, z, s * (sh_x + 0.020), ptop + 0.056 + 0.008 * brut, 0.0,
+                         0.052 * shw, 0.0125, 0.070 * shw, 0.012)
+            d, mat = _smat(d, l2, mat, M_CERAMIC, 0.004)
+        if brut > 0.44:                  # spikes bolted through the pauldron rim
+            ns = 2 + int(2.2 * brut)
+            for i in range(ns):
+                zc_ = (i - 0.5 * (ns - 1)) * 0.044 * shw
+                ln = (0.034 + 0.070 * brut)
+                sp = sd_capsule(x, y, z, s * (sh_x + 0.050), ptop + 0.026, zc_,
+                                s * (sh_x + 0.050 + ln * 1.25), ptop + 0.026 + ln * 0.72,
+                                zc_ * 1.10, 0.0130 * (1.0 - 0.12 * abs(i - 0.5 * (ns - 1))),
+                                0.0026)
+                d, mat = _smat(d, sp, mat, M_GOLD if not noble else M_GUNMETAL, 0.005)
+        if brut > 0.66:                  # armour skirt hanging off the shoulder
+            sk = sd_rbox(x, y, z, s * (sh_x + 0.026), ptop - 0.062, 0.012,
+                         0.030 * shw, 0.044, 0.074 * shw, 0.013)
+            d, mat = _smat(d, sk, mat, M_PAINT, 0.006)
+            skr = sd_rbox(x, y, z, s * (sh_x + 0.030), ptop - 0.098, 0.012,
+                          0.024 * shw, 0.0090, 0.058 * shw, 0.006)
+            d, mat = _smat(d, skr, mat, M_EMIT, 0.004)
         if s < 0.0 and chassis >= 2:     # rank chevrons on the left pauldron
             for i in range(3):
                 bar = sd_rbox(x, y, z, s * (sh_x + 0.020), chest_y + 0.112 - 0.020 * i,
@@ -613,6 +776,21 @@ def map_robot(px, py, pz, P, lean_c, lean_s):
     bpframe = sd_rbox(x, y, z, 0.0, chest_y + 0.108, bp_z - 0.072,
                       cw * 0.52, 0.020, 0.014, 0.010)
     d, mat = _smat(d, bpframe, mat, M_CHROME, 0.008)
+    if brut > 0.60:                      # command wings: an elite pilot's silhouette
+        nwg = 2 + int(2.4 * brut)
+        for s in (-1.0, 1.0):
+            for i in range(nwg):
+                px0 = s * (cw * 0.66 + 0.030 + 0.016 * i)
+                py0 = chest_y + 0.030 + 0.044 * i
+                pz0 = bp_z - 0.030 - 0.010 * i
+                sx_, sy_, sz_ = rot_z(x - px0, y - py0, z - pz0, 1.0,
+                                      (0.70 + 0.10 * i) * s)
+                wg = sd_rbox(sx_ + px0, sy_ + py0, sz_ + pz0, px0, py0, pz0,
+                             0.062 + 0.012 * i, 0.0078, 0.017, 0.004)
+                d, mat = _smat(d, wg, mat, M_PAINT, 0.004)
+            ex_ = s * (cw * 0.70 + 0.030)
+            ember = sd_sphere(x, y, z, ex_, chest_y + 0.070, bp_z - 0.048, 0.0095)
+            d, mat = _smat(d, ember, mat, M_EMIT, 0.003)
     if packv >= 1:
         for s in (-1.0, 1.0):
             noz = sd_capsule(x, y, z, s * cw * 0.50, chest_y - 0.016, bp_z - 0.070,

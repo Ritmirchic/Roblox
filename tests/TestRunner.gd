@@ -31,6 +31,7 @@ func _ready() -> void:
 	_test_ui_skin_kit()
 	_test_reactor_governor_and_market()
 	await _test_card_foils_and_lock_combat()
+	await _test_drop_odds_are_honest()
 	await _test_achievement_hall3d()
 
 	print("=== TEST SUMMARY: %d PASSED, %d FAILED ===" % [_passed, _failed])
@@ -1354,3 +1355,68 @@ func _scan_ui_subtree_invariants(node: Node, bad_scales: Array[String], narrow_l
 		_scan_ui_subtree_invariants(child, bad_scales, narrow_labels)
 
 
+# 16. Drop odds: the table the station shows IS the table the engine rolls, and
+# the rare end of the ladder stays rare in practice, not just on paper.
+func _test_drop_odds_are_honest() -> void:
+	var order: Array[String] = GameData.RARITY_ORDER
+	# --- the disclosed table is exactly the weight dictionary ---------------
+	var probs: Dictionary = PackManager.get_probability_table("standard")
+	var wstd: Dictionary = PackManager.PACK_TYPES["standard"]["weights"]
+	var wsum := 0.0
+	for r in order:
+		wsum += float(wstd.get(r, 0.0))
+	var table_exact := true
+	for r in order:
+		var want: float = float(wstd.get(r, 0.0)) / maxf(0.0001, wsum) * 100.0
+		table_exact = table_exact and absf(float(probs[r]) - want) < 0.001
+	_check(table_exact, "Disclosed pack percentages are computed from the live weight table")
+
+	# --- the roller can only ever return what the table says ----------------
+	var only_epic := true
+	for i in range(24):
+		only_epic = only_epic and PackManager._roll_rarity({"Epic": 5.0}) == "Epic"
+	_check(only_epic, "Rarity roll is driven purely by the supplied weight table")
+
+	# --- 6000 real rolls must reproduce the disclosed odds ------------------
+	var rolls := 6000
+	var counts := {}
+	for r in order:
+		counts[r] = 0
+	var elite_secret := 0
+	var we: Dictionary = PackManager.PACK_TYPES["elite"]["weights"]
+	for i in range(rolls):
+		var picked: String = PackManager._roll_rarity(wstd)
+		counts[picked] = int(counts[picked]) + 1
+	for i in range(int(rolls / 2)):
+		if PackManager._roll_rarity(we) == "Secret":
+			elite_secret += 1
+	var top_measured := (float(counts["Legendary"]) + float(counts["Mythic"]) + float(counts["Secret"])) / float(rolls) * 100.0
+	var top_disclosed := float(probs["Legendary"]) + float(probs["Mythic"]) + float(probs["Secret"])
+	_check(absf(float(counts["Common"]) / float(rolls) * 100.0 - float(probs["Common"])) < 5.0, "Measured Common rate matches the disclosed odds")
+	_check(absf(float(counts["Rare"]) / float(rolls) * 100.0 - float(probs["Rare"])) < 5.0, "Measured Rare rate matches the disclosed odds")
+	_check(top_measured > 0.2 and top_measured < 5.0, "Legendary-or-better lands %.2f%% of standard pulls (disclosed %.2f%%)" % [top_measured, top_disclosed])
+	_check(elite_secret <= 30, "The vault box prints a Secret at most once in ~170 elite cards")
+
+	# --- combat salvage: capped ladder, never the binder top -----------------
+	var sweep := 999
+	var secret_seen := false
+	var mythic_light := 0
+	var mythic_heavy := 0
+	for i in range(sweep + 1):
+		var rr := float(i) / float(sweep)
+		var light: String = GameData.roll_salvage_rarity(rr, false)
+		var heavy: String = GameData.roll_salvage_rarity(rr, true)
+		if light == "Secret" or heavy == "Secret":
+			secret_seen = true
+		if light == "Mythic":
+			mythic_light += 1
+		if heavy == "Mythic":
+			mythic_heavy += 1
+	_check(not secret_seen, "No salvage roll in the whole 0..1 range can print a Secret")
+	_check(mythic_light <= int(sweep * 0.02), "A plain elite leader almost never drops a Mythic print")
+	_check(mythic_heavy > mythic_light, "Only a heavy response wing leader makes a Mythic print likelier")
+	_check(GameData.salvage_chance(true) > GameData.salvage_chance(false), "Heavy wings also guarantee the drop more often")
+	_check(GameData.SALVAGE_PRINTS_PER_EXPEDITION >= 1 and GameData.SALVAGE_PRINTS_PER_EXPEDITION <= 3, "Salvage prints per expedition stay inside a sane cap")
+	var exp_src := FileAccess.get_file_as_string("res://scripts/space/SpaceExpedition3D.gd")
+	_check(exp_src.contains("GameData.SALVAGE_PRINTS_PER_EXPEDITION"), "The expedition honours the salvage cap")
+	_check(exp_src.contains("GameData.roll_salvage_rarity(randf(), heavy)"), "The expedition rolls the salvage ladder")

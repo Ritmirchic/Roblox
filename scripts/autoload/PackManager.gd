@@ -11,13 +11,15 @@ const PACK_TYPES: Dictionary = {
 		"cards_count": 3,
 		"art": "res://assets/cards/pack_standard.png",
 		"weights": {
-			"Common": 42.0,
-			"Uncommon": 26.0,
-			"Rare": 16.0,
-			"Epic": 9.0,
-			"Legendary": 4.5,
-			"Mythic": 2.0,
-			"Secret": 0.5,
+			# A collector ladder, not a giveaway: one Legendary per ~80 cards,
+			# a Secret per ~1700. These are the exact numbers the station shows.
+			"Common": 53.5,
+			"Uncommon": 28.0,
+			"Rare": 12.5,
+			"Epic": 4.5,
+			"Legendary": 1.2,
+			"Mythic": 0.24,
+			"Secret": 0.06,
 		}
 	},
 	"elite": {
@@ -27,13 +29,15 @@ const PACK_TYPES: Dictionary = {
 		"cards_count": 3,
 		"art": "res://assets/cards/pack_elite.png",
 		"weights": {
+			# The vault box pays far better per card and never prints a Common,
+			# but a Secret is still a 1-in-250-per-card event.
 			"Common": 0.0,
-			"Uncommon": 25.0,
-			"Rare": 34.0,
-			"Epic": 22.0,
-			"Legendary": 11.5,
-			"Mythic": 5.8,
-			"Secret": 1.7,
+			"Uncommon": 20.0,
+			"Rare": 44.0,
+			"Epic": 26.3,
+			"Legendary": 7.5,
+			"Mythic": 1.8,
+			"Secret": 0.4,
 		}
 	}
 }

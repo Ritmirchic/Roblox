@@ -51,6 +51,43 @@ const CARD_FINISHES: Dictionary = {
 	},
 }
 
+# ── Combat salvage rarity ladder ─────────────────────────────────────────────
+# A sector kill pays out a *print*, not the end of the chase. Salvage rolls Rare
+# and Epic almost always, Legendary now and then, Mythic only off a heavy
+# response-wing leader - and never Secret: the top of the binder stays a pack
+# exclusive, so farming a hot sector cannot mint what the vault hoards.
+const SALVAGE_RARITY_WEIGHTS: Dictionary = {
+	"Rare": 62.0, "Epic": 30.0, "Legendary": 7.0, "Mythic": 1.0,
+}
+const SALVAGE_RARITY_WEIGHTS_HEAVY: Dictionary = {
+	"Rare": 46.0, "Epic": 34.0, "Legendary": 16.0, "Mythic": 4.0,
+}
+const SALVAGE_PRINTS_PER_EXPEDITION: int = 2
+
+
+func roll_salvage_rarity(roll: float, heavy: bool) -> String:
+	## Maps a uniform 0..1 roll onto the salvage ladder. A pure function so the
+	## test suite can sweep every bucket and prove a Secret never comes out.
+	var w: Dictionary = SALVAGE_RARITY_WEIGHTS_HEAVY if heavy else SALVAGE_RARITY_WEIGHTS
+	var total := 0.0
+	for r in RARITY_ORDER:
+		total += float(w.get(r, 0.0))
+	if total <= 0.0:
+		return "Rare"
+	var pick := clampf(roll, 0.0, 0.999999) * total
+	var accum := 0.0
+	for r in RARITY_ORDER:
+		accum += float(w.get(r, 0.0))
+		if pick < accum:
+			return r
+	return "Rare"
+
+
+func salvage_chance(heavy: bool) -> float:
+	## Drop chance on an elite leader's wreck, before the per-expedition cap.
+	return 0.62 if heavy else 0.26
+
+
 const RESOURCES: Dictionary = {
 	"iron": {
 		"id": "iron",

@@ -6,6 +6,17 @@ signal select_module_for_editor(mod_id: String)
 signal panel_closed
 
 var current_tab: String = ""
+
+
+static func _odds_text(pct: float) -> String:
+	## Disclosed odds are printed with the precision they deserve: anything under one
+	## percent keeps two or three decimals, so a 0.06% Secret is never rounded up into
+	## a flattering "0.1%".
+	if pct < 0.1:
+		return "%.3f%%" % pct
+	if pct < 1.0:
+		return "%.2f%%" % pct
+	return "%.1f%%" % pct
 var standalone_settings_mode: bool = false
 
 var _modal_box: PanelContainer
@@ -886,7 +897,7 @@ func _build_packs_tab() -> void:
 			var chip := PanelContainer.new()
 			chip.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(rcol.darkened(0.78), rcol, 6, 8, 3))
 			var cl := Label.new()
-			cl.text = "%s: %.1f%%" % [L.rarity_name(r), pct]
+			cl.text = "%s: %s" % [L.rarity_name(r), _odds_text(pct)]
 			cl.add_theme_font_size_override("font_size", 12)
 			cl.add_theme_color_override("font_color", rcol.lightened(0.28))
 			chip.add_child(cl)
@@ -904,7 +915,7 @@ func _build_packs_tab() -> void:
 			fchip.add_theme_stylebox_override("panel", ThemeHelper.make_pill_style(
 				Color(fcol.r * 0.14, fcol.g * 0.16, fcol.b * 0.20, 0.92), fcol, 6, 8, 3))
 			var fl := Label.new()
-			fl.text = "%s: %.1f%%" % [L.foil_name(str(fid)), fpct]
+			fl.text = "%s: %s" % [L.foil_name(str(fid)), _odds_text(fpct)]
 			fl.add_theme_font_size_override("font_size", 12)
 			fl.add_theme_color_override("font_color", fcol.lightened(0.24))
 			fchip.add_child(fl)

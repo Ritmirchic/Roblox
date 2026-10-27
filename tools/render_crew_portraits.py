@@ -89,12 +89,12 @@ ROLE_PAULDRON = {0: 0, 1: 1, 2: 1, 3: 2, 4: 3, 5: 3, 6: 3}
 
 # material shading parameters: albedo key, roughness, metalness, coat, emission
 MATS = {
-    M_CERAMIC: ("ceramic", 0.26, 0.00, 0.85, 0.00),
+    M_CERAMIC: ("ceramic", 0.34, 0.00, 0.60, 0.00),
     M_PAINT:   ("paint",    0.31, 0.34, 1.00, 0.00),
-    M_CHROME:  ("chrome",   0.075, 1.00, 0.00, 0.00),
+    M_CHROME:  ("chrome",   0.115, 1.00, 0.00, 0.00),
     M_GUNMETAL: ("gunmetal", 0.40, 0.92, 0.00, 0.00),
-    M_EMIT:    ("emit",     0.22, 0.00, 0.00, 1.00),
-    M_LENS:    ("lens",     0.07, 0.10, 1.00, 0.16),
+    M_EMIT:    ("emit",     0.90, 0.00, 0.00, 1.00),
+    M_LENS:    ("lens",     0.055, 0.14, 1.00, 0.10),
     M_HOSE:    ("hose",     0.66, 0.00, 0.00, 0.00),
     M_GOLD:    ("gold",     0.20, 1.00, 0.00, 0.00),
 }
@@ -202,7 +202,7 @@ def band(x, k, wdt):
 # ── lighting ────────────────────────────────────────────────────────────────
 LIGHTS = [
     # (direction, colour key, intensity, softbox width, softbox height)
-    (KEY_DIR, "key", 2.20, 0.55, 0.30),
+    (KEY_DIR, "key", 1.86, 0.55, 0.30),
     ((0.72, -0.16, 0.67), "fill", 0.48, 1.20, 0.80),
     ((-0.12, 0.30, -0.95), "rim", 2.05, 0.42, 1.10),
 ]
@@ -213,7 +213,7 @@ def _norm(v):
     return v / max(float(np.sqrt((v * v).sum())), 1e-9)
 
 
-def make_env(pal):
+def make_env(pal, brut=0.0):
     """A tiny procedural studio: a graded space backdrop plus the light shapes,
     sampled by direction so chrome and glass reflect something believable."""
     top = np.array(pal["sky_top"], np.float32) * 5.2
@@ -221,9 +221,13 @@ def make_env(pal):
     accent = np.array(pal["trim"], np.float32)
     rims = np.array(pal["rim"], np.float32)
     dirs = [np.array(l[0], np.float32) for l in LIGHTS]
-    cols = [np.array([1.00, 0.965, 0.905], np.float32) * LIGHTS[0][2],
-            accent * 0.85 * LIGHTS[1][2],
-            rims * 1.15 * LIGHTS[2][2]]
+    # The escalation reaches the studio rig itself: elite armour is deliberately
+    # dark, so the fill lamp opens the front of the chest back up and the rim lamp
+    # gets hotter to peel that silhouette off a storm-black sky.
+    cols = [np.array([1.00, 0.965, 0.905], np.float32) * LIGHTS[0][2] * (1.0 + 0.10 * brut),
+            (accent * 0.85 + np.array([0.30, 0.33, 0.38], np.float32) * 0.55)
+            * LIGHTS[1][2] * (1.0 + 0.85 * brut),
+            rims * (1.15 + 0.55 * brut) * LIGHTS[2][2] * (1.0 + 0.34 * brut)]
     size = [(LIGHTS[i][3], LIGHTS[i][4]) for i in range(len(LIGHTS))]
 
     def env(d):
@@ -261,7 +265,7 @@ def ggx(n, v, L, rough, f0):
 
 
 def shade_robot(nv, mat, valid, shb, eye, pal, rng, sigil_kind, lean_c, lean_s,  # noqa: C901
-                twist, tier, decal):
+                twist, tier, decal, brut=0.0):
     """Physically-plausible shading pass for the android g-buffer."""
     h, w = valid.shape
     n = nv[..., 0:3].astype(np.float32)
@@ -282,7 +286,7 @@ def shade_robot(nv, mat, valid, shb, eye, pal, rng, sigil_kind, lean_c, lean_s, 
     v = v / np.maximum(np.sqrt(np.maximum((v * v).sum(axis=2), 1e-9))[..., None], 1e-6)
     nvv = np.maximum((n * v).sum(axis=2), 0.0)
 
-    env = make_env(pal)
+    env = make_env(pal, brut)
     paint_col = np.array(pal["paint"], np.float32)
     cer_col = np.array(pal["ceramic"], np.float32)
     trim = np.array(pal["trim"], np.float32)
@@ -323,6 +327,21 @@ def shade_robot(nv, mat, valid, shb, eye, pal, rng, sigil_kind, lean_c, lean_s, 
             albedo = np.where(m[..., None], lens[None, None, :], albedo)
             emit = np.where(m[..., None], trim[None, None, :], emit)
 
+    # the visor glass is a near-black mirror that burns with the cockpit glow,
+    # and every emissive part gets hotter up the rarity ladder
+    lens_m = (mat == M_LENS).astype(np.float32)
+    rough = np.clip(rough * (1.0 - 0.62 * lens_m), 0.012, 1.0)
+    coat = np.clip(coat + 0.95 * lens_m, 0.0, 1.0)
+    emit = emit + trim[None, None, :] * (lens_m * (0.03 + 0.09 * brut))[..., None]
+    emit = np.clip(emit * (1.0 + 0.34 * brut), 0.0, 0.78)
+    if brut > 0.62:
+        # an elite pilot's optics burn crimson: shift the emissive hue without
+        # touching its energy, so the card reads hotter instead of blown out
+        k = float((brut - 0.62) / 0.38) * 0.72
+        mag = emit.mean(axis=2, keepdims=True)
+        hotc = np.array([1.00, 0.27, 0.12], np.float32)
+        emit = emit * (1.0 - k) + hotc[None, None, :] * mag * k
+
     # ── surface detail: seams, micro-roughness, grime, edge wear ───────────
     break_up = 0.30 + 1.45 * noise(rng, (h, w), 3, 2)     # which lines are real
     seam_y = band(ly, 12.5, 0.055) * break_up
@@ -336,8 +355,8 @@ def shade_robot(nv, mat, valid, shb, eye, pal, rng, sigil_kind, lean_c, lean_s, 
     brushed = noise(rng, (h, w), 26, 2, stretch=16.0)
     rough = np.clip(rough * (0.78 + 0.55 * micro) + is_metal * (brushed - 0.5) * 0.10, 0.02, 1.0)
 
-    grime_gain = [1.00, 0.92, 0.70, 0.46, 0.24, 0.14, 0.10][min(tier, 6)]
-    grime = smoothstep(0.66, 0.10, ao) * (0.35 + 1.25 * noise(rng, (h, w), 34, 4, warp=0.9))
+    grime_gain = 0.30 + 0.26 * brut          # a serviceable suit is not filthy
+    grime = smoothstep(0.72, 0.16, ao) * (0.30 + 1.05 * noise(rng, (h, w), 34, 4, warp=0.9))
     grime = np.clip(grime, 0, 1) * grime_gain
     dirt_col = np.array([0.055, 0.048, 0.040], np.float32)
 
@@ -350,7 +369,11 @@ def shade_robot(nv, mat, valid, shb, eye, pal, rng, sigil_kind, lean_c, lean_s, 
           + np.gradient(n[..., 2], axis=1))
     crease = np.clip(smoothstep(4.5, 16.0, np.abs(dv) * depth * 60.0), 0.0, 1.0)
     wear = np.clip(np.maximum(rim, crease * 0.55) * is_shell
-                   * (0.40 + 0.95 * noise(rng, (h, w), 46, 3)), 0.0, 1.0)
+                   * (0.30 + 0.80 * noise(rng, (h, w), 46, 3) + 0.55 * brut), 0.0, 1.0)
+    if brut > 0.26:                           # battle scoring: hairline scratches
+        sc = noise(rng, (h, w), 74, 2, stretch=26.0)
+        scratch = np.clip(smoothstep(0.855, 0.985, sc) * is_shell * (brut - 0.26) * 2.9, 0.0, 1.0)
+
 
     paint_m = (mat == M_PAINT).astype(np.float32)
     cer_m = (mat == M_CERAMIC).astype(np.float32)
@@ -366,6 +389,9 @@ def shade_robot(nv, mat, valid, shb, eye, pal, rng, sigil_kind, lean_c, lean_s, 
     seams *= is_shell
     albedo = albedo * (1.0 - 0.55 * seams[..., None])
     rough = np.clip(rough + 0.18 * seams, 0.02, 1.0)
+    if brut > 0.26:
+        albedo = albedo * (1.0 - 0.42 * scratch[..., None]) + chrome[None, None, :] * (0.50 * scratch)[..., None]
+        rough = np.clip(rough - 0.20 * scratch, 0.02, 1.0)
 
     # ── decals: unit stripes on the helm, chevrons on the pauldron ─────────
     if decal > 0:
@@ -380,6 +406,17 @@ def shade_robot(nv, mat, valid, shb, eye, pal, rng, sigil_kind, lean_c, lean_s, 
         strip = np.clip(pat * helm_zone * front, 0, 1) * ((mat == M_CERAMIC) | (mat == M_PAINT))
         albedo = albedo * (1.0 - strip[..., None]) + trim[None, None, :] * strip[..., None] * 0.85
         emit = emit + trim[None, None, :] * (strip * 0.35)[..., None]
+
+    if brut > 0.55:
+        # elite war paint: twin hot stripes down the helm shell
+        front = np.clip(n[..., 2] * 1.8 + n[..., 0] * 0.6 - 0.25, 0.0, 1.0)
+        hz = ((ly > 1.50) & (ly < 1.90)).astype(np.float32)
+        pat = np.clip((np.abs(np.abs(lx) - 0.082) < 0.0072).astype(np.float32)
+                      + (np.abs(np.abs(lx) - 0.108) < 0.0036).astype(np.float32), 0.0, 1.0)
+        wstrip = np.clip(pat * hz * front, 0.0, 1.0) * ((mat == M_CERAMIC) | (mat == M_PAINT))
+        hot = np.array([1.00, 0.32, 0.16], np.float32)
+        albedo = albedo * (1.0 - wstrip[..., None]) + hot[None, None, :] * wstrip[..., None] * 0.85
+        emit = emit + hot[None, None, :] * (wstrip * 0.30)[..., None]
 
     # ── role sigil plate on the left pectoral ───────────────────────────────
     su = (lx - 0.086) / 0.056
@@ -415,14 +452,18 @@ def shade_robot(nv, mat, valid, shb, eye, pal, rng, sigil_kind, lean_c, lean_s, 
         else:
             lcol = (np.array(pal["rim"], np.float32) * 1.15
                     + np.array([0.12, 0.12, 0.16], np.float32)) * lint
+        if lname == "key":
+            lcol = lcol * (1.0 + 0.12 * brut)
+        elif lname == "rim":
+            lcol = lcol * (1.0 + 0.70 * brut)       # elites are lit like a poster
         lit = lit + albedo * (1.0 - 0.86 * metal[..., None]) * (ndl * vis)[..., None] * lcol[None, None, :]
         lit = lit + ggx(n, v, L, rough, f0) * (vis[..., None]) * lcol[None, None, :] * 1.35
     # clear coat over the paint and glaze over the ceramic: one tight lobe
     L0 = _norm(LIGHTS[0][0])
     ndl0 = np.clip(n[..., 0] * L0[0] + n[..., 1] * L0[1] + n[..., 2] * L0[2], 0.0, 1.0)
-    coat_spec = ggx(n, v, L0, np.full((h, w), 0.075, np.float32),
-                    np.full((h, w), 0.045, np.float32))
-    lit = lit + coat_spec * (coat * ndl0 * shadowed * 2.10)[..., None] \
+    coat_spec = ggx(n, v, L0, np.full((h, w), 0.045, np.float32),
+                    np.full((h, w), 0.040, np.float32))
+    lit = lit + coat_spec * (coat * ndl0 * shadowed * 1.18)[..., None] \
         * np.array([1.0, 0.985, 0.96], np.float32)[None, None, :]
 
     # ── ambient: sky irradiance + environment reflection ─────────────────────
@@ -457,7 +498,7 @@ def shade_robot(nv, mat, valid, shb, eye, pal, rng, sigil_kind, lean_c, lean_s, 
     return np.clip(col, 0.0, 6.0)
 
 
-def make_sky(h, w, pal, rng, mode=0):
+def make_sky(h, w, pal, rng, mode=0, brut=0.0):
     top = np.array(pal["sky_top"], np.float32)
     bot = np.array(pal["sky_bot"], np.float32)
     yy = (np.arange(h, dtype=np.float32)[:, None] / h)
@@ -500,21 +541,33 @@ def make_sky(h, w, pal, rng, mode=0):
     sy = rng.integers(0, h, n_stars)
     stars[sy, sx] = 0.35 + 0.85 * (rng.random(n_stars) ** 3.2)
     stars = np.clip(blur(stars, 0.55), 0, None)
-    n_big = 3 + int(rng.random() * 3)
+    n_big = 1 + int(rng.random() * 2)
     for b in range(n_big):
-        bx, by = int(rng.integers(0, w)), int(rng.integers(0, int(h * 0.55)))
-        rr = int(rng.integers(9, 17))
+        bx, by = int(rng.integers(0, w)), int(rng.integers(0, int(h * 0.42)))
+        rr = int(rng.integers(6, 11))
         y0, y1 = max(0, by - rr), min(h, by + rr + 1)
         x0, x1 = max(0, bx - rr), min(w, bx + rr + 1)
         gy = np.abs(np.arange(y0, y1)[:, None] - by).astype(np.float32)
         gx2 = np.abs(np.arange(x0, x1)[None, :] - bx).astype(np.float32)
-        spk = (np.maximum(0, 1 - gy / rr) ** 14 + np.maximum(0, 1 - gx2 / rr) ** 14) * 0.30
+        spk = (np.maximum(0, 1 - gy / rr) ** 26 + np.maximum(0, 1 - gx2 / rr) ** 26) * 0.12
         dots = np.maximum(0, 1 - np.sqrt(gy ** 2 + gx2 ** 2) / 3.0) ** 2
         stars[y0:y1, x0:x1] += spk + dots
     sky += stars[..., None] * np.array([0.92, 0.95, 1.0], np.float32)[None, None, :] * 0.8
     # hangar floor glow at the very bottom so the bust never floats on flat black
     glow = smoothstep(0.72, 1.0, np.arange(h, dtype=np.float32)[:, None] / h)
     sky += np.array(pal["rim"], np.float32)[None, None, :] * (glow ** 2.4 * 0.10)[..., None]
+    if brut > 0.35:
+        # the elites fly through a burning sky: drifting embers and hot smoke
+        smoke = noise(rng, (h, w), 5, 4, warp=2.2)
+        sky = sky * (1.0 + (np.clip(smoke - 0.55, 0, 1) * 0.9)[..., None] * brut)
+        sky += np.array([1.00, 0.42, 0.16], np.float32)[None, None, :] \
+            * (np.clip(smoke - 0.72, 0, 1) * (1.5 * brut))[..., None]
+        em = np.zeros((h, w), np.float32)
+        n_em = int((10 + 90 * brut) * h * w / 1e5) * 4
+        ex_, ey_ = rng.integers(0, w, n_em), rng.integers(0, h, n_em)
+        em[ey_, ex_] = (0.5 + rng.random(n_em)) * (0.35 + brut)
+        em = np.clip(blur(em, 0.9), 0, None)
+        sky += np.array([1.00, 0.62, 0.24], np.float32)[None, None, :] * em[..., None] * 0.9
     return sky
 
 
@@ -532,11 +585,11 @@ def _starfield(h, w, sky, rng):
         x0, x1 = max(0, bx - rr), min(w, bx + rr + 1)
         gy = np.abs(np.arange(y0, y1)[:, None] - by).astype(np.float32)
         gx = np.abs(np.arange(x0, x1)[None, :] - bx).astype(np.float32)
-        sky[y0:y1, x0:x1] += ((np.maximum(0, 1 - gy / rr) ** 16 + np.maximum(0, 1 - gx / rr) ** 16) * 0.5)[..., None]
+        sky[y0:y1, x0:x1] += ((np.maximum(0, 1 - gy / rr) ** 30 + np.maximum(0, 1 - gx / rr) ** 30) * 0.16)[..., None]
     return sky
 
 
-def grade(col, rng, pal, h, w):
+def grade(col, rng, pal, h, w, brut=0.0):
     col = np.clip(col, 0.0, 8.0)
     col = col / (1.0 + col * 0.36)
     col = col ** np.array([0.985, 1.0, 1.025], np.float32)
@@ -547,16 +600,16 @@ def grade(col, rng, pal, h, w):
     col = col + shad * np.array([0.0, 0.030, 0.058], np.float32)[None, None, :]
     col = col + high * np.array([0.052, 0.020, -0.030], np.float32)[None, None, :]
     lum = col.mean(axis=2, keepdims=True)
-    col = lum + (col - lum) * 1.14
+    col = lum + (col - lum) * (1.14 + 0.22 * brut)
     mean = float(col.mean())
-    col = (col - mean) * 1.24 + mean * 0.965
+    col = (col - mean) * (1.20 + 0.16 * brut) + mean * (0.965 - 0.030 * brut)
     col = col * (1.0 - 0.20 * np.clip(np.abs(col - 0.5) - 0.30, 0, 1))
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
     dx = (xx / w - 0.5) * 2.0
     dy = (yy / h - 0.5) * 2.0
-    vig = 1.0 - 0.30 * np.clip(dx * dx * 0.55 + dy * dy * 0.95, 0, 2.0) ** 1.4
-    col *= np.clip(vig, 0.58, 1.0)[..., None]
-    col += rng.standard_normal((h, w, 1)).astype(np.float32) * 0.010
+    vig = 1.0 - (0.26 + 0.20 * brut) * np.clip(dx * dx * 0.55 + dy * dy * 0.95, 0, 2.0) ** 1.4
+    col *= np.clip(vig, 0.52, 1.0)[..., None]
+    col += rng.standard_normal((h, w, 1)).astype(np.float32) * 0.0055
     return np.clip(col, 0, 1)
 
 
@@ -580,30 +633,49 @@ def render_card(idx, rec, size=(FRAME_H, FRAME_W), seed=None, ss=2):
     role, rarity = rec["role"], rec["rarity"]
     meta = RARITY[rarity]
     tier = meta[0]
+    # The rarity ladder IS the brutality ladder: a common jockey is a working
+    # pilot in serviceable armour, a secret is a war machine in scored plate.
+    brut = float(np.clip({0: 0.05, 1: 0.20, 2: 0.40, 3: 0.58,
+                          4: 0.74, 5: 0.88, 6: 1.00}[tier]
+                         + rng.uniform(-0.05, 0.05), 0.0, 1.0))
     bulk, swing, head_s, shoulder, pack = ROLE_BUILD.get(role, (1.0, 0.25, 1.0, 1.0, 1))
     bulk *= rng.uniform(0.94, 1.08)
-    chest = rng.uniform(0.94, 1.10) * (1.0 + 0.03 * tier)
-    head_s *= rng.uniform(0.95, 1.05)
+    chest = rng.uniform(0.94, 1.10) * (1.0 + 0.03 * tier + 0.055 * brut)
+    shoulder *= 1.0 + 0.085 * brut
+    bulk *= 1.0 + 0.055 * brut
+    head_s *= rng.uniform(0.95, 1.05) * (1.0 + 0.11 * brut)
     shoulder *= rng.uniform(0.90, 1.14)
 
     # Compose a framing archetype per card so the set does not read as one bust
     # re-tinted 42 times: distance, crop height, angle and hero pitch all move.
-    frame = int(rng.integers(0, 5))
-    if tier >= 4:
-        frame = int(rng.integers(1, 5))  # high tiers never get the flat tight bust
+    if tier <= 1:
+        frame = int(rng.integers(0, 3))      # grunts: tight, documentary, level
+    elif tier <= 3:
+        frame = int(rng.integers(1, 4))
+    else:
+        frame = int(rng.integers(1, 3))      # elites: chest-up, helmet dominant
     half_lo, half_hi, tgt_lo, tgt_hi = FRAME_LOOK[frame]
-    twist = np.radians(rng.uniform(-30.0, 30.0))
+    # Brutality reads as a confrontation, not a profile: the higher the ladder rung,
+    # the more the bust squares up to the lens, so visor, horns and chest sigil all
+    # land in one read and the armour never swings out of the lower band.
+    twist = np.radians(rng.uniform(-17.0, 17.0) * (1.0 - 0.50 * brut))
     lean = np.radians(rng.uniform(-4.0, 8.0))
-    yaw = np.radians(rng.uniform(YAW_LO[frame], YAW_HI[frame])) * (1.0 if rng.random() < 0.55 else -1.0)
-    pitch = np.radians(rng.uniform(PITCH_LO[frame], PITCH_HI[frame]))
+    yaw = np.radians(min(25.0 - 13.0 * brut,
+                         rng.uniform(YAW_LO[frame], YAW_HI[frame]) * (1.0 - 0.42 * brut))) \
+        * (1.0 if rng.random() < 0.55 else -1.0)
+    pitch = np.radians(rng.uniform(PITCH_LO[frame], PITCH_HI[frame]) - 2.6 * brut)
     sky_mode = int(rng.integers(0, 3))
 
     gear = ROLE_GEAR.get(role, 0)
-    if rng.random() < 0.30:
+    if rng.random() < 0.16:
         gear = int(rng.integers(0, 8))
+    if brut > 0.60 and gear in (1, 3, 6, 7):
+        gear = 2 + 2 * int(rng.integers(0, 2))      # elites: rail, booms or claws
     crest = ROLE_CREST.get(role, 0)
-    if rng.random() < 0.34:
+    if rng.random() < 0.18:
         crest = int(rng.integers(0, 8))
+    if brut > 0.60 and crest in (2, 5, 6):
+        crest = 1 + 2 * int(rng.integers(0, 2))     # blade comb or antenna mast
     optics = ROLE_OPTICS.get(role, 0)
     if rng.random() < 0.28:
         optics = int(rng.integers(0, 4))
@@ -614,8 +686,10 @@ def render_card(idx, rec, size=(FRAME_H, FRAME_W), seed=None, ss=2):
     if rng.random() < 0.25:
         pauld = int(rng.integers(0, 4))
     decal = 0 if tier < 2 else int(rng.integers(1, 4))
+    if brut > 0.55:
+        gear = 2 if rng.random() < 0.55 else gear   # most elites fly line-pilot helms
 
-    P = np.zeros(16, np.float64)
+    P = np.zeros(17, np.float64)
     P[0] = twist
     P[1] = chest
     P[2] = bulk
@@ -632,6 +706,7 @@ def render_card(idx, rec, size=(FRAME_H, FRAME_W), seed=None, ss=2):
     P[13] = pauld
     P[14] = rng.uniform(0.88, 1.16)         # face width
     P[15] = 1.0 if tier >= 4 else 0.0      # gold fittings on the high tiers
+    P[16] = brut                           # tier-driven aggression (see crew_robot)
 
     hue = rng.uniform(-0.09, 0.11)
 
@@ -640,25 +715,38 @@ def render_card(idx, rec, size=(FRAME_H, FRAME_W), seed=None, ss=2):
         return tuple(np.clip(a * (1.0 + hue * np.array([1.0, 0.4, -0.5], np.float32)), 0.02, 1.0))
 
     _tr = np.array(meta[3], np.float32)
-    pal = {"paint": tint(tuple(np.array(meta[1], np.float32) * 0.92 + _tr * 0.30), rng.uniform(0.92, 1.16)),
-           "ceramic": tint(tuple(np.array(meta[2], np.float32) * 0.86 + np.array([0.10, 0.11, 0.13], np.float32)),
-                           rng.uniform(0.94, 1.10)),
-           "trim": meta[3], "rim": meta[4],
+    # the higher the tier, the darker the plate and the hotter its trim burns -
+    # "black armour, red optics" reads as menace where gold reads as a trophy
+    dark = 1.0 - 0.30 * brut
+    hot = 1.0 + 0.35 * brut
+
+    def enrich(c):
+        a = np.asarray(c, np.float32)
+        m = float(a.mean())
+        return tuple(np.clip(m + (a - m) * 1.30, 0.015, 1.0))
+    pal = {"paint": enrich(tuple(np.clip(np.array(tint(tuple(np.array(meta[1], np.float32) * 0.92 + _tr * 0.30),
+                                                     rng.uniform(0.92, 1.16) * dark), np.float32), 0.012, 1.0))),
+           "ceramic": tuple(np.clip(np.array(tint(tuple(np.array(meta[2], np.float32) * 0.86
+                                                     + np.array([0.10, 0.11, 0.13], np.float32)),
+                                                rng.uniform(0.94, 1.10) * (1.0 - 0.34 * brut)), np.float32),
+                                    0.015, 1.0)),
+           "trim": tuple(np.clip(np.array(meta[3], np.float32) * hot, 0.0, 1.0)),
+           "rim": meta[4],
            "sky_top": meta[5], "sky_bot": meta[6], "nebula": meta[7], "planet": meta[8],
            "planet_rim": meta[9]}
 
     h, w = size
-    half = rng.uniform(half_lo, half_hi)
-    dist = rng.uniform(1.36, 1.62)
-    tgt = (0.0, rng.uniform(tgt_lo, tgt_hi), 0.02)
+    half = rng.uniform(half_lo, half_hi) * (1.0 - (0.055 if frame == 0 else 0.024) * brut)
+    dist = rng.uniform(1.36, 1.62) * (1.0 - 0.075 * brut)
+    tgt = (0.0, rng.uniform(tgt_lo, tgt_hi) - 0.014 * brut, 0.02)
     cam = make_camera(tgt, dist, math.degrees(yaw), math.degrees(pitch), half / dist, w, h)
     out, dep, matb, shb = gbuffer(P, math.degrees(lean), math.degrees(twist), w, h, cam, ss=ss)
     valid = dep > 0
     col = shade_robot(out, matb, valid, shb, cam[0:3], pal, rng,
                       ROLE_SIGIL.get(role, 0), float(np.cos(lean)), float(np.sin(lean)),
-                      twist, tier, decal)
+                      twist, tier, decal, brut)
 
-    sky = make_sky(h, w, pal, rng, sky_mode)
+    sky = make_sky(h, w, pal, rng, sky_mode, brut)
     gy, gx = np.mgrid[0:h, 0:w].astype(np.float32)
     halo = np.exp(-(((gx - w * (0.5 - 0.12 * np.sign(yaw))) / (w * 0.46)) ** 2
                     + ((gy - h * 0.30) / (h * 0.30)) ** 2))
@@ -668,13 +756,14 @@ def render_card(idx, rec, size=(FRAME_H, FRAME_W), seed=None, ss=2):
 
     out_img = np.where(valid[..., None], np.clip(col, 0, 4.0), sky)
     # bloom: the emissive optics, the reactor core and every specular hot spot
-    bright = np.clip(out_img - 0.88, 0.0, None)
-    bl = np.stack([blur(bright[..., i], 6.0) for i in range(3)], axis=2)
-    out_img = out_img + bl * (0.22 + 0.24 * np.array(pal["rim"], np.float32)[None, None, :])
+    bright = np.clip(out_img - (1.10 - 0.05 * brut), 0.0, None)
+    bl = np.stack([blur(bright[..., i], 5.0 + 2.5 * brut) for i in range(3)], axis=2)
+    out_img = out_img + np.clip(bl, 0.0, 0.42) * ((0.09 + 0.07 * brut)
+                             + (0.11 + 0.09 * brut) * np.array(pal["rim"], np.float32)[None, None, :])
     # atmospheric rim wrap so the silhouette separates from the backdrop
     wrapm = np.clip(blur(valid.astype(np.float32), 2.6) - valid.astype(np.float32), 0, 1)
     out_img = out_img + wrapm[..., None] * np.array(pal["trim"], np.float32)[None, None, :] * 0.32
-    return np.clip(grade(out_img, rng, pal, h, w), 0, 1)
+    return np.clip(grade(out_img, rng, pal, h, w, brut), 0, 1)
 
 
 def to_png(arr, out_path, out_size=(OUT_W, OUT_H)):
