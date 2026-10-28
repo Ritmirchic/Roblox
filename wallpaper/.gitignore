@@ -1,0 +1,5 @@
+# generated media (re-create with the scripts, see README.md)
+*.mp4
+*.gif
+build/
+__pycache__/
