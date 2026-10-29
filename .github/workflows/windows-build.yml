@@ -129,7 +129,11 @@ jobs:
             Write-Output "::error title=Exported file not found::$where"
             exit 1
           }
-          Write-Host "Verified executable size: $((Get-Item $exePath).Length) bytes"
+          $exeItem = Get-Item -Path $exePath -Force
+          $nearby = (Get-ChildItem -Path $workspace -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'HORIZON_VELOCITY*' } | ForEach-Object { $_.FullName + ':' + $_.Length }) -join '; '
+          $diagnostic = "workspace=$workspace; exe=$($exeItem.FullName); length=$($exeItem.Length); nearby=$nearby" -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
+          Write-Output "::notice title=Export file diagnostic::$diagnostic"
+          Write-Host "Verified executable size: $($exeItem.Length) bytes"
           Get-ChildItem -Path $outDir -Force | Format-Table Name,Length
 
       - name: Upload Windows executable
