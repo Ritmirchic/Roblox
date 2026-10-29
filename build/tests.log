@@ -1,0 +1,95 @@
+=== FRACTURE engine test suite ===
+[test] materials: strength ordering
+  PASS: rebar > concrete
+  PASS: concrete > brick
+  PASS: brick > wood
+  PASS: wood > glass
+  PASS: wood is flammable
+  PASS: glass is transparent
+  PASS: many material types available
+[test] raycast
+  PASS: downward ray hits ground
+  PASS: ground hit at y=0.2
+  PASS: upward ray misses
+[test] meshing: solid cube
+  cube 12x12x12 -> 96 verts 144 indices
+  PASS: merged cube produces 96 vertices (24 quads, capped merge)
+  PASS: cube produces 144 indices
+  slab carve: 1728 -> 1440
+  PASS: carving a slab removes exactly two layers
+[test] destruction: hammer hole in concrete wall
+  PASS: raycast from outside hits the wall
+  PASS: raycast reports concrete
+  removed 32 voxels (2952 -> 2920)
+  PASS: carveSphere removes voxels from the wall
+  PASS: voxel count matches removed count
+  PASS: opening allows a ray through the wall
+  PASS: mesh rebuilds after damage
+[test] structural collapse
+  disconnected structures found: 1
+  PASS: unsupported slab becomes a falling structure body
+  PASS: structure falls under gravity
+[test] explosion damage + debris
+  voxels: 5956 -> 2975 (2981 destroyed)
+  PASS: explosion removes voxels
+  PASS: explosion spawns physical debris
+  PASS: explosion spawns particles
+[test] debris physics settle
+  PASS: 40 debris spawned
+  40 debris at rest near ground
+  PASS: debris falls and settles on the ground
+[test] vehicle impact destroys wall
+  voxels 20769 -> 20691
+  PASS: heavy vehicle damages the wall on impact
+[test] audio
+  synthesized 54/54 sounds
+  PASS: all generated sounds available
+  PASS: explosion sound has signal
+[test] save / load destroyed world
+[map] loading WESTHAVEN SUBURBS (620x120x620)
+[map] ground level 1.40 m
+[map] build 201ms mesh 105ms chunks=12168
+  objective 'BREACH THE EAST WALL' baseline 6842 voxels at 47.0,8.8,22.5
+  objective 'DESTROY THE GARAGE WALL' baseline 4931 voxels at 49.0,3.4,21.0
+  objective 'SMASH THE HOUSE WINDOWS' baseline 6055 voxels at 47.0,8.2,40.5
+  objective 'WRECK THE STORE FRONT' baseline 14912 voxels at 76.0,8.6,49.0
+  objective 'COLLAPSE THE STATION CANOPY' baseline 8208 voxels at 40.0,5.2,80.0
+  objective 'DEMOLISH HOUSE A' baseline 26614 voxels at 42.0,8.6,22.5
+  objective 'DEMOLISH HOUSE B' baseline 25351 voxels at 42.0,9.2,45.0
+  objective 'BRING DOWN THE SITE CRANE' baseline 8060 voxels at 74.0,14.8,82.0
+[map] ready, player at 62.0 1.4 62.0
+  map loaded: 3159650 voxels
+  after destruction: 3155674 voxels (3976 removed)
+  PASS: destruction removed voxels
+[save] wrote saves/slot7.frx (8 chunks)
+  PASS: saveGame writes a file
+[map] loading WESTHAVEN SUBURBS (620x120x620)
+[map] ground level 1.40 m
+[map] build 203ms mesh 103ms chunks=12168
+  objective 'BREACH THE EAST WALL' baseline 6842 voxels at 47.0,8.8,22.5
+  objective 'DESTROY THE GARAGE WALL' baseline 4931 voxels at 49.0,3.4,21.0
+  objective 'SMASH THE HOUSE WINDOWS' baseline 6055 voxels at 47.0,8.2,40.5
+  objective 'WRECK THE STORE FRONT' baseline 14912 voxels at 76.0,8.6,49.0
+  objective 'COLLAPSE THE STATION CANOPY' baseline 8208 voxels at 40.0,5.2,80.0
+  objective 'DEMOLISH HOUSE A' baseline 26614 voxels at 42.0,8.6,22.5
+  objective 'DEMOLISH HOUSE B' baseline 25351 voxels at 42.0,9.2,45.0
+  objective 'BRING DOWN THE SITE CRANE' baseline 8060 voxels at 74.0,14.8,82.0
+[map] ready, player at 62.0 1.4 62.0
+  PASS: map can be rebuilt cleanly
+[map] loading WESTHAVEN SUBURBS (620x120x620)
+[map] ground level 1.40 m
+[map] build 180ms mesh 100ms chunks=12168
+  objective 'BREACH THE EAST WALL' baseline 6842 voxels at 47.0,8.8,22.5
+  objective 'DESTROY THE GARAGE WALL' baseline 4931 voxels at 49.0,3.4,21.0
+  objective 'SMASH THE HOUSE WINDOWS' baseline 6055 voxels at 47.0,8.2,40.5
+  objective 'WRECK THE STORE FRONT' baseline 14912 voxels at 76.0,8.6,49.0
+  objective 'COLLAPSE THE STATION CANOPY' baseline 8208 voxels at 40.0,5.2,80.0
+  objective 'DEMOLISH HOUSE A' baseline 26614 voxels at 42.0,8.6,22.5
+  objective 'DEMOLISH HOUSE B' baseline 25351 voxels at 42.0,9.2,45.0
+  objective 'BRING DOWN THE SITE CRANE' baseline 8060 voxels at 74.0,14.8,82.0
+[map] ready, player at 62.0 1.4 62.0
+[load] saves/slot7.frx ok
+  PASS: loadGame reads the file back
+  after reload: 3155674 voxels
+  PASS: destroyed voxels stay destroyed after reload
+=== 34 passed, 0 failed ===
