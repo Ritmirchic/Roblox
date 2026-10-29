@@ -733,8 +733,12 @@ func unlock_sector(sector_idx: int) -> Dictionary:
 	credits -= cost
 	unlocked_sectors.append(sector_idx)
 	credits_changed.emit(credits)
+	# The purchase used to leave the UI uninformed and unsaved until the next
+	# unrelated action, so a crash could take the credits and keep the sector shut.
+	ship_changed.emit()
 	if AchievementManager:
 		AchievementManager.record_event("unlock_sector", 1)
+	SaveManager.autosave()
 	return {"ok": true}
 
 func serialize_ship() -> Array:

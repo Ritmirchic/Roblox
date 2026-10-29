@@ -30,6 +30,11 @@ var _mouse_idle_time: float = 0.0
 var _mouse_captured: bool = true
 var _shake_trauma: float = 0.0
 var _shake_seed: float = 0.0
+var _sun_dir_deg: Vector3 = Vector3(-38, 42, 0)
+var _gate_rings: Array[MeshInstance3D] = []
+var _grade_rect: ColorRect
+var _grade_mat: ShaderMaterial
+var _speed_warp: float = 0.0
 var _ach_toast: PanelContainer
 var _ach_toast_lbl: Label
 var _ach_toast_time: float = 0.0
@@ -43,6 +48,17 @@ const STEER_RING_RADIUS_PX: float = 165.0
 var _enemy_spawn_cd: float = 5.0
 var _hazard_cd: float = 9.0
 var _hazard_flash_t: float = 0.0
+# Real sector hazards (v2.6.0). GameData has always declared four hazard types,
+# but only the plasma discharge was implemented — the other three were inert
+# data. Each one below now has a mechanic the player can feel and dodge.
+var _hazard_kind: String = "none"
+var _wreck_nodes: Array[Node3D] = []
+var _wreck_drift: Array[Vector3] = []
+var _debris_shard_cd: float = 7.0
+var _shear_cd: float = 11.0
+var _shear_phase: float = 0.0
+var _drag_dust: CPUParticles3D
+var _shards: Array[Dictionary] = []
 var _radar_sweep_angle: float = 0.0
 
 # HUD elements
@@ -93,6 +109,7 @@ var _manual_locked_enemy: Node3D = null
 func setup_sector(sec_idx: int) -> void:
 	sector_index = clampi(sec_idx, 0, GameData.sectors.size() - 1)
 	sector_def = GameData.sectors[sector_index]
+	_hazard_kind = str(sector_def.get("hazard", "none"))
 
 func _ready() -> void:
 	if sector_def.is_empty():
@@ -143,36 +160,168 @@ func _build_sector_environment() -> void:
 		env.sky_rotation = Vector3(0.0, deg_to_rad(float(sector_def.get("index", 0)) * 57.0), 0.0)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = sector_def["ambient_color"]
-	env.ambient_light_energy = 1.05
-	env.glow_enabled = true
-	env.glow_intensity = 0.78
+	env.ambient_light_energy = 1.15
+	# Общий кинематографический базис: ACES, свечение, туман глубины, цветокор.
+	# Один и тот же профиль обслуживает ангар, полёт и зал достижений.
+	ThemeHelper.style_3d_environment(env, sector_def["sky_horizon"])
+	env.background_energy_multiplier = 1.12 if env.sky != null else 1.0
 	we.environment = env
 	add_child(we)
 
 	var sun := DirectionalLight3D.new()
 	sun.light_color = sector_def["sun_color"]
-	sun.light_energy = 1.65
-	sun.shadow_enabled = ThemeHelper.graphics_preset in ["High", "Ultra"]
+	sun.light_energy = 1.85
+	sun.shadow_enabled = ThemeHelper.quality_bool("shadows")
+	sun.directional_shadow_max_distance = 180.0
+	sun.directional_shadow_blend_splits = true
 	sun.rotation_degrees = Vector3(-38, 42, 0)
 	add_child(sun)
+	_sun_dir_deg = Vector3(-38, 42, 0)
 
-	var stars := CPUParticles3D.new()
-	stars.name = "NebulaParticles"
-	stars.amount = maxi(40, int(round(140.0 * VFXFactory.get_particle_scale())))
-	stars.lifetime = 6.0
-	stars.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
-	stars.emission_box_extents = Vector3(130, 80, 130)
-	stars.gravity = Vector3.ZERO
-	stars.initial_velocity_min = 0.2
-	stars.initial_velocity_max = 1.2
+	_build_sky_landmarks()
+	_build_distant_belt()
+	_build_space_dust()
+
+
+func _build_sky_landmarks() -> void:
+	## A sector needs depth cues, not just rocks nearby. A banded giant on the
+	## horizon, its moons and a far unlit belt give the frame scale and parallax.
+	var idx := int(sector_def.get("index", 0))
+	var horizon: Color = sector_def["sky_horizon"]
+	var sun_col: Color = sector_def["sun_color"]
+
+	var planet_mi := MeshInstance3D.new()
+	var sphere := SphereMesh.new()
+	sphere.radius = 240.0
+	sphere.height = 480.0
+	sphere.radial_segments = 40 if ThemeHelper.quality_bool("landmark_detail") else 20
+	sphere.rings = 24 if ThemeHelper.quality_bool("landmark_detail") else 12
+	planet_mi.mesh = sphere
+	var pmat := ShaderMaterial.new()
+	if ResourceLoader.exists("res://shaders/planet_atmosphere.gdshader"):
+		pmat.shader = load("res://shaders/planet_atmosphere.gdshader")
+		pmat.set_shader_parameter("planet_a", horizon.darkened(0.25))
+		pmat.set_shader_parameter("planet_b", horizon.lightened(0.28))
+		pmat.set_shader_parameter("planet_c", sun_col.darkened(0.15))
+		pmat.set_shader_parameter("atmo_color", horizon.lightened(0.45))
+		pmat.set_shader_parameter("sun_dir", Vector3(0.62, 0.34, -0.7))
+		pmat.set_shader_parameter("band_scale", 3.6 + float(idx) * 0.55)
+		pmat.set_shader_parameter("turbulence", 1.2 + float(idx) * 0.35)
+		planet_mi.material_override = pmat
+	else:
+		var fallback := StandardMaterial3D.new()
+		fallback.albedo_color = horizon.lightened(0.2)
+		fallback.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		planet_mi.material_override = fallback
+	planet_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var planet_ang := 0.55 + float(idx) * 1.31
+	planet_mi.position = Vector3(cos(planet_ang) * 620.0, -110.0 + float(idx) * 26.0, sin(planet_ang) * 620.0)
+	add_child(planet_mi)
+
+	# Moons: cheap silhouette variation, no collisions, no lights.
+	for m in range(2):
+		var moon := MeshInstance3D.new()
+		var ms := SphereMesh.new()
+		ms.radius = 26.0 - float(m) * 9.0
+		ms.height = ms.radius * 2.0
+		ms.radial_segments = 16
+		ms.rings = 10
+		moon.mesh = ms
+		var mm := StandardMaterial3D.new()
+		mm.albedo_color = horizon.darkened(0.05).lightened(0.12)
+		mm.roughness = 0.95
+		moon.material_override = mm
+		moon.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var mang := planet_ang + (0.34 if m == 0 else -0.42)
+		moon.position = Vector3(cos(mang) * (760.0 + float(m) * 90.0), 90.0 - float(m) * 130.0, sin(mang) * (760.0 + float(m) * 90.0))
+		add_child(moon)
+
+	# Star flare pinned to the sun direction so lens bloom always matches the key light.
+	var flare := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(260.0, 260.0)
+	flare.mesh = quad
+	if ResourceLoader.exists("res://shaders/lens_flare.gdshader"):
+		var fmat := ShaderMaterial.new()
+		fmat.shader = load("res://shaders/lens_flare.gdshader")
+		fmat.set_shader_parameter("core_color", sun_col.lightened(0.5))
+		fmat.set_shader_parameter("halo_color", sun_col.darkened(0.1))
+		fmat.set_shader_parameter("intensity", 2.2)
+		flare.material_override = fmat
+		flare.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var sun_basis := Basis.from_euler(
+			Vector3(deg_to_rad(_sun_dir_deg.x), deg_to_rad(_sun_dir_deg.y), 0.0)
+		)
+		var sun_vec := sun_basis * Vector3(0.0, 0.0, -1.0)
+		add_child(flare)
+		# Orient only once the node is in the tree: look_at needs a live global
+		# transform, and the quad must face the arena centre from 800 m out.
+		flare.global_position = sun_vec * 820.0
+		flare.look_at(Vector3.ZERO, Vector3.UP)
+
+
+func _build_distant_belt() -> void:
+	## Far, non-colliding rock belt for depth and parallax. One MultiMesh draw call
+	## with the sector's own asteroid art beats dozens of instanced scenes.
+	var path := str(sector_def.get("asteroid_model", "res://assets/models/asteroids/ast_silicate_iron.glb"))
+	if not ResourceLoader.exists(path):
+		return
+	var ps: PackedScene = load(path)
+	if ps == null:
+		return
+	var probe: Node = ps.instantiate()
+	var source_mesh: Mesh = null
+	for mi in VFXFactory.collect_mesh_instances(probe):
+		source_mesh = mi.mesh
+		break
+	probe.free()
+	if source_mesh == null:
+		return
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = source_mesh
+	var count := 150 if ThemeHelper.quality_bool("landmark_detail") else 70
+	mm.instance_count = count
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1337 + int(sector_def.get("index", 0)) * 97
+	for i in range(count):
+		var ang := rng.randf() * TAU
+		var radius := rng.randf_range(330.0, 620.0)
+		var pos := Vector3(cos(ang) * radius, rng.randf_range(-70.0, 55.0), sin(ang) * radius)
+		var basis := Basis.from_euler(Vector3(rng.randf() * TAU, rng.randf() * TAU, rng.randf() * TAU))
+		basis = basis.scaled(Vector3.ONE * rng.randf_range(2.5, 8.5))
+		mm.set_instance_transform(i, Transform3D(basis, pos))
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = "DistantBelt"
+	mmi.multimesh = mm
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mmi)
+
+
+func _build_space_dust() -> void:
+	## Near-camera motes that follow the player: they sell speed in a void where
+	## otherwise nothing moves relative to the ship.
+	var dust := CPUParticles3D.new()
+	dust.name = "NebulaParticles"
+	dust.amount = maxi(40, int(round(190.0 * VFXFactory.get_particle_scale())))
+	dust.lifetime = 7.0
+	dust.preprocess = 3.0
+	dust.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	dust.emission_box_extents = Vector3(150, 90, 150)
+	dust.gravity = Vector3.ZERO
+	dust.initial_velocity_min = 0.15
+	dust.initial_velocity_max = 0.9
+	dust.scale_amount_min = 0.4
+	dust.scale_amount_max = 1.5
 	var smesh := BoxMesh.new()
-	smesh.size = Vector3.ONE * 0.28
+	smesh.size = Vector3.ONE * 0.22
 	var smat := StandardMaterial3D.new()
 	smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	smat.albedo_color = (sector_def["sun_color"] as Color).lightened(0.35)
+	smat.albedo_color = (sector_def["sun_color"] as Color).lightened(0.5) * 1.9
+	smat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 	smesh.material = smat
-	stars.mesh = smesh
-	add_child(stars)
+	dust.mesh = smesh
+	add_child(dust)
 
 func _spawn_player_and_containers() -> void:
 	asteroids_root = Node3D.new()
@@ -225,6 +374,25 @@ func _spawn_player_and_containers() -> void:
 			_warp_gate.add_child(bps.instantiate())
 	var portal := VFXFactory.create_holo_panel(Vector2(11.5, 11.5), Color(0.20, 0.95, 0.68, 0.48))
 	_warp_gate.add_child(portal)
+	# Two counter-rotating containment rings: the gate reads as machinery rather
+	# than a floating green card, and it draws the eye from across the sector.
+	_gate_rings.clear()
+	for ring_spec in [
+		[7.6, 0.32, Color(0.30, 1.0, 0.72, 0.85)],
+		[9.1, 0.18, Color(0.24, 0.86, 1.0, 0.65)],
+	]:
+		var rmi := MeshInstance3D.new()
+		var torus := TorusMesh.new()
+		torus.inner_radius = float(ring_spec[0])
+		torus.outer_radius = float(ring_spec[0]) + float(ring_spec[1])
+		torus.rings = 40
+		torus.ring_segments = 6
+		rmi.mesh = torus
+		rmi.material_override = VFXFactory.glow_material(ring_spec[2], 1.0, true)
+		rmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		rmi.rotation_degrees = Vector3(90.0, 0.0, 0.0)
+		_warp_gate.add_child(rmi)
+		_gate_rings.append(rmi)
 	_gate_lbl_3d = Label3D.new()
 	if ThemeHelper.font_display:
 		_gate_lbl_3d.font = ThemeHelper.font_display
@@ -255,6 +423,8 @@ func _populate_asteroids_and_props() -> void:
 				wreck.add_child(cs)
 				wreck.add_child(dps.instantiate())
 				add_child(wreck)
+				_wreck_nodes.append(wreck)
+				_wreck_drift.append(Vector3(randf_range(-2.2, 2.2), randf_range(-0.8, 0.8), randf_range(-2.2, 2.2)))
 
 	var init_enemies := mini(3, int(sector_def.get("enemy_cap", 4)))
 	for _k in range(init_enemies):
@@ -420,8 +590,57 @@ func _roll_elite_finish() -> String:
 # ==============================================================================
 # REBUILT NON-OVERLAPPING EXPEDITION HUD, SCANNER BRACKETS & TACTICAL RADAR
 # ==============================================================================
+func _build_screen_grade() -> void:
+	## Full-screen cinematic grade for the flight view. Reads the screen texture,
+	## so it never blurs or shifts a single HUD element underneath.
+	if not ResourceLoader.exists("res://shaders/hud_grade.gdshader"):
+		return
+	var layer := CanvasLayer.new()
+	layer.layer = 1
+	layer.name = "ScreenGrade"
+	add_child(layer)
+	_grade_rect = ColorRect.new()
+	_grade_rect.name = "GradeRect"
+	_grade_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ThemeHelper.fill_full_rect(_grade_rect)
+	_grade_mat = ShaderMaterial.new()
+	_grade_mat.shader = load("res://shaders/hud_grade.gdshader")
+	var grade_scale := ThemeHelper.quality_float("grade")
+	_grade_mat.set_shader_parameter("vignette_strength", 0.30 + 0.18 * grade_scale)
+	_grade_mat.set_shader_parameter("grain_amount", 0.020 + 0.022 * grade_scale)
+	_grade_mat.set_shader_parameter("scanline_amount", 0.028 if ThemeHelper.quality_bool("landmark_detail") else 0.0)
+	_grade_mat.set_shader_parameter("saturation", 1.02 + 0.06 * grade_scale)
+	_grade_mat.set_shader_parameter("warmth", 0.035)
+	_grade_mat.set_shader_parameter("damage_flash", 0.0)
+	_grade_mat.set_shader_parameter("speed_warp", 0.0)
+	_grade_rect.material = _grade_mat
+	layer.add_child(_grade_rect)
+
+
+func _tick_screen_grade(delta: float) -> void:
+	if _grade_mat == null:
+		return
+	var dmg := 0.0
+	if is_instance_valid(player_ship):
+		dmg = clampf(player_ship.hull_hit_pulse, 0.0, 1.0)
+	if ThemeHelper.reduced_motion:
+		# При включённом «меньше движения» вспышка остаётся, но без пульсаций
+		# и без искажения скорости — это вопрос комфорта, не эффектности.
+		dmg = minf(dmg, 0.35)
+	_grade_mat.set_shader_parameter("damage_flash", dmg)
+	var target_warp := 0.0
+	if is_instance_valid(player_ship) and player_ship.boost_active:
+		target_warp = 0.85
+	_speed_warp = lerpf(_speed_warp, target_warp, clampf(delta * 3.5, 0.0, 1.0))
+	_grade_mat.set_shader_parameter("speed_warp", _speed_warp)
+
+
 func _build_expedition_hud() -> void:
+	_build_screen_grade()
 	_hud_layer = CanvasLayer.new()
+	# Град живёт на слое 1 — над 3D, но строго под HUD: текст и шкалы не
+	# окрашиваются виньеткой и не теряют контраст.
+	_hud_layer.layer = 2
 	add_child(_hud_layer)
 
 	_hud_root = Control.new()
@@ -1046,6 +1265,7 @@ func _process(delta: float) -> void:
 
 	_tick_achievement_toast(delta)
 	_tick_hud_alert(delta)
+	_tick_screen_grade(delta)
 	if not is_instance_valid(player_ship) or _extracting:
 		return
 
@@ -1054,6 +1274,10 @@ func _process(delta: float) -> void:
 	var neb := get_node_or_null("NebulaParticles")
 	if neb is Node3D:
 		neb.global_position = player_ship.global_position
+
+	for i in range(_gate_rings.size()):
+		if is_instance_valid(_gate_rings[i]):
+			_gate_rings[i].rotate_z(delta * (0.85 if i == 0 else -0.62))
 
 	_handle_flight_steering(delta)
 	_update_third_person_camera(delta)
@@ -1266,6 +1490,8 @@ func _process_sector_spawns_and_hazards(delta: float) -> void:
 			_lightning_beam.visible = false
 			_hazard_warn_lbl.text = ""
 
+	_apply_sector_hazard(delta)
+
 	var haz: String = str(sector_def.get("hazard", "none"))
 	if haz == "plasma_lightning":
 		_hazard_cd -= delta
@@ -1281,6 +1507,132 @@ func _process_sector_spawns_and_hazards(delta: float) -> void:
 			if bolt_end.distance_to(player_ship.global_position) < 9.0:
 				player_ship.receive_enemy_hit(34.0, player_ship.global_position, 0)
 				add_camera_trauma(0.55)
+
+func _apply_sector_hazard(delta: float) -> void:
+	## Nebula drag, drifting wreck field and void shear. Every branch has a real
+	## mechanical effect on the ship, so the sector data is no longer decorative.
+	if not is_instance_valid(player_ship):
+		return
+	match _hazard_kind:
+		"nebula_drag":
+			# Ionised gas brakes the hull: thrust has to fight the medium, and the
+			# ship cannot simply coast between rocks at full speed.
+			var drag := clampf(0.55 * delta, 0.0, 0.9)
+			player_ship.linear_velocity *= (1.0 - drag)
+			player_ship.angular_velocity *= (1.0 - drag * 0.6)
+			if _drag_dust == null:
+				_drag_dust = CPUParticles3D.new()
+				_drag_dust.amount = maxi(20, int(round(80.0 * VFXFactory.get_particle_scale())))
+				_drag_dust.lifetime = 2.4
+				_drag_dust.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+				_drag_dust.emission_sphere_radius = 34.0
+				_drag_dust.gravity = Vector3.ZERO
+				_drag_dust.initial_velocity_min = 0.4
+				_drag_dust.initial_velocity_max = 2.6
+				_drag_dust.local_coords = false
+				var dm := BoxMesh.new()
+				dm.size = Vector3.ONE * 0.11
+				var dmat := StandardMaterial3D.new()
+				dmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+				dmat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+				dmat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+				dmat.albedo_color = (sector_def["sky_horizon"] as Color).lightened(0.4) * 1.7
+				dm.material = dmat
+				_drag_dust.mesh = dm
+				add_child(_drag_dust)
+			_drag_dust.global_position = player_ship.global_position
+		"debris_field":
+			# Derelict hulks drift and the field throws fast shards across the arena.
+			for i in range(_wreck_nodes.size()):
+				if not is_instance_valid(_wreck_nodes[i]):
+					continue
+				_wreck_nodes[i].position += _wreck_drift[i] * delta
+				_wreck_nodes[i].rotate_y(delta * 0.045)
+			_debris_shard_cd -= delta
+			if _debris_shard_cd <= 0.0:
+				_debris_shard_cd = randf_range(6.0, 9.5)
+				_spawn_debris_shard()
+			_tick_debris_shards(delta)
+		"void_shear":
+			# Gravitational shear: a slow wave that first pulls, then hurls the hull.
+			_shear_cd -= delta
+			if _shear_cd <= 0.0:
+				_shear_cd = randf_range(11.0, 16.0)
+				_shear_phase = 3.2
+				VFXFactory.spawn_impact_ring(get_parent(), player_ship.global_position, Color(0.72, 0.32, 1.0), 22.0, 1.1)
+				AudioManager.play_sfx("plasma_shot", 0.12, 0.45)
+				add_camera_trauma(0.42)
+			if _shear_phase > 0.0:
+				_shear_phase = maxf(0.0, _shear_phase - delta)
+				var inward := _shear_phase > 1.6
+				var to_centre := -player_ship.global_position
+				var dist := to_centre.length()
+				if dist > 1.0:
+					var dir := to_centre / dist
+					var strength := clampf(1.0 - dist / 260.0, 0.15, 1.0)
+					player_ship.apply_central_impulse(dir * (34.0 if inward else -46.0) * strength * delta * 6.0)
+
+
+func _spawn_debris_shard() -> void:
+	## A single fast, glowing shard crossing the player's neighbourhood. It is
+	## visible (rim glow + emission), dodgeable, and it hurts if it connects.
+	if not is_instance_valid(player_ship):
+		return
+	var shard := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.9, 0.7, 2.4)
+	shard.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.30, 0.26, 0.24)
+	mat.metallic = 0.75
+	mat.roughness = 0.45
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 0.42, 0.18)
+	mat.emission_energy_multiplier = 1.4
+	shard.material_override = mat
+	shard.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var start := player_ship.global_position + Vector3(randf_range(-120, 120), randf_range(-40, 40), randf_range(-120, 120))
+	if start.distance_to(player_ship.global_position) < 60.0:
+		start = player_ship.global_position + Vector3(0.0, 62.0, 0.0)
+	shard.position = start
+	var travel := (player_ship.global_position - start).normalized()
+	if travel.length_squared() < 0.5:
+		travel = Vector3.FORWARD
+	shard.look_at(start + travel, Vector3.UP)
+	add_child(shard)
+	_shards.append({
+		"node": shard,
+		"dir": travel,
+		"speed": randf_range(46.0, 62.0),
+		"t": 0.0,
+	})
+
+
+func _tick_debris_shards(delta: float) -> void:
+	## Shards are advanced here instead of with per-shard timers: one loop, no
+	## long tween chains, and the hit test runs on the same tick as the movement.
+	var keep: Array[Dictionary] = []
+	for entry in _shards:
+		var node: Node3D = entry["node"]
+		if not is_instance_valid(node):
+			continue
+		var t: float = float(entry["t"]) + delta
+		entry["t"] = t
+		node.position += (entry["dir"] as Vector3) * float(entry["speed"]) * delta
+		node.rotate_x(delta * 2.2)
+		var alive := t < 6.5
+		if alive and t > 0.2 and is_instance_valid(player_ship) \
+				and node.position.distance_to(player_ship.global_position) < 6.4:
+			player_ship.receive_enemy_hit(26.0, node.position, 0)
+			VFXFactory.spawn_explosion(get_parent(), node.position, Color(1.0, 0.55, 0.25), 0.7)
+			add_camera_trauma(0.38)
+			alive = false
+		if alive:
+			keep.append(entry)
+		else:
+			node.queue_free()
+	_shards = keep
+
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and _mouse_captured:

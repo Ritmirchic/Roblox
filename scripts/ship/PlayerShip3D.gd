@@ -41,6 +41,7 @@ var _muzzles_by_uid: Dictionary = {}     # uid -> Marker3D
 var _plumes_by_uid: Dictionary = {}      # uid -> MeshInstance3D
 var _sparks_by_uid: Dictionary = {}      # uid -> CPUParticles3D
 var _beams_by_uid: Dictionary = {}       # uid -> MeshInstance3D
+var _seam_mats: Array[ShaderMaterial] = []  # hull panel seams (energy conduit)
 var _weapon_cooldowns: Dictionary = {}   # uid -> float
 var _shape_idx_to_uid: Dictionary = {}   # shape_index -> uid
 
@@ -50,6 +51,9 @@ var _orbit_drones: Array[Node3D] = []
 var _drone_angle: float = 0.0
 var _drone_fire_cd: float = 0.0
 var _shield_hit_flash: float = 0.0
+# Публичный отклик урона для кадрового града HUD (v2.6.0): заполняется, когда
+# снаряд реально пробил щит и снял броню, а не при любом касании.
+var hull_hit_pulse: float = 0.0
 var _shield_regen_delay: float = 0.0
 var _prev_pos: Vector3 = Vector3.ZERO
 var _prev_phys_xform: Transform3D = Transform3D.IDENTITY
@@ -117,6 +121,9 @@ func rebuild_from_grid() -> void:
 		if is_instance_valid(b):
 			b.queue_free()
 	_beams_by_uid.clear()
+	# Seam material handles belong to the freed hull meshes: keeping them would
+	# leak one ShaderMaterial per rebuild.
+	_seam_mats.clear()
 
 	ShipGrid.repair_all_modules()
 	stats = ShipGrid.compute_ship_stats()
@@ -173,6 +180,22 @@ func rebuild_from_grid() -> void:
 		elif mod_id in ["radar", "magnetic_radar"]:
 			_radars_by_uid[uid] = pivot
 
+		if mod_id in ["hull_cell", "armor_plate"]:
+			# Structural cells carry the glowing seams: the hull stops looking like
+			# separate boxes glued together and starts reading as one plated frame.
+			var seam := VFXFactory.make_hull_seam_mesh(
+				box_size,
+				Color(0.24, 0.74, 1.0) if mod_id == "hull_cell" else Color(1.0, 0.72, 0.28),
+				1.05
+			)
+			if seam != null:
+				# Parented to the hull itself, not the rotated module root: the seam
+				# box must sit exactly over the cell it outlines at every yaw.
+				seam.position = center_local
+				add_child(seam)
+				if seam.material_override is ShaderMaterial:
+					_seam_mats.append(seam.material_override)
+
 		var mpath: String = def["model_path"]
 		if ResourceLoader.exists(mpath):
 			var ps: PackedScene = load(mpath)
@@ -183,6 +206,16 @@ func rebuild_from_grid() -> void:
 				inst.scale = Vector3.ONE * 1.16
 				inst.rotation.y = randf_range(-0.13, 0.13)
 				pivot.add_child(inst)
+				# Imported modules arrived with mismatched metal/roughness, which is
+				# what made a grid-built ship read as separate blocks. One tuning
+				# pass gives the whole hull the same specular behaviour.
+				var is_engine := def.has("thrust_force")
+				VFXFactory.tune_glb_materials(
+					inst,
+					0.12 if is_engine else 0.06,
+					0.34 if is_engine else 0.46,
+					is_engine
+				)
 
 		# Muzzle marker at front (-Z) of module/turret
 		var muzzle := Marker3D.new()
@@ -259,6 +292,8 @@ func _physics_process(delta: float) -> void:
 
 	if _shield_hit_flash > 0.0:
 		_shield_hit_flash = maxf(0.0, _shield_hit_flash - delta * 3.2)
+	if hull_hit_pulse > 0.0:
+		hull_hit_pulse = maxf(0.0, hull_hit_pulse - delta * 2.1)
 	if _shield_mesh and _shield_mesh.material_override is ShaderMaterial:
 		var smat: ShaderMaterial = _shield_mesh.material_override
 		var max_sh := maxf(1.0, float(stats.get("shield_cap", 0.0)))
@@ -461,6 +496,14 @@ func _apply_flight_physics(delta: float) -> void:
 			var sm: ShaderMaterial = pl.material_override
 			sm.set_shader_parameter("throttle", throttle_vis * eff)
 			sm.set_shader_parameter("heat_ratio", engine_heat / 100.0)
+
+	# The hull conduits answer the same throttle as the engines, so a boosting
+	# ship lights up along its plate seams instead of standing still while the
+	# plumes fire.
+	var seam_duty := clampf(throttle_vis * 0.85 + engine_heat / 220.0, 0.0, 1.0)
+	for smat in _seam_mats:
+		if smat != null:
+			smat.set_shader_parameter("duty", seam_duty)
 
 func _get_reticle_assisted_point(from_pos: Vector3) -> Vector3:
 	var base_dir := (aimed_world_point - from_pos).normalized()
@@ -718,10 +761,19 @@ func _process_mining_beams(delta: float) -> void:
 			if col is Asteroid3D:
 				var y_bonus := 1.0 + float(def.get("yield_bonus", 0.0))
 				col.apply_mining_damage(dps * delta, int(def.get("hardness_pierce", 1)), loot_mult * y_bonus, rare_ch, chunks_root)
+				# The beam has to scar the rock it is cutting: molten spot, spark spray
+				# and a growing fracture glow, all driven by real damage.
+				col.register_beam_hit(hit["position"], delta)
 			elif col and col.has_method("take_weapon_damage"):
-				col.take_weapon_damage(dps * 0.45 * delta)
+				col.take_weapon_damage(dps * 0.45 * delta, hit["position"])
 
 		VFXFactory.update_beam_between(bm, m_pos, end_pos)
+		# The beam widens and brightens with the reactor share it is actually
+		# getting, so a starved laser visibly loses authority.
+		var bmat := bm.material_override as ShaderMaterial
+		if bmat != null:
+			bmat.set_shader_parameter("load", clampf(0.15 + mine_pow * 0.7, 0.0, 1.0))
+			bmat.set_shader_parameter("intensity", 1.35 + mine_pow * 0.75)
 
 	AudioManager.set_mining_active(any_beam_active)
 	if any_beam_active:
@@ -876,6 +928,10 @@ func _process_orbiting_drones(delta: float) -> void:
 func receive_enemy_hit(raw_damage: float, hit_world_pos: Vector3, shape_idx: int = 0) -> void:
 	if raw_damage <= 0.0:
 		return
+	# Кадровому граду нужен один нормализованный сигнал: сколько урона только
+	# что пришло. Щит даёт половину, пробитие корпуса — полную вспышку.
+	var incoming_ratio := clampf(raw_damage / maxf(1.0, float(stats.get("hull_cap", 180.0))), 0.08, 1.0)
+	hull_hit_pulse = clampf(hull_hit_pulse + incoming_ratio * 0.85, 0.0, 1.0)
 	_shield_regen_delay = 3.2
 	var remaining := raw_damage
 	if current_shield > 0.0:

@@ -83,8 +83,11 @@ func _roll_rarity(weights: Dictionary) -> String:
 	var pick := _rng.randf() * total
 	var accum := 0.0
 	for r in GameData.RARITY_ORDER:
-		accum += float(weights.get(r, 0.0))
-		if pick <= accum:
+		var w := float(weights.get(r, 0.0))
+		accum += w
+		# A zero-weight rarity must never be returned, not even on the astronomically
+		# unlikely pick == 0 roll (the elite vault box prints no Commons at all).
+		if w > 0.0 and pick <= accum:
 			return r
 	return "Common"
 
@@ -166,7 +169,9 @@ func purchase_and_open_pack(pack_id: String) -> Dictionary:
 		var drawn_finish := str(grant["finish"])
 		var dup_credits := 0
 		if not is_new:
-			var frank := GameData.get_finish_rank(drawn_finish)
+			# Compensation must follow the *pulled* finish, not the best foil already
+			# owned: a plain duplicate used to pay out at glow rates.
+			var frank := GameData.get_finish_rank(fid)
 			dup_credits = int(round(float(DUPLICATE_CREDIT_BONUS.get(rar, 150)) * (1.0 + 0.35 * float(frank))))
 			ShipGrid.add_credits(dup_credits)
 

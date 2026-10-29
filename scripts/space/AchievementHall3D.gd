@@ -54,23 +54,16 @@ func _ready() -> void:
 func _build_environment() -> void:
 	var we := WorldEnvironment.new()
 	var env := Environment.new()
-	var sky := Sky.new()
-	var smat := ProceduralSkyMaterial.new()
-	smat.sky_top_color = Color(0.014, 0.02, 0.045)
-	smat.sky_horizon_color = Color(0.05, 0.07, 0.13)
-	smat.ground_bottom_color = Color(0.004, 0.008, 0.018)
-	smat.ground_horizon_color = Color(0.015, 0.025, 0.05)
-	sky.sky_material = smat
+	# Зал смотрит в ту же туманность, что и полёт: карточные награды висят в
+	# узнаваемом космосе, а не в собственной процедурной заливке.
 	env.background_mode = Environment.BG_SKY
-	env.sky = sky
+	env.sky = ThemeHelper.make_nebula_sky(-38.0, 0.85)
+	env.sky_rotation = ThemeHelper.sky_rotation_for(-38.0)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.16, 0.21, 0.3)
+	env.ambient_light_color = Color(0.18, 0.24, 0.34)
 	env.ambient_light_energy = 1.0
-	env.glow_enabled = true
-	env.glow_intensity = 0.75
-	env.fog_enabled = true
-	env.fog_light_color = Color(0.03, 0.05, 0.10)
-	env.fog_density = 0.006
+	ThemeHelper.style_3d_environment(env, Color(0.24, 0.34, 0.58))
+	env.fog_density = 0.0055 * ThemeHelper.quality_float("fog")
 	we.environment = env
 	add_child(we)
 

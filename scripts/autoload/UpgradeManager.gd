@@ -97,7 +97,12 @@ func enforce_slot_cap() -> void:
 		if owned_upgrades.has(uid) and GameData.upgrades_by_id.has(uid) and not clean.has(uid):
 			if clean.size() < cap:
 				clean.append(uid)
+	if clean.size() == active_equipped.size():
+		return
+	# A getter must not mutate the loadout silently: when the cap trims an entry,
+	# the UI and the ship stats have to be told.
 	active_equipped = clean
+	upgrades_changed.emit()
 
 func get_combined_buffs() -> Dictionary:
 	enforce_slot_cap()

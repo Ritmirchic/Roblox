@@ -21,6 +21,8 @@ var elite: bool = false
 var aggression: float = 1.0
 var _lock_ring: MeshInstance3D = null
 var _halo: MeshInstance3D = null
+# Hull-punch scale pulse after a confirmed hit (v2.6.0 hit feedback).
+var _hit_punch: float = 0.0
 
 var target_ship: Node3D = null
 var projectiles_root: Node = null
@@ -71,9 +73,13 @@ func setup(
 	_strafe_phase = randf() * TAU
 	_strafe_dir = -1.0 if randf() < 0.5 else 1.0
 
+	# Elites are drawn 1.26x larger; the sphere used to stay at the base radius, so
+	# shots aimed at the wings flew straight through the hull.
+	var visual_scale := 1.26 if elite else 1.0
+	var body_radius := 2.0 * float(def.get("scale", 1.15)) * visual_scale
 	var col := CollisionShape3D.new()
 	var sph := SphereShape3D.new()
-	sph.radius = 2.0 * float(def.get("scale", 1.15))
+	sph.radius = body_radius
 	col.shape = sph
 	add_child(col)
 
@@ -89,9 +95,9 @@ func setup(
 	plume.position = Vector3(0, 0, 1.8 * float(def.get("scale", 1.15)))
 	add_child(plume)
 
-	var body_scale := 2.0 * float(def.get("scale", 1.15)) * (1.34 if elite else 1.0)
+	var body_scale := body_radius
 	if elite:
-		scale = Vector3.ONE * 1.26
+		scale = Vector3.ONE * visual_scale
 
 	# green soft-lock bracket drawn around the hull so the marked target is unmistakable
 	_lock_ring = MeshInstance3D.new()
@@ -150,6 +156,7 @@ func set_lock_state(on: bool) -> void:
 		tw.tween_property(_lock_ring, "scale", Vector3.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func _physics_process(delta: float) -> void:
+	_pulse_hit_punch(delta)
 	if _dead or not is_instance_valid(target_ship):
 		return
 
@@ -195,6 +202,9 @@ func _physics_process(delta: float) -> void:
 		_fire_at_player(dir_to_player)
 
 func _fire_at_player(aim_dir: Vector3) -> void:
+	# Enemy fire used to be completely silent, so incoming shots were invisible
+	# until they landed. One quiet report per volley with a little pitch spread.
+	AudioManager.play_sfx("laser_shot", 0.09, 0.42)
 	var wtype := "plasma" if enemy_id in ["plasma_hunter", "void_sentinel"] else "laser"
 	var shots := 3 if elite else 1
 	for i in range(shots):
@@ -208,7 +218,7 @@ func _fire_at_player(aim_dir: Vector3) -> void:
 		var xform := Projectile3D.make_aim_transform(muzzle_pos, spread)
 		p.setup(false, wtype, attack_damage * (0.82 if elite else 1.0), 142.0 if elite else 125.0, xform)
 
-func take_weapon_damage(dmg: float) -> void:
+func take_weapon_damage(dmg: float, hit_pos: Vector3 = Vector3.ZERO) -> void:
 	if _dead or dmg <= 0.0:
 		return
 	var rem := dmg
@@ -216,9 +226,60 @@ func take_weapon_damage(dmg: float) -> void:
 		var absorbed := minf(shield, rem)
 		shield -= absorbed
 		rem -= absorbed
+		if absorbed > 0.0:
+			_shield_flash(hit_pos if hit_pos != Vector3.ZERO else global_position)
 	hp -= rem
+	if rem > 0.0:
+		_hull_impact(hit_pos if hit_pos != Vector3.ZERO else global_position)
 	if hp <= 0.0:
 		_die()
+
+
+func _shield_flash(at: Vector3) -> void:
+	## Shield hits read differently from hull hits: a dielectric bubble flash that
+	## collapses, so the player can tell "shields up" from "taking real damage".
+	var mi := MeshInstance3D.new()
+	var sph := SphereMesh.new()
+	sph.radius = 2.6
+	sph.height = 5.2
+	sph.radial_segments = 14
+	sph.rings = 8
+	mi.mesh = sph
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.albedo_color = Color(0.35, 0.82, 1.0, 0.85) * 2.0
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	get_parent().add_child(mi)
+	mi.global_position = global_position
+	mi.scale = Vector3.ONE * 0.55
+	var tw := mi.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(mi, "scale", Vector3.ONE * 1.15, 0.22).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_method(func(a: float): mat.albedo_color = Color(0.35, 0.82, 1.0, a) * 2.0, 0.85, 0.0, 0.22)
+	tw.chain().tween_callback(mi.queue_free)
+	VFXFactory.spawn_impact_ring(get_parent(), at, Color(0.42, 0.86, 1.0), 1.9, 0.26)
+
+
+func _hull_impact(at: Vector3) -> void:
+	VFXFactory.spawn_impact_ring(get_parent(), at, Color(1.0, 0.62, 0.28), 1.6, 0.24)
+	VFXFactory.spawn_debris_burst(
+		get_parent(), at, Color(1.0, 0.72, 0.35),
+		maxi(2, int(round(5.0 * ThemeHelper.quality_float("particles")))), 9.0
+	)
+	# A short hull punch makes every connected round feel like it landed.
+	_hit_punch = 1.0
+	scale = Vector3.ONE * (1.26 if elite else 1.0) * 1.045
+
+
+func _pulse_hit_punch(delta: float) -> void:
+	if _hit_punch <= 0.0:
+		return
+	_hit_punch = maxf(0.0, _hit_punch - delta * 6.0)
+	var base := 1.26 if elite else 1.0
+	scale = Vector3.ONE * (base * (1.0 + 0.045 * _hit_punch))
 
 func _die() -> void:
 	if _dead:

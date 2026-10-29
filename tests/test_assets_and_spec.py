@@ -1000,3 +1000,130 @@ def test_card_footer_is_not_buried_under_the_skin_frame_overlay():
     i = src.index("skin_frame.self_modulate =")
     assert "vb.move_to_front()" in src[i:i + 500], \
         "the etched band of the skin frame dimmed the bonus row"
+
+
+# ── v2.6.0 graphics overhaul + audit fixes ───────────────────────────────────
+
+def _src(rel: str) -> str:
+    return (ROOT / rel).read_text(encoding="utf-8")
+
+
+def test_quality_presets_have_a_single_source_of_truth():
+    theme = _src("scripts/autoload/ThemeHelper.gd")
+    assert "const QUALITY_PROFILES: Dictionary" in theme
+    for preset in ("Low", "Medium", "High"):
+        assert f'"{preset}": {{' in theme, f"missing quality profile {preset}"
+    for field in ("particles", "shadows", "glow", "fog", "grade", "vfx_lights"):
+        assert f'"{field}"' in theme, f"quality profile lost the '{field}' lever"
+    # The old bug: VFXFactory matched a preset the settings screen never offered.
+    for rel in ("scripts/vfx/VFXFactory.gd", "scripts/space/SpaceExpedition3D.gd",
+                "scripts/hangar/Hangar3D.gd"):
+        assert '"Ultra"' not in _src(rel), f"{rel} still branches on the phantom Ultra preset"
+    vfx = _src("scripts/vfx/VFXFactory.gd")
+    assert 'ThemeHelper.quality_float("particles")' in vfx, "particle density must read the profile"
+
+
+def test_new_shaders_exist_and_are_referenced():
+    expected = {
+        "shaders/hud_grade.gdshader": "scripts/space/SpaceExpedition3D.gd",
+        "shaders/planet_atmosphere.gdshader": "scripts/space/SpaceExpedition3D.gd",
+        "shaders/lens_flare.gdshader": "scripts/space/SpaceExpedition3D.gd",
+        "shaders/light_shaft.gdshader": "scripts/hangar/Hangar3D.gd",
+        "shaders/asteroid_crack.gdshader": "scripts/space/Asteroid3D.gd",
+        "shaders/hull_seam.gdshader": "scripts/vfx/VFXFactory.gd",
+    }
+    for shader, consumer in expected.items():
+        assert (ROOT / shader).is_file(), f"missing shader {shader}"
+        assert shader.split("/")[-1] in _src(consumer), f"{shader} is never loaded by {consumer}"
+    grade = _src("shaders/hud_grade.gdshader")
+    assert "hint_screen_texture" in grade, "the grade must sample the screen, not repaint the frame"
+    assert "damage_flash" in grade, "the grade has to react to real damage"
+
+
+def test_shaders_have_no_literal_escape_artifacts():
+    # A heredoc that writes "\t" instead of a tab produces a shader that fails to
+    # compile at runtime - and only the engine step would notice.
+    for f in sorted((ROOT / "shaders").glob("*.gdshader")):
+        text = f.read_text(encoding="utf-8")
+        assert "\\t" not in text, f"{f.name} contains a literal backslash-t escape"
+
+
+def test_every_sector_hazard_has_a_real_mechanic():
+    src = _src("scripts/space/SpaceExpedition3D.gd")
+    body_i = src.index("func _apply_sector_hazard(")
+    body = src[body_i:src.index("func _spawn_debris_shard(", body_i)]
+    data = _src("scripts/autoload/GameData.gd")
+    hazards = set(re.findall(r'"hazard": "([a-z_]+)"', data))
+    assert hazards >= {"nebula_drag", "debris_field", "plasma_lightning", "void_shear"}
+    for hz in hazards:
+        assert f'"{hz}"' in src, f"sector hazard '{hz}' is inert data with no mechanic"
+    # plasma_lightning predates the batch and lives in the spawn/hazard tick.
+    assert '"plasma_lightning"' in src
+    for hz in ("nebula_drag", "debris_field", "void_shear"):
+        assert f'"{hz}"' in body, f"sector hazard '{hz}' has no branch in _apply_sector_hazard"
+    assert "apply_central_impulse" in body, "void shear must move the hull"
+    assert "linear_velocity" in body, "nebula drag must actually brake the hull"
+    assert "_spawn_debris_shard()" in body, "debris field must throw real shards"
+
+
+def test_elite_hitbox_matches_its_visual_scale():
+    src = _src("scripts/space/EnemyShip3D.gd")
+    assert "var visual_scale := 1.26 if elite else 1.0" in src
+    assert 'sph.radius = body_radius' in src, "the collision sphere must follow the elite body"
+    assert "scale = Vector3.ONE * visual_scale" in src
+
+
+def test_partial_cargo_pickup_keeps_the_remainder():
+    src = _src("scripts/space/ResourceChunk3D.gd")
+    body = src[src.index("func try_collect("):]
+    assert "if stored <= 0:" in body, "a full hold must leave the fragment in space"
+    assert "amount -= stored" in body, "the un-stored remainder was silently deleted"
+
+
+def test_duplicate_pack_payout_uses_the_pulled_finish():
+    src = _src("scripts/autoload/PackManager.gd")
+    i = src.index("var dup_credits := 0")
+    blk = src[i:i + 320]
+    assert "GameData.get_finish_rank(fid)" in blk, "duplicates must pay for the foil actually pulled"
+    assert 'w > 0.0 and pick <= accum' in src, "zero-weight rarities must never be rolled"
+
+
+def test_sector_unlock_is_saved_and_announced():
+    src = _src("scripts/autoload/ShipGrid.gd")
+    body = src[src.index("func unlock_sector("):src.index("func serialize_ship(")]
+    assert "ship_changed.emit()" in body, "the UI has to learn about a bought sector"
+    assert "SaveManager.autosave()" in body, "a paid unlock must survive a crash"
+
+
+def test_glow_pipeline_is_hdr_and_light_budgeted():
+    vfx = _src("scripts/vfx/VFXFactory.gd")
+    assert "* 2.4" in vfx, "additive materials must exceed 1.0 to reach the bloom threshold"
+    assert 'ThemeHelper.quality_int("vfx_lights") > 0' in vfx, "explosion lights must respect the profile"
+    assert "spawn_impact_ring(" in vfx and "spawn_debris_burst(" in vfx
+    chunk = _src("scripts/space/ResourceChunk3D.gd")
+    assert 'ThemeHelper.quality_int("vfx_lights") > 0' in chunk, "one light per fragment must be budgeted"
+    assert "_glow_check_t" in chunk, "distant fragments should not keep their light on"
+
+
+def test_all_3d_stages_share_the_nebula_sky_and_grade():
+    for rel in ("scripts/ui/Main.gd", "scripts/hangar/Hangar3D.gd",
+                "scripts/space/AchievementHall3D.gd"):
+        src = _src(rel)
+        assert "ThemeHelper.make_nebula_sky(" in src, f"{rel} still uses its own flat sky"
+        assert "ThemeHelper.style_3d_environment(" in src, f"{rel} skipped the shared grade"
+    theme = _src("scripts/autoload/ThemeHelper.gd")
+    assert "Environment.TONE_MAPPER_ACES" in theme
+    assert "fog_density = 0.0009" in theme, "fog must stay aerial, not veil the landmarks"
+    proj = _src("project.godot")
+    assert "anti_aliasing/quality/screen_space_aa=1" in proj
+    assert "anti_aliasing/quality/use_debanding=true" in proj
+    assert "textures/default_filters/anisotropic_filtering_level=2" in proj
+
+
+def test_hud_grade_sits_under_the_hud_and_over_the_world():
+    src = _src("scripts/space/SpaceExpedition3D.gd")
+    grade = src[src.index("func _build_screen_grade("):src.index("func _tick_screen_grade(")]
+    assert "layer.layer = 1" in grade, "the grade must render above 3D"
+    hud = src[src.index("func _build_expedition_hud("):]
+    assert "_hud_layer.layer = 2" in hud, "the HUD must stay above the grade, never tinted by it"
+    assert "_tick_screen_grade(delta)" in src

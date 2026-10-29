@@ -18,6 +18,7 @@ const COL_TEXT := Color(0.93, 0.97, 1.00, 1.0)
 const COL_MUTED := Color(0.60, 0.74, 0.88, 1.0)
 
 var graphics_preset: String = "High"
+signal graphics_profile_changed(preset: String)
 var reduced_motion: bool = false
 var camera_sensitivity: float = 1.0
 
@@ -628,21 +629,120 @@ func make_language_dropdown(compact: bool = false) -> OptionButton:
 	)
 	return ob
 
+# ── Quality profiles (v2.6.0) ────────────────────────────────────────────────
+const QUALITY_PROFILES: Dictionary = {
+	"Low": {
+		"particles": 0.45, "lights": false, "shadows": false, "glow": 0.34,
+		"bloom": 0.02, "fog": 0.60, "msaa": 0, "scale": 0.80, "debris": 0.5,
+		"landmark_detail": false, "grade": 0.35, "vfx_lights": 0,
+	},
+	"Medium": {
+		"particles": 0.85, "lights": true, "shadows": true, "glow": 0.76,
+		"bloom": 0.07, "fog": 0.85, "msaa": 1, "scale": 0.95, "debris": 1.0,
+		"landmark_detail": true, "grade": 0.7, "vfx_lights": 2,
+	},
+	"High": {
+		"particles": 1.35, "lights": true, "shadows": true, "glow": 1.10,
+		"bloom": 0.13, "fog": 1.0, "msaa": 2, "scale": 1.0, "debris": 1.45,
+		"landmark_detail": true, "grade": 1.0, "vfx_lights": 4,
+	},
+}
+
+func normalize_preset(preset: String) -> String:
+	# Старые сейвы могли содержать «Ultra»; неизвестное имя = лучший профиль,
+	# а не молчаливое падение на дефолт в одном месте и на «High» в другом.
+	if QUALITY_PROFILES.has(preset):
+		return preset
+	return "High"
+
+func _profile() -> Dictionary:
+	return QUALITY_PROFILES.get(normalize_preset(graphics_preset), QUALITY_PROFILES["High"])
+
+func quality_float(field: String) -> float:
+	return float(_profile().get(field, 1.0))
+
+func quality_int(field: String) -> int:
+	return int(_profile().get(field, 1))
+
+func quality_bool(field: String) -> bool:
+	return bool(_profile().get(field, true))
+
+func make_nebula_sky(rotation_deg: float = 0.0, energy: float = 1.0) -> Sky:
+	## Одна панорама на все 3D-сцены: ангар, сектор и зал достижений смотрят в
+	## один и тот же космос, повёрнутый на свой угол. Так три сцены читаются как
+	## одно место действия, а не как три разных движка.
+	var sky := Sky.new()
+	var path := "res://assets/textures/sky/nebula_2k.png"
+	if ResourceLoader.exists(path):
+		var pano := PanoramaSkyMaterial.new()
+		pano.panorama = load(path)
+		pano.energy_multiplier = energy
+		sky.sky_material = pano
+		sky.radiance_size = Sky.RADIANCE_SIZE_128
+	else:
+		var proc := ProceduralSkyMaterial.new()
+		proc.sky_top_color = Color(0.02, 0.03, 0.07)
+		proc.sky_horizon_color = Color(0.08, 0.11, 0.20)
+		proc.ground_bottom_color = Color(0.01, 0.015, 0.03)
+		proc.ground_horizon_color = Color(0.06, 0.08, 0.14)
+		sky.sky_material = proc
+	sky.process_mode = Sky.PROCESS_MODE_REALTIME if quality_bool("landmark_detail") else Sky.PROCESS_MODE_AUTOMATIC
+	var r := deg_to_rad(rotation_deg)
+	return sky
+
+
+func sky_rotation_for(rotation_deg: float) -> Vector3:
+	return Vector3(0.0, deg_to_rad(rotation_deg), 0.0)
+
+
+func style_3d_environment(env: Environment, palette_hint: Color = Color(0.5, 0.6, 0.8)) -> void:
+	## Единый кинематографический базис для всех 3D-сцен (v2.6.0).
+	## Раньше у ангара и у сектора были независимые, приглушённые настройки —
+	## отсюда «мутный» вид. Здесь тонмаппинг, свечение, туман глубины и цветокор
+	## задаются один раз и масштабируются пресетом качества.
+	var q_glow := quality_float("glow")
+	var q_bloom := quality_float("bloom")
+	var q_fog := quality_float("fog")
+	var q_grade := quality_float("grade")
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.tonemap_exposure = 1.06
+	env.tonemap_white = 6.2
+	env.glow_enabled = q_glow > 0.0
+	if env.glow_enabled:
+		env.glow_intensity = q_glow
+		env.glow_strength = 1.05
+		env.glow_bloom = q_bloom
+		env.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
+		env.glow_hdr_threshold = 0.92
+		env.glow_hdr_scale = 2.1
+		for lvl in range(7):
+			env.set_glow_level(lvl, 1.0 if lvl in [1, 2, 3, 4] else (0.55 if lvl in [0, 5] else 0.0))
+	env.fog_enabled = q_fog > 0.0
+	if env.fog_enabled:
+		env.fog_mode = Environment.FOG_MODE_EXPONENTIAL
+		env.fog_light_color = palette_hint.darkened(0.45)
+		env.fog_light_energy = 0.72
+		env.fog_density = 0.0009 * q_fog
+		env.fog_aerial_perspective = 0.55 * q_fog
+		env.fog_sky_affect = 0.12
+	env.adjustment_enabled = q_grade > 0.0
+	if env.adjustment_enabled:
+		env.adjustment_brightness = lerpf(1.0, 1.04, q_grade)
+		env.adjustment_contrast = lerpf(1.0, 1.12, q_grade)
+		env.adjustment_saturation = lerpf(1.0, 1.16, q_grade)
+	env.ambient_light_sky_contribution = 0.45
+
+
 func apply_graphics_preset(preset: String) -> void:
-	graphics_preset = preset
+	graphics_preset = normalize_preset(preset)
 	var vp := get_viewport()
 	if not vp:
 		return
-	match preset:
-		"Low":
-			vp.msaa_3d = Viewport.MSAA_DISABLED
-			vp.scaling_3d_scale = 0.80
-		"Medium":
-			vp.msaa_3d = Viewport.MSAA_2X
-			vp.scaling_3d_scale = 0.95
-		_:
-			vp.msaa_3d = Viewport.MSAA_4X
-			vp.scaling_3d_scale = 1.0
+	vp.msaa_3d = int(_profile()["msaa"])
+	vp.scaling_3d_scale = float(_profile()["scale"])
+	# The flight grade and world environments read the same profile, so a preset
+	# change has to reach every live 3D stage instead of only the next one.
+	graphics_profile_changed.emit(graphics_preset)
 
 # ============================================================================
 # v2.1 EXPANDED PERSISTED SETTINGS STORE

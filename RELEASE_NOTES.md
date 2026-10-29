@@ -4,6 +4,69 @@ A complete standalone 3D space game: modular ship engineering on a real 3D grid,
 magnetic recovery, orbital combat, a collectible crew-card economy, a live sector market and UTC-rotating
 achievements. No external runtimes required.
 
+## v2.6.0 — Cinematic Rendering Pass + Audit Fixes
+
+The whole 3D presentation was rebuilt around one shared quality profile, one shared sky and one shared
+colour grade, and the codebase was audited end to end for the real defects hiding in it.
+
+### Rendering
+- **One quality profile for the entire game.** Low / Medium / High now drive particle density, realtime
+  lights, shadow casting, glow, fog, MSAA and render scale from a single table in `ThemeHelper`. The old
+  setup had three independent `match` blocks and one of them still branched on an `Ultra` preset that the
+  settings screen never offered — so "High" was secretly running base-level particle density.
+- **Cinematic world grade everywhere**: ACES tonemapping with a 6.2 white point, additive glow with tuned
+  HDR threshold and glow levels, aerial-perspective depth fog, and contrast/saturation adjustments. The
+  main menu, the hangar, the flight sectors and the achievement hall all share it, so the game stops
+  looking like four different engines.
+- **One cosmos.** The 2K nebula panorama is now the sky of the menu, the hangar, all five sectors and the
+  hall. The hangar is no longer a dark box: space is visible through the open launch bay, with a ceiling,
+  three spotlights, volumetric-looking light shafts, warm hazard strips, emissive ceiling lamps and dust
+  motes in the beams.
+- **Sky landmarks in flight**: each sector gets a procedurally banded gas giant with a soft terminator and
+  fresnel atmosphere, two moons, a 150-instance distant asteroid belt (one MultiMesh draw call, no
+  collision, no shadows) and a star flare pinned to the real sun direction.
+- **Full-screen combat grade** under the HUD (`layer 1`, HUD stays on `layer 2`): vignette, film grain,
+  faint scanlines, split-tone warmth, and a chromatic-aberration/red flash that only opens up when the hull
+  actually takes damage. Boost adds a subtle speed warp. Reduced-motion and the Low profile tone all of it down.
+- **Hull panel seams**: structural cells now wear an additive seam shader that draws glowing plate lines and
+  rivets on every face, and the seams answer engine throttle. Together with a shared metallic/roughness pass
+  over every imported module, a grid-built ship finally reads as one plated hull instead of glued cubes.
+- **Weapons and mining got real light**: tracers, beams, plumes and explosions use additive HDR materials
+  (>1.0) so the glow pass finally catches them. The mining beam is a layered core + flowing energy packets +
+  a bright throat, widened by the reactor share it is actually getting. Shots now land with an expanding
+  shockwave ring, shrapnel spray, a shock light and a hull-punch scale pulse.
+- **Asteroids scar as you cut them**: a fracture shell with a glowing crack network that reveals with real
+  damage, a molten hot spot where the beam touches, spark spray on contact and a burst of shards, ring and
+  flash on shatter. Every rock also gets albedo jitter so a field does not read as clone stamps.
+- **Enemy hit feedback**: shield hits flash a dielectric bubble that collapses, hull hits spark and punch the
+  model, and enemy volleys are finally audible.
+- FXAA + debanding + 2x anisotropic filtering enabled at the project level.
+
+### Audit fixes
+- **Elite hulls had a base-size hitbox**: elites are drawn 1.26x larger, but the collision sphere never
+  scaled, so shots aimed at the wings passed straight through. Hitbox, lock bracket and halo now all derive
+  from one `visual_scale` / `body_radius`.
+- **Ore was being deleted**: a fragment that only partly fit into the hold was consumed whole. The remainder
+  now stays in space as a smaller chunk, and a full hold leaves it untouched.
+- **Three sector hazards were inert data**: `nebula_drag`, `debris_field` and `void_shear` existed in
+  `GameData` but did nothing. They now brake the hull in ionised gas, drift derelict hulks while throwing
+  dodgeable high-speed shards, and fire a pull-then-hurl gravitational shear wave.
+- **Duplicate card payouts used the wrong foil**: compensation was computed from the best foil already owned
+  instead of the one actually pulled, so a plain duplicate could pay at glow rates.
+- **Zero-weight rarities could be rolled** on the exact-zero random edge (the elite vault box never prints
+  Commons).
+- **Buying a sector did not persist**: credits were spent, no `ship_changed` signal was emitted and nothing
+  was saved until an unrelated action. A crash could take the money and keep the gate shut.
+- **Fragment lights are budgeted**: one omni light per ore chunk could put dozens of lights in a shattered
+  rock field; lights are now profile-capped and only switch on near the camera.
+- **Small-rock damage staging was distorted** by a `maxf(1.0, max_hp)` denominator, and an unknown mineral id
+  in sector data could crash the shatter VFX lookup. Both are guarded.
+- **Shaders can no longer ship broken silently**: a test now fails the build if any `.gdshader` contains a
+  literal `\t` escape instead of a tab.
+
+All of the above is covered by 11 new specification tests (53 total) on top of the existing engine and
+packaged-executable runtime verification.
+
 ## v2.5.2 — Owning a Card Now Shows on the Card, Not Only on Its Frame
 
 Reported from the crew-tab frames: an owned specialist looked exactly as dark as a locked one, only the border

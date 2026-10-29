@@ -93,21 +93,60 @@ func _show_main_menu() -> void:
 
 	var we := WorldEnvironment.new()
 	var env := Environment.new()
-	var sky := Sky.new()
-	var smat := ProceduralSkyMaterial.new()
-	smat.sky_top_color = Color(0.015, 0.032, 0.085)
-	smat.sky_horizon_color = Color(0.065, 0.19, 0.36)
-	smat.ground_bottom_color = Color(0.01, 0.02, 0.05)
-	smat.ground_horizon_color = Color(0.05, 0.14, 0.28)
-	sky.sky_material = smat
+	# The menu is the first frame of the game, so it looks through the same
+	# nebula panorama as the hangar, the sectors and the achievement hall.
 	env.background_mode = Environment.BG_SKY
-	env.sky = sky
+	env.sky = ThemeHelper.make_nebula_sky(18.0, 0.95)
+	env.sky_rotation = ThemeHelper.sky_rotation_for(18.0)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.24, 0.35, 0.52)
-	env.glow_enabled = true
-	env.glow_intensity = 0.72
+	env.ambient_light_energy = 0.9
+	ThemeHelper.style_3d_environment(env, Color(0.18, 0.34, 0.62))
 	we.environment = env
 	_menu_world.add_child(we)
+
+	# Backdrop landmark: a banded world plus a thin ring plane behind the ship.
+	var planet := MeshInstance3D.new()
+	var sphere := SphereMesh.new()
+	sphere.radius = 16.0
+	sphere.height = 32.0
+	sphere.radial_segments = 32 if ThemeHelper.quality_bool("landmark_detail") else 16
+	sphere.rings = 20 if ThemeHelper.quality_bool("landmark_detail") else 10
+	planet.mesh = sphere
+	if ResourceLoader.exists("res://shaders/planet_atmosphere.gdshader"):
+		var pmat := ShaderMaterial.new()
+		pmat.shader = load("res://shaders/planet_atmosphere.gdshader")
+		pmat.set_shader_parameter("planet_a", Color(0.10, 0.20, 0.42))
+		pmat.set_shader_parameter("planet_b", Color(0.38, 0.56, 0.82))
+		pmat.set_shader_parameter("planet_c", Color(0.86, 0.58, 0.36))
+		pmat.set_shader_parameter("atmo_color", Color(0.35, 0.72, 1.0))
+		pmat.set_shader_parameter("sun_dir", Vector3(0.7, 0.32, -0.6))
+		pmat.set_shader_parameter("band_scale", 5.2)
+		pmat.set_shader_parameter("turbulence", 1.4)
+		planet.material_override = pmat
+	else:
+		var pm := StandardMaterial3D.new()
+		pm.albedo_color = Color(0.18, 0.32, 0.55)
+		pm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		planet.material_override = pm
+	planet.position = Vector3(11.0, 8.0, -46.0)
+	planet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_menu_world.add_child(planet)
+
+	var ring_plane := MeshInstance3D.new()
+	var ring_mesh := TorusMesh.new()
+	ring_mesh.inner_radius = 20.0
+	ring_mesh.outer_radius = 27.0
+	ring_mesh.rings = 48 if ThemeHelper.quality_bool("landmark_detail") else 20
+	ring_mesh.ring_segments = 4
+	ring_plane.mesh = ring_mesh
+	var rmat := VFXFactory.glow_material(Color(0.42, 0.68, 1.0, 0.5), 1.0, true)
+	ring_plane.material_override = rmat
+	ring_plane.position = planet.position
+	ring_plane.rotation_degrees = Vector3(74.0, 22.0, -14.0)
+	ring_plane.scale = Vector3(1.0, 1.0, 0.06)
+	ring_plane.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_menu_world.add_child(ring_plane)
 
 	var sun := DirectionalLight3D.new()
 	sun.light_color = Color(0.96, 0.93, 0.86)
@@ -141,6 +180,10 @@ func _show_main_menu() -> void:
 				inst.position = Vector3(e["anchor"].x, e["anchor"].y, e["anchor"].z) * ShipGrid.CELL_SIZE
 				inst.rotation_degrees = Vector3(0, float(e["yaw"]) * 90.0, 0)
 				_menu_ship_spin.add_child(inst)
+				# Same specular language as in flight, otherwise the menu ship and
+				# the ship you fly look like two different assets.
+				var is_engine := GameData.modules[mid].has("thrust_force")
+				VFXFactory.tune_glb_materials(inst, 0.1 if is_engine else 0.06, 0.38 if is_engine else 0.46, is_engine)
 
 	if ResourceLoader.exists("res://assets/models/asteroids/ast_crystal_geode.glb"):
 		var aps: PackedScene = load("res://assets/models/asteroids/ast_crystal_geode.glb")

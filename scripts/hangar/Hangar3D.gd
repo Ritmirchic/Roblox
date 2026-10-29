@@ -99,20 +99,24 @@ func _build_3d_hangar_environment() -> void:
 
 	var we := WorldEnvironment.new()
 	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.02, 0.035, 0.075)
+	# Ангар больше не «коробка в пустоте»: за створом виден тот же космос, что и
+	# в полёте, поэтому переход ангар → сектор перестал быть сменой картинки.
+	env.background_mode = Environment.BG_SKY
+	env.sky = ThemeHelper.make_nebula_sky(24.0, 1.0)
+	env.sky_rotation = ThemeHelper.sky_rotation_for(24.0)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.24, 0.32, 0.46)
-	env.ambient_light_energy = 0.95
-	env.glow_enabled = true
-	env.glow_intensity = 0.65
+	env.ambient_light_color = Color(0.26, 0.34, 0.48)
+	env.ambient_light_energy = 0.85
+	ThemeHelper.style_3d_environment(env, Color(0.30, 0.44, 0.70))
+	# Внутри цеха воздух плотнее: лёгкая дымка даёт объём лучам прожекторов.
+	env.fog_density = 0.0065 * ThemeHelper.quality_float("fog")
 	we.environment = env
 	_env_root.add_child(we)
 
 	var key_light := DirectionalLight3D.new()
 	key_light.light_color = Color(0.95, 0.96, 1.0)
 	key_light.light_energy = 1.45
-	key_light.shadow_enabled = ThemeHelper.graphics_preset != "Low"
+	key_light.shadow_enabled = ThemeHelper.quality_bool("shadows")
 	key_light.rotation_degrees = Vector3(-48, 36, 0)
 	_env_root.add_child(key_light)
 
@@ -144,6 +148,9 @@ func _build_3d_hangar_environment() -> void:
 	floor_mi.material_override = fmat
 	_env_root.add_child(floor_mi)
 
+	_build_hangar_lighting(_env_root)
+	_build_hangar_dust(_env_root)
+
 	var wall_mat := StandardMaterial3D.new()
 	wall_mat.albedo_color = Color(0.11, 0.14, 0.20)
 	wall_mat.metallic = 0.75
@@ -152,6 +159,7 @@ func _build_3d_hangar_environment() -> void:
 		[Vector3(-26, 8, 0), Vector3(1.5, 19, 56)],
 		[Vector3(26, 8, 0), Vector3(1.5, 19, 56)],
 		[Vector3(0, 8, 25), Vector3(54, 19, 1.5)],
+		[Vector3(0, 12.6, 0), Vector3(54, 1.2, 56)],
 	]:
 		var wmi := MeshInstance3D.new()
 		var wb := BoxMesh.new()
@@ -192,6 +200,105 @@ func _build_3d_hangar_environment() -> void:
 	]
 	for st in stations:
 		_create_interactive_station(st[0], st[1], st[2], st[3], st[4])
+
+func _build_hangar_lighting(root: Node3D) -> void:
+	## Настоящие источники света вместо «материал светится сам»: холодные
+	## прожекторы сверху плюс тёплые аварийные полосы по стенам. Лучи — конусы
+	## shader'а light_shaft, поэтому объём читается и без volumetric fog.
+	var shaft_shader: Shader = null
+	if ResourceLoader.exists("res://shaders/light_shaft.gdshader"):
+		shaft_shader = load("res://shaders/light_shaft.gdshader")
+
+	for spec in [
+		[Vector3(-13.0, 10.5, -8.0), Color(0.45, 0.78, 1.0)],
+		[Vector3(13.0, 10.5, -8.0), Color(0.55, 0.86, 1.0)],
+		[Vector3(0.0, 11.0, 6.0), Color(1.0, 0.82, 0.55)],
+	]:
+		var spot := SpotLight3D.new()
+		spot.position = spec[0]
+		spot.light_color = spec[1]
+		spot.light_energy = 3.4
+		spot.spot_range = 34.0
+		spot.spot_angle = 42.0
+		spot.spot_attenuation = 0.85
+		spot.shadow_enabled = false
+		spot.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
+		root.add_child(spot)
+
+		if shaft_shader != null and ThemeHelper.quality_bool("lights"):
+			var cone := MeshInstance3D.new()
+			var mesh := CylinderMesh.new()
+			mesh.top_radius = 0.9
+			mesh.bottom_radius = 7.4
+			mesh.height = 19.0
+			mesh.radial_segments = 20
+			mesh.cap_top = false
+			mesh.cap_bottom = false
+			cone.mesh = mesh
+			var mat := ShaderMaterial.new()
+			mat.shader = shaft_shader
+			mat.set_shader_parameter("shaft_color", spec[1])
+			mat.set_shader_parameter("intensity", 0.30)
+			mat.set_shader_parameter("noise_scale", 2.2)
+			cone.material_override = mat
+			cone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			cone.position = Vector3(spec[0].x, 1.6, spec[0].z)
+			root.add_child(cone)
+
+	# Верхние лампы как источник бликов на металле пола и корпуса.
+	for spec2 in [[Vector3(-16.0, 9.4, -14.0)], [Vector3(16.0, 9.4, -14.0)], [Vector3(0.0, 9.6, 16.0)]]:
+		var lamp := MeshInstance3D.new()
+		var lb := BoxMesh.new()
+		lb.size = Vector3(7.0, 0.22, 0.6)
+		lamp.mesh = lb
+		var lmat := StandardMaterial3D.new()
+		lmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		lmat.albedo_color = Color(0.82, 0.94, 1.0) * 2.6
+		lamp.material_override = lmat
+		lamp.position = spec2[0]
+		lamp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(lamp)
+
+	# Тёплые аварийные полосы по низу стен — то, что делает кадр «живым».
+	for strip in [
+		[Vector3(-25.1, 1.2, 0.0), Vector3(0.12, 0.18, 50.0)],
+		[Vector3(25.1, 1.2, 0.0), Vector3(0.12, 0.18, 50.0)],
+	]:
+		var sm := MeshInstance3D.new()
+		var sb := BoxMesh.new()
+		sb.size = strip[1]
+		sm.mesh = sb
+		var smat := StandardMaterial3D.new()
+		smat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		smat.albedo_color = Color(1.0, 0.52, 0.18) * 1.9
+		sm.material_override = smat
+		sm.position = strip[0]
+		sm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(sm)
+
+
+func _build_hangar_dust(root: Node3D) -> void:
+	## Пыль в лучах: без неё прожекторы выглядят как наклейки.
+	var dust := CPUParticles3D.new()
+	dust.amount = maxi(24, int(round(120.0 * VFXFactory.get_particle_scale())))
+	dust.lifetime = 9.0
+	dust.preprocess = 4.0
+	dust.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	dust.emission_box_extents = Vector3(22.0, 7.0, 18.0)
+	dust.position = Vector3(0.0, 5.0, 0.0)
+	dust.gravity = Vector3(0.0, -0.05, 0.0)
+	dust.initial_velocity_min = 0.02
+	dust.initial_velocity_max = 0.16
+	var m := BoxMesh.new()
+	m.size = Vector3.ONE * 0.045
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	mat.albedo_color = Color(0.78, 0.90, 1.0) * 1.6
+	m.material = mat
+	dust.mesh = m
+	root.add_child(dust)
+
 
 func _create_interactive_station(tab_id: String, loc_key: String, pos: Vector3, yaw_deg: float, holo_col: Color) -> void:
 	var sb := StaticBody3D.new()
@@ -334,6 +441,19 @@ func _rebuild_ship_3d_preview(animate_last_uid: int = -1) -> void:
 			holder.add_child(cs)
 
 		var vis := _spawn_glb(holder, def["model_path"], Vector3.ZERO, Vector3.ZERO)
+		if vis:
+			# The hangar preview must match the ship you actually fly: same specular
+			# pass, plus the glowing plate seams on structural cells.
+			var is_engine := def.has("thrust_force")
+			VFXFactory.tune_glb_materials(vis, 0.1 if is_engine else 0.06, 0.38 if is_engine else 0.46, is_engine)
+		if mid in ["hull_cell", "armor_plate"]:
+			var seam := VFXFactory.make_hull_seam_mesh(
+				Vector3.ONE * (ShipGrid.CELL_SIZE * 0.98),
+				Color(0.24, 0.74, 1.0) if mid == "hull_cell" else Color(1.0, 0.72, 0.28),
+				0.95
+			)
+			if seam != null:
+				holder.add_child(seam)
 		if vis and uid == animate_last_uid and not ThemeHelper.reduced_motion:
 			vis.scale = Vector3(0.2, 0.2, 0.2)
 			var tw := create_tween()

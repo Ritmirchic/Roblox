@@ -97,20 +97,30 @@ func _build_visual(wtype: String, is_player: bool) -> void:
 		cap.height = 1.35 if wtype != "plasma" else 0.75
 		mi.mesh = cap
 		mi.rotation_degrees = Vector3(90, 0, 0)
-		var mat := StandardMaterial3D.new()
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		var tracer_col := Color(1.0, 0.78, 0.28)
 		if not is_player:
-			mat.albedo_color = Color(1.0, 0.28, 0.24)
+			tracer_col = Color(1.0, 0.28, 0.24)
 		elif wtype == "laser":
-			mat.albedo_color = Color(0.25, 0.95, 1.0)
+			tracer_col = Color(0.25, 0.95, 1.0)
 		elif wtype == "plasma":
-			mat.albedo_color = Color(0.78, 0.35, 1.0)
+			tracer_col = Color(0.78, 0.35, 1.0)
 		elif wtype == "railgun":
-			mat.albedo_color = Color(1.0, 0.90, 0.42)
-		else:
-			mat.albedo_color = Color(1.0, 0.78, 0.28)
-		mi.material_override = mat
+			tracer_col = Color(1.0, 0.90, 0.42)
+		# Additive HDR tracer: rounds read as light streaks, not as painted sticks,
+		# and the shared shader glow pass finally catches them.
+		mi.material_override = VFXFactory.glow_material(tracer_col, 1.0, true)
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(mi)
+
+		# A short ionised trail behind every round (rockets already have their own).
+		var trail := VFXFactory.create_continuous_sparks(tracer_col)
+		trail.amount = maxi(3, int(round(9.0 * VFXFactory.get_particle_scale())))
+		trail.lifetime = 0.22
+		trail.initial_velocity_min = 0.2
+		trail.initial_velocity_max = 1.4
+		trail.emitting = true
+		trail.position = Vector3(0.0, 0.0, 0.45)
+		add_child(trail)
 
 	# Glowing electromagnetic induction ring & trail on magnetized bullets
 	if magnetic_homing and is_player:
@@ -254,11 +264,11 @@ func _on_impact(hit_pos: Vector3, collider: Object) -> void:
 				if dist_e <= splash_radius:
 					var falloff: float = 1.0 - 0.5 * (dist_e / splash_radius)
 					if e_n.has_method("take_weapon_damage"):
-						e_n.take_weapon_damage(damage * falloff)
+						e_n.take_weapon_damage(damage * falloff, hit_pos)
 	else:
 		if from_player:
 			if collider and collider.has_method("take_weapon_damage"):
-				collider.take_weapon_damage(damage)
+				collider.take_weapon_damage(damage, hit_pos)
 			elif collider is Asteroid3D:
 				# hull guns cannot mine: meteoroids are RMB / mining-beam only
 				AudioManager.play_sfx("shield_hit", 0.03, 1.32)
