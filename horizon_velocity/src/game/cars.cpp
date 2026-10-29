@@ -18,72 +18,7 @@ const char* carClassName(CarClass c) {
 }
 std::string carClassLabel(CarClass c) { return carClassName(c); }
 
-// ---------------------------------------------------------------- materials
-static std::map<std::string, int> g_matCache;
-
-int matNamed(const char* name) {
-    auto it = g_matCache.find(name);
-    if (it != g_matCache.end()) return it->second;
-    Material m;
-    m.name = name;
-    std::string n(name);
-    if (n == "glass") { m.shade = Shade::Glass; m.albedo = Color(0.55f, 0.60f, 0.62f); m.opacity = 0.30f; m.roughness = 0.06f; m.metallic = 0.0f; m.doubleSided = false; }
-    else if (n == "glass_tint") { m.shade = Shade::Glass; m.albedo = Color(0.16f, 0.17f, 0.19f); m.opacity = 0.55f; m.roughness = 0.05f; }
-    else if (n == "chrome") { m.metallic = 1.0f; m.roughness = 0.07f; m.albedo = Color(0.86f, 0.87f, 0.89f); }
-    else if (n == "brushed") { m.metallic = 1.0f; m.roughness = 0.30f; m.albedo = Color(0.72f, 0.73f, 0.75f); }
-    else if (n == "blackplastic") { m.metallic = 0.0f; m.roughness = 0.62f; m.albedo = Color(0.035f, 0.035f, 0.038f); }
-    else if (n == "rubber") { m.metallic = 0.0f; m.roughness = 0.92f; m.albedo = Color(0.022f, 0.022f, 0.024f); }
-    else if (n == "rim") { m.metallic = 1.0f; m.roughness = 0.22f; m.albedo = Color(0.62f, 0.63f, 0.66f); }
-    else if (n == "rimdark") { m.metallic = 0.9f; m.roughness = 0.35f; m.albedo = Color(0.14f, 0.145f, 0.16f); }
-    else if (n == "caliper") { m.metallic = 0.25f; m.roughness = 0.32f; m.albedo = Color(0.62f, 0.06f, 0.06f); }
-    else if (n == "disc") { m.metallic = 1.0f; m.roughness = 0.42f; m.albedo = Color(0.34f, 0.34f, 0.36f); }
-    else if (n == "leather") { m.metallic = 0.0f; m.roughness = 0.68f; m.albedo = Color(0.055f, 0.05f, 0.048f); }
-    else if (n == "leather_tan") { m.metallic = 0.0f; m.roughness = 0.62f; m.albedo = Color(0.31f, 0.22f, 0.13f); }
-    else if (n == "interior") { m.metallic = 0.0f; m.roughness = 0.55f; m.albedo = Color(0.028f, 0.028f, 0.031f); }
-    else if (n == "softtouch") { m.metallic = 0.0f; m.roughness = 0.45f; m.albedo = Color(0.06f, 0.062f, 0.068f); }
-    else if (n == "screen") { m.shade = Shade::Emissive; m.albedo = Color(0.1f,0.3f,0.4f); m.emissive = Color(0.25f, 0.85f, 1.0f, 1.6f); m.roughness = 0.15f; }
-    else if (n == "headlight") { m.shade = Shade::Emissive; m.albedo = Color(0.9f,0.92f,1.0f); m.emissive = Color(1.0f, 0.97f, 0.90f, 2.4f); m.roughness = 0.12f; m.metallic = 0.2f; }
-    else  if (n == "headlight_off") { m.shade = Shade::Emissive; m.albedo = Color(0.75f,0.78f,0.82f); m.emissive = Color(0.10f, 0.11f, 0.13f, 1.0f); m.roughness = 0.10f; m.metallic = 0.3f; }
-    else if (n == "drl") { m.shade = Shade::Emissive; m.albedo = Color(1,1,1); m.emissive = Color(1.0f, 0.98f, 0.94f, 3.2f); }
-    else if (n == "taillight") { m.shade = Shade::Emissive; m.albedo = Color(0.6f,0.05f,0.05f); m.emissive = Color(1.0f, 0.08f, 0.06f, 2.0f); m.roughness = 0.15f; }
-    else if (n == "brakelight") { m.shade = Shade::Emissive; m.albedo = Color(0.7f,0.06f,0.06f); m.emissive = Color(1.0f, 0.10f, 0.08f, 3.6f); }
-    else if (n == "reverse_light") { m.shade = Shade::Emissive; m.albedo = Color(1,1,1); m.emissive = Color(1.0f, 1.0f, 1.0f, 1.6f); }
-    else if (n == "carbon") { m.metallic = 0.45f; m.roughness = 0.28f; m.albedo = Color(0.028f, 0.028f, 0.031f); }
-    else if (n == "grille") { m.metallic = 0.55f; m.roughness = 0.45f; m.albedo = Color(0.03f, 0.03f, 0.034f); }
-    else if (n == "plate") { m.metallic = 0.0f; m.roughness = 0.55f; m.albedo = Color(0.86f, 0.86f, 0.82f); }
-    else if (n == "gold") { m.metallic = 1.0f; m.roughness = 0.22f; m.albedo = Color(0.85f, 0.66f, 0.30f); }
-    else if (n == "copper") { m.metallic = 1.0f; m.roughness = 0.30f; m.albedo = Color(0.72f, 0.42f, 0.26f); }
-    else if (n == "white") { m.metallic = 0.0f; m.roughness = 0.45f; m.albedo = Color(0.85f,0.85f,0.86f); }
-    else { m.metallic = 0.1f; m.roughness = 0.5f; m.albedo = Color(0.5f,0.5f,0.5f); }
-    int idx = assets().addMaterial(m);
-    g_matCache[name] = idx;
-    return idx;
-}
-
-int matPaint(const PaintColor& c, const char* name) {
-    Material m;
-    m.name = name;
-    m.shade = Shade::CarPaint;
-    m.albedo = Color::fromHex(c.hex);
-    m.metallic = c.metallic;
-    m.roughness = 0.16f + (1.0f - c.clearcoat) * 0.4f;
-    m.clearcoat = c.clearcoat;
-    return assets().addMaterial(m);
-}
-
-int texNamed(const char* name) {
-    int t = assets().tex(name);
-    return t;
-}
-
-void initVehicleMaterials() {
-    // pre-create the shared materials so indices are stable
-    const char* names[] = {"glass", "glass_tint", "chrome", "brushed", "blackplastic", "rubber", "rim",
-                           "rimdark", "caliper", "disc", "leather", "leather_tan", "interior", "softtouch",
-                           "screen", "headlight", "headlight_off", "drl", "taillight", "brakelight",
-                           "reverse_light", "carbon", "grille", "plate", "gold", "copper", "white"};
-    for (auto n : names) matNamed(n);
-}
+#include "render/materials.h"
 
 // ---------------------------------------------------------------- SDF helpers
 namespace {

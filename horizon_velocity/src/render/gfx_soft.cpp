@@ -472,23 +472,25 @@ public:
         float metal = mat.metallic;
         float ao = 1.0f;
         if (mat.shade == Shade::Terrain) {
-            // triplanar-ish blend of three surface layers driven by vertex colour
+            // Base colour comes from the material (one material per biome), detail
+            // from a tiled grain texture, macro variation from the vertex colour.
             float slope = 1.0f - clampf(N.y, 0.0f, 1.0f);
-            Vec3 grass(0.16f, 0.20f, 0.09f), rock(0.30f, 0.29f, 0.27f), sand(0.55f, 0.48f, 0.32f);
-            Vec3 c1 = tex ? Vec3(1,1,1) : grass;
-            if (tex) { Vec4 t = tex->sampleVec(uv.x * 0.25f, uv.y * 0.25f, lod + 1.0f); c1 = Vec3(t.x, t.y, t.z); }
-            Vec3 c2 = rock, c3 = sand;
-            if (tex2) { Vec4 t = tex2->sampleVec(uv.x * 0.18f, uv.y * 0.18f, lod + 1.0f); c2 = Vec3(t.x, t.y, t.z); }
-            if (tex3) { Vec4 t = tex3->sampleVec(uv.x * 0.12f, uv.y * 0.12f, lod + 1.0f); c3 = Vec3(t.x, t.y, t.z); }
-            float rockMask = smoothstepf(0.35f, 0.62f, slope);
-            albedo = vlerp(c1, alembicMix(c2, c3, vcol.x), rockMask);
-            float detail = tex ? 1.0f : 0.0f;
-            (void)detail;
-            rough = lerpf(0.92f, 0.72f, rockMask) + vcol.y * 0.1f;
+            Vec3 base = toLinear(mat.albedo.rgb());
+            float grain = 1.0f;
+            if (tex) {
+                Vec4 t = tex->sampleVec(uv.x * mat.uvScale.x, uv.y * mat.uvScale.y, lod);
+                grain = 0.74f + t.x * 0.52f;
+            }
+            float variation = 0.90f + vcol.x * 0.20f;
+            albedo = base * (grain * variation);
+            float rockMask = smoothstepf(0.30f, 0.62f, slope);
+            Vec3 rock(0.31f, 0.30f, 0.28f);
+            albedo = vlerp(albedo, rock * (0.70f + grain * 0.45f), rockMask * 0.88f);
+            rough = lerpf(mat.roughness, 0.90f, rockMask);
             metal = 0.0f;
-            ao = 0.85f + 0.15f * clampf(N.y, 0.0f, 1.0f);
+            ao = 0.86f + 0.14f * clampf(N.y, 0.0f, 1.0f);
         } else if (mat.shade == Shade::Asphalt) {
-            Vec3 base(0.085f, 0.088f, 0.093f);
+            Vec3 base(0.16f, 0.162f, 0.168f);
             float grain = 1.0f, wet = env_.wetness;
             if (tex) {
                 Vec4 t = tex->sampleVec(uv.x * mat.uvScale.x, uv.y * mat.uvScale.y, lod);
@@ -497,10 +499,23 @@ public:
                 // additive aggregate sparkle
                 base += Vec3(0.05f, 0.05f, 0.055f) * std::max(0.0f, grain - 0.62f) * 2.2f;
             }
+            // carriageway markings come from the mask texture's red channel
+            if (tex2) {
+                Vec4 mk = tex2->sampleVec(uv.x, uv.y, lod);
+                float m = smoothstepf(0.35f, 0.65f, mk.x);
+                if (m > 0.0f) {
+                    Vec3 paint(0.72f, 0.72f, 0.70f);
+                    base = vlerp(base, paint, m * 0.92f);
+                }
+            }
             // wet surfaces darken and become glossy
             base = base * lerpf(1.0f, 0.55f, wet);
             albedo = base;
             rough = lerpf(0.82f - grain * 0.12f, 0.14f, wet * 0.85f);
+            if (tex2) {
+                Vec4 mk = tex2->sampleVec(uv.x, uv.y, lod);
+                rough = lerpf(rough, 0.52f, smoothstepf(0.35f, 0.65f, mk.x));
+            }
             metal = 0.0f;
         } else {
             albedo = toLinear(mat.albedo.rgb());

@@ -467,15 +467,15 @@ void Vehicle::step(float dt, const WorldQuery& world) {
         // ---------------- world collision ----------------
         {
             Vec3 pts[5] = {
-                position + orientation.transformDir(Vec3(spec.dims.x * 0.46f, 0.35f, 0)),
-                position + orientation.transformDir(Vec3(-spec.dims.x * 0.46f, 0.35f, 0)),
-                position + orientation.transformDir(Vec3(0, 0.35f, spec.dims.z * 0.46f)),
-                position + orientation.transformDir(Vec3(0, 0.35f, -spec.dims.z * 0.46f)),
+                position + orientation.transformDir(Vec3(spec.dims.x * 0.46f, 0.60f, 0)),
+                position + orientation.transformDir(Vec3(-spec.dims.x * 0.46f, 0.60f, 0)),
+                position + orientation.transformDir(Vec3(0, 0.60f, spec.dims.z * 0.46f)),
+                position + orientation.transformDir(Vec3(0, 0.60f, -spec.dims.z * 0.46f)),
                 position + orientation.transformDir(Vec3(0, spec.dims.y * 0.5f, 0))
             };
             for (int p = 0; p < 5; p++) {
                 Vec3 n; float pen = 0;
-                if (world.collideSphere(pts[p], 0.55f, n, pen)) {
+                if (world.collideSphere(pts[p], 0.34f, n, pen)) {
                     position += n * std::min(pen, 0.5f);
                     float vn = velocity.dot(n);
                     if (vn < 0) {
