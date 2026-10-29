@@ -137,7 +137,7 @@ jobs:
           Get-ChildItem -Path $outDir -Force | Format-Table Name,Length
 
       - name: Publish Windows alpha release
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[release-alpha]')
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
