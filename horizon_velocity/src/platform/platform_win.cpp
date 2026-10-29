@@ -28,10 +28,11 @@ public:
         if (IsKeyDown(KEY_A)) in.steer -= 1.0f;
         if (IsKeyDown(KEY_D)) in.steer += 1.0f;
         if (IsKeyDown(KEY_SPACE)) in.handbrake = 1.0f;
-        if (IsKeyDown(KEY_LEFT_SHIFT)) in.camUp = 1.0f;
-        if (IsKeyDown(KEY_LEFT_CONTROL)) in.camUp = -1.0f;
-        if (IsKeyPressed(KEY_E)) in.shiftUp = true;
-        if (IsKeyPressed(KEY_Q)) in.shiftDown = true;
+        // default bindings from the design spec: W/S/A/D, Space handbrake,
+        // Shift / Ctrl sequential shift, C camera, R reset, M map, Esc pause,
+        // F interact. T toggles the automatic gearbox.
+        if (IsKeyPressed(KEY_LEFT_SHIFT) || IsKeyPressed(KEY_RIGHT_SHIFT)) in.shiftUp = true;
+        if (IsKeyPressed(KEY_LEFT_CONTROL) || IsKeyPressed(KEY_RIGHT_CONTROL)) in.shiftDown = true;
         if (IsKeyPressed(KEY_T)) in.toggleAuto = true;
         if (IsKeyPressed(KEY_C)) in.cameraCycle = 1;
         if (IsKeyPressed(KEY_R)) in.reset = true;
