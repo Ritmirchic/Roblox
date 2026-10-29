@@ -72,7 +72,7 @@ jobs:
             Write-Host "Installed template entries: $((Get-ChildItem $templateDir -File | Measure-Object).Count)"
             "GODOT_EXE=$($godot.FullName)" | Out-File $env:GITHUB_ENV -Append
             & $godot.FullName --version
-            if ($LASTEXITCODE -ne 0) { throw "Godot editor --version failed with exit code $LASTEXITCODE" }
+            if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "Godot editor --version failed with exit code $LASTEXITCODE" }
           } catch {
             $diagnostic = $_.Exception.ToString() -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
             Write-Output "::error title=Godot installation diagnostic::$diagnostic"
