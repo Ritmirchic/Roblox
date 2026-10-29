@@ -62,7 +62,8 @@ jobs:
             Rename-Item "$env:GODOT_TEMP/templates.tpz" 'templates.zip'
             Expand-Archive "$env:GODOT_TEMP/templates.zip" -DestinationPath "$env:GODOT_TEMP/export" -Force
             Write-Host "Template archive extracted: $((Get-ChildItem "$env:GODOT_TEMP/export" -Recurse -File | Measure-Object).Count) files"
-            $godot = Get-ChildItem "$env:GODOT_TEMP/editor" -Filter 'Godot_v*_win64.exe' -Recurse | Select-Object -First 1
+            $godot = Get-ChildItem "$env:GODOT_TEMP/editor" -Filter 'Godot_v*_win64_console.exe' -Recurse | Select-Object -First 1
+            if (-not $godot) { $godot = Get-ChildItem "$env:GODOT_TEMP/editor" -Filter 'Godot_v*_win64.exe' -Recurse | Select-Object -First 1 }
             if (-not $godot) { throw "Godot Windows editor executable was not found in $env:GODOT_TEMP/editor" }
             $templateDir = Join-Path $env:APPDATA 'Godot/export_templates/4.7.2.stable'
             New-Item -ItemType Directory -Force -Path $templateDir | Out-Null
