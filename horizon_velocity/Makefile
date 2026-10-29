@@ -32,13 +32,16 @@ shots: $(BUILD)/hv_linux
 replay: $(BUILD)/hv_linux
 	./$(BUILD)/hv_linux --replay out_replay.csv
 
-# Windows target: requires libraylib.a built for x86_64-windows-gnu (see REPORT.md)
-win: $(SRC) src/main.cpp src/platform/platform_win.cpp
+# Windows target: build/libraylib.a is a prebuilt raylib 5.5 for x86_64-windows-gnu
+# (MIT), built with third_party/build_raylib_win.sh from the vendored header.
+win: $(SRC) src/main.cpp src/platform/platform_win.cpp third_party/raylib/include/raylib.h
 	@mkdir -p $(BUILD)
-	$(ZIG) c++ -target x86_64-windows-gnu -std=c++17 -O2 -fno-exceptions -fno-rtti -I src -mwindows \
+	$(ZIG) c++ -target x86_64-windows-gnu -std=c++17 -O2 -fno-exceptions -fno-rtti \
+	  -I src -I third_party/raylib/include -Wl,--subsystem,windows \
 	  -o $(BUILD)/HORIZON_VELOCITY.exe \
 	  src/main.cpp src/platform/platform_win.cpp $(SRC) build/libraylib.a \
 	  -lopengl32 -lgdi32 -lwinmm -lshell32 -lole32 -luser32
+	@ls -la $(BUILD)/HORIZON_VELOCITY.exe
 
 clean:
 	rm -rf $(BUILD)

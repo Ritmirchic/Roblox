@@ -58,13 +58,13 @@ minimap, region, credits, event timer), 50 events in 5 chapters (10 per chapter)
 traffic that follows the road graph kinematically, AI racers with the full
 vehicle sim on the circuit, JSON save/load, day-night environment.
 
-**Known bug (blocking gameplay):** in the world the car does not accelerate.
-Throttle reaches the sim and the engine revs (rpm climbs to ~4100 at gear 1)
-but road speed stays ~0.3 km/h, i.e. drive torque does not reach the wheels -
-most likely the auto-box is stuck in a shift state or the tires have no load in
-this world adapter. The same sim accelerates correctly in the unit tests, so the
-defect is in the `WorldQueryImpl` integration, not the solver. This is the first
-thing to fix next session; `out_replay.csv` is the reproduction.
+**Fixed this session:** the car did not accelerate in the world. Root cause was
+`makeWheelSpecs()` never setting `WheelSpec::driven` / `::steered`, so every car
+was effectively a trailer: the engine free-revved and no torque reached a wheel.
+The wheel setup is now derived from `VehicleSpec::drivetrain` (FWD/RWD/AWD) and
+the front wheels steer. Measured with `make replay` (45 s scripted drive on the
+Aurora grid): 0-62 km/h in 5.8 s, 135.3 km/h peak, 1.00 km covered, gears
+1->2->4 shifting normally.
 
 ## [PARTIAL] UI / audio
 
@@ -80,18 +80,28 @@ executable.
 
 ## Windows build
 
-`make win` cross-compiles with `-target x86_64-windows-gnu` and links a
-prebuilt `build/libraylib.a` (5.5, Win64) plus `platform_win.cpp` (Win32 window,
-keyboard + gamepad input, RGBA blit). **This was not compiled or run here** - the
-sandbox has no Windows runtime, no display and the raylib archive was not kept in
-the repo. No `.exe` is shipped with this commit; claiming otherwise would be
-false.
+`dist/HORIZON_VELOCITY.exe` - 1.78 MB, PE32+ (machine 0x8664 = x86-64), Windows
+GUI subsystem, static raylib 5.5 (no DLLs required). Built with:
+
+    make win      # zig c++ -target x86_64-windows-gnu ...
+
+Verified: it is a valid PE32+ executable, statically linked, with the entry
+point and imports resolved by the linker. **Not verified: that it runs.** There
+is no Windows machine, no display and no Wine in the authoring sandbox, so the
+first actual launch will happen on the user's PC. If it fails to start, the
+likely causes are the raylib window/GL init path in
+`src/platform/platform_win.cpp` - that file is the only untested code in the
+game.
+
+Files needed to rebuild it are vendored: `third_party/raylib/lib/libraylib.a`
+(MIT, raylib 5.5 for x86_64-windows-gnu), `third_party/raylib/include/raylib.h`
+and `third_party/build_raylib_win.sh` (the script that produced the archive).
 
 ## Performance table (reproducible)
 
 | scene | res | triangles | frame time | fps |
 |---|---|---|---|---|
-| city chase, 09:30 | 1280x720 | 53 777 | 477 ms | 2.1 |
+| city chase, 09:30 | 1280x720 | 53 777 | 477 ms | 2.1 (2 vCPU) |
 | cockpit, sunset | 1280x720 | ~29 000 | 601 ms | 1.7 |
 | city oblique | 1280x720 | 36 496 | 226 ms draws | - |
 

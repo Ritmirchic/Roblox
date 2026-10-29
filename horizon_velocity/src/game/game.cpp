@@ -86,7 +86,7 @@ bool Game::init(Renderer* r, int w, int h, uint64_t seed) {
     for (int i = 0; i < n; i++) ownedCars.push_back(i);
     playerDef = &cat[std::min(currentCar, (int)cat.size() - 1)];
     if (!models_.empty()) playerVisual = models_[0];
-    player.setup(playerDef->spec, makeWheelSpecs(playerDef->style));
+    player.setup(playerDef->spec, makeWheelSpecs(playerDef->style, &playerDef->spec));
     player.autoTransmission = true;
 
     // ---- traffic: kinematic road followers spread over the network
@@ -232,7 +232,7 @@ bool Game::startEvent(int idx) {
             a.model = (currentCar + 1 + i) % (int)models_.size();
             const std::vector<CarDef>& cat2 = carCatalogue();
             const CarDef& adef = cat2[modelCarIdx_[a.model] % (int)cat2.size()];
-            a.v.setup(adef.spec, makeWheelSpecs(adef.style));
+            a.v.setup(adef.spec, makeWheelSpecs(adef.style, &adef.spec));
             a.v.autoTransmission = true;
             Vec3 sp = sampleRoad(e.roadIdx, (float)(i + 1) * 14.0f);
             a.v.resetOnGround(sp, std::atan2(d.z, d.x), wq_);

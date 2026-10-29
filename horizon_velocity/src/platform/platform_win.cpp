@@ -5,6 +5,7 @@
 #include "platform/platform.h"
 #include "raylib.h"
 #include <cstring>
+#include <cmath>
 
 namespace hv {
 
@@ -14,7 +15,7 @@ public:
         SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE);
         InitWindow(w, h, title);
         if (!IsWindowReady()) return false;
-        image_ = GenImageColor(w, h, BLANK);
+        image_ = GenImageColor(w, h, ::Color{0, 0, 0, 0});
         tex_ = LoadTextureFromImage(image_);
         SetTargetFPS(240);
         SetExitKey(KEY_NULL);   // Esc is the pause key, not quit
@@ -57,15 +58,15 @@ public:
     void present(const uint8_t* rgba, int w, int h) override {
         if (w != image_.width || h != image_.height) {
             UnloadImage(image_); UnloadTexture(tex_);
-            image_ = GenImageColor(w, h, BLANK);
+            image_ = GenImageColor(w, h, ::Color{0, 0, 0, 0});
             tex_ = LoadTextureFromImage(image_);
         }
         // the renderer writes RGBA; raylib expects RGBA8 too
         std::memcpy(image_.data, rgba, (size_t)w * h * 4);
         UpdateTexture(tex_, image_.data);
         BeginDrawing();
-        ClearBackground(BLACK);
-        DrawTexture(tex_, 0, 0, WHITE);
+        ClearBackground(::Color{0, 0, 0, 255});
+        DrawTexture(tex_, 0, 0, ::Color{255, 255, 255, 255});
         EndDrawing();
     }
     bool shouldQuit() const override { return WindowShouldClose(); }

@@ -3,3 +3,7 @@ build/
 *.a
 out_shots/
 *.exe
+# shipped artifacts
+!third_party/raylib/lib/libraylib.a
+!dist/
+!dist/*.exe

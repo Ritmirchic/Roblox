@@ -766,7 +766,7 @@ Mesh buildNeedle(float length, int material) {
 } // namespace
 
 // ---------------------------------------------------------------- public API
-std::vector<WheelSpec> makeWheelSpecs(const BodyStyle& s) {
+std::vector<WheelSpec> makeWheelSpecs(const BodyStyle& s, const VehicleSpec* spec) {
     std::vector<WheelSpec> ws(4);
     float fx = s.frontAxleT;    // fraction from rear
     // convert to local x: front/rear axle offsets from the model origin
@@ -785,6 +785,16 @@ std::vector<WheelSpec> makeWheelSpecs(const BodyStyle& s) {
         w.radius = s.wheelRadius;
         w.width = s.tireWidth;
         w.inertia = 3.0f;
+        // front wheels steer; which wheels are driven comes from the drivetrain.
+        // Without this every car is a trailer: the engine revs and nothing moves.
+        w.steered = w.front;
+        if (spec) {
+            Drivetrain dt = spec->drivetrain;
+            w.driven = (dt == Drivetrain::AWD) || (dt == Drivetrain::FWD && w.front) ||
+                       (dt == Drivetrain::RWD && !w.front);
+        } else {
+            w.driven = !w.front;
+        }
     }
     return ws;
 }

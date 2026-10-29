@@ -112,7 +112,7 @@ int texNamed(const char* name);
 CarVisual buildCarVisual(const CarDef& def, float detailScale = 1.0f, bool withDetails = true);
 const std::vector<CarDef>& carCatalogue();
 const CarDef* findCar(const std::string& id);
-std::vector<WheelSpec> makeWheelSpecs(const BodyStyle& s);
+std::vector<WheelSpec> makeWheelSpecs(const BodyStyle& s, const VehicleSpec* spec = nullptr);
 std::string carClassLabel(CarClass c);
 
 // world/scene materials
