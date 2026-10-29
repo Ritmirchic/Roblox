@@ -10,10 +10,11 @@
 
 ## Delivered build
 
-- Prerelease: [Horizon Velocity 0.1.0-alpha](https://github.com/Ritmirchic/Roblox/releases/tag/horizon-velocity-v0.1.0-alpha)
-- Direct executable: [HORIZON_VELOCITY.exe](https://github.com/Ritmirchic/Roblox/releases/download/horizon-velocity-v0.1.0-alpha/HORIZON_VELOCITY.exe)
-- Companion data file: [HORIZON_VELOCITY.pck](https://github.com/Ritmirchic/Roblox/releases/download/horizon-velocity-v0.1.0-alpha/HORIZON_VELOCITY.pck). Keep it beside the executable.
-- Build runner reported 109,154,304 bytes for the executable and 140,868 bytes for the PCK. The release API reported both assets as uploaded.
+- Prerelease: [Horizon Velocity 0.1.1-alpha](https://github.com/Ritmirchic/Roblox/releases/tag/horizon-velocity-v0.1.1-alpha)
+- Recommended download: [HORIZON_VELOCITY_WINDOWS.zip](https://github.com/Ritmirchic/Roblox/releases/download/horizon-velocity-v0.1.1-alpha/HORIZON_VELOCITY_WINDOWS.zip). Extract both files into one folder and run the EXE.
+- Direct executable: [HORIZON_VELOCITY.exe](https://github.com/Ritmirchic/Roblox/releases/download/horizon-velocity-v0.1.1-alpha/HORIZON_VELOCITY.exe)
+- Companion data: [HORIZON_VELOCITY.pck](https://github.com/Ritmirchic/Roblox/releases/download/horizon-velocity-v0.1.1-alpha/HORIZON_VELOCITY.pck). The `.pck` must be beside the executable; launching only the EXE can leave the game with a black screen because the project scene/resources are absent.
+- Build runner reported 109,154,304 bytes for the executable and 140,884 bytes for the PCK. The release API confirmed the EXE, PCK and ZIP were uploaded.
 - This is an **experimental Windows alpha**, not the complete AAA game requested. The CI smoke test did not validate input, event completion, save/load persistence, rendered image quality, FPS or crashes during extended play.
 
 ## Implemented project files
