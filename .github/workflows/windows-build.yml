@@ -105,6 +105,8 @@ jobs:
 
       - name: Export Windows x64 executable
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $workspace = $env:GITHUB_WORKSPACE
           $project = Join-Path $workspace 'project'
@@ -135,48 +137,36 @@ jobs:
           Write-Output "::notice title=Export file diagnostic::$diagnostic"
           Write-Host "Verified executable size: $($exeItem.Length) bytes"
           Get-ChildItem -Path $outDir -Force | Format-Table Name,Length
-
-      - name: Publish Windows alpha release
-        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[release-alpha]')
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $tag = 'horizon-velocity-v0.1.0-alpha'
-          $workspace = $env:GITHUB_WORKSPACE
-          if ([string]::IsNullOrEmpty($workspace)) { Write-Output '::error title=Release preflight::GITHUB_WORKSPACE is missing.'; exit 1 }
-          $assets = @((Join-Path $workspace 'build/HORIZON_VELOCITY.exe'))
-          $pck = Join-Path $workspace 'build/HORIZON_VELOCITY.pck'
-          if (Test-Path -Path $pck -PathType Leaf) { $assets += $pck }
-          foreach ($asset in $assets) {
-            if (-not (Test-Path -Path $asset -PathType Leaf)) { Write-Output "::error title=Release preflight::Missing regular asset file: $asset"; exit 1 }
-          }
-          if ([string]::IsNullOrEmpty($env:GH_TOKEN)) { Write-Output '::error title=Release preflight::GH_TOKEN is missing.'; exit 1 }
-          Write-Output "::notice title=Release publish::Preparing release $tag with $($assets.Count) asset(s)."
-          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
-          $body = @{
-            tag_name = $tag
-            target_commitish = $env:GITHUB_SHA
-            name = 'Horizon Velocity 0.1.0-alpha — Windows x64'
-            body = 'Experimental Windows alpha build of the Aurora Coast vertical slice. Includes one featured coupe configuration, one checkpoint sprint and the current prototype map. Not a finished AAA release; gameplay and performance still need full Windows QA.'
-            draft = $false
-            prerelease = $true
-          } | ConvertTo-Json
-          try {
-            $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/Ritmirchic/Roblox/releases' -Method Post -Headers $headers -ContentType 'application/json' -Body $body
-            $uploadBase = $release.upload_url -replace '\{\?name,label\}$',''
-            foreach ($asset in $assets) {
-              $assetName = [uri]::EscapeDataString([System.IO.Path]::GetFileName($asset))
-              $uploadUrl = "$uploadBase`?name=$assetName"
-              Write-Host "Uploading $assetName ($((Get-Item $asset).Length) bytes)"
-              Invoke-RestMethod -Uri $uploadUrl -Method Post -Headers $headers -ContentType 'application/octet-stream' -InFile $asset | Out-Null
+          $event = Get-Content -Path $env:GITHUB_EVENT_PATH -Raw | ConvertFrom-Json
+          if ($event.head_commit.message.Contains('[release-alpha]')) {
+            $tag = 'horizon-velocity-v0.1.0-alpha'
+            $assets = @($exePath)
+            $pck = Join-Path $outDir 'HORIZON_VELOCITY.pck'
+            if (Test-Path -Path $pck -PathType Leaf) { $assets += $pck }
+            if ([string]::IsNullOrEmpty($env:GH_TOKEN)) { throw 'GH_TOKEN is missing.' }
+            $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
+            $body = @{
+              tag_name = $tag
+              target_commitish = $env:GITHUB_SHA
+              name = 'Horizon Velocity 0.1.0-alpha — Windows x64'
+              body = 'Experimental Windows alpha build of the Aurora Coast vertical slice. Includes one featured coupe configuration, one checkpoint sprint and the current prototype map. Not a finished AAA release; gameplay and performance still need full Windows QA.'
+              draft = $false
+              prerelease = $true
+            } | ConvertTo-Json
+            try {
+              $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/Ritmirchic/Roblox/releases' -Method Post -Headers $headers -ContentType 'application/json' -Body $body
+              $uploadBase = $release.upload_url -replace '\{\?name,label\}$',''
+              foreach ($asset in $assets) {
+                $assetName = [uri]::EscapeDataString([System.IO.Path]::GetFileName($asset))
+                $uploadUrl = "$uploadBase`?name=$assetName"
+                Write-Host "Uploading $assetName ($((Get-Item $asset).Length) bytes)"
+                Invoke-RestMethod -Uri $uploadUrl -Method Post -Headers $headers -ContentType 'application/octet-stream' -InFile $asset | Out-Null
+              }
+              Write-Host "Published prerelease tag $tag"
+            } catch {
+              $diagnostic = $_.Exception.ToString()
+              $annotation = $diagnostic -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
+              Write-Output "::error title=GitHub release API diagnostic::$annotation"
+              throw
             }
-            Write-Host "Published prerelease tag $tag"
-          } catch {
-            $diagnostic = $_.Exception.ToString()
-            $annotation = $diagnostic -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
-            Write-Output "::error title=GitHub release API diagnostic::$annotation"
-            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "Windows release publish error: $diagnostic"
-            throw
           }
