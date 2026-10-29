@@ -1,0 +1,13 @@
+# Godot editor/import artifacts
+project/.godot/
+project/.import/
+*.translation
+
+# Builds, exports, temporary test/user data
+build/
+.dist/
+*.exe
+*.pck
+*.log
+*.zip
+.DS_Store

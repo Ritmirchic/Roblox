@@ -1,0 +1,76 @@
+name: Windows x64 game build
+
+on:
+  push:
+    branches:
+      - arena/b3b7737d-roblox
+    paths:
+      - 'project/**'
+      - 'tools/**'
+      - '.github/workflows/windows-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Download Godot editor and export templates
+        shell: pwsh
+        run: |
+          $version = '4.7.2-stable'
+          $base = "https://github.com/godotengine/godot/releases/download/$version"
+          $temp = Join-Path $env:RUNNER_TEMP 'godot'
+          New-Item -ItemType Directory -Force -Path $temp | Out-Null
+          Invoke-WebRequest "$base/Godot_v${version}_win64.exe.zip" -OutFile "$temp/editor.zip"
+          Invoke-WebRequest "$base/Godot_v${version}_export_templates.tpz" -OutFile "$temp/templates.tpz"
+          Expand-Archive "$temp/editor.zip" -DestinationPath "$temp/editor" -Force
+          Rename-Item "$temp/templates.tpz" 'templates.zip'
+          Expand-Archive "$temp/templates.zip" -DestinationPath "$temp/export" -Force
+          $godot = Get-ChildItem "$temp/editor" -Filter 'Godot_v*_win64.exe' -Recurse | Select-Object -First 1
+          if (-not $godot) { throw 'Godot Windows editor executable was not found.' }
+          $templateDir = Join-Path $env:APPDATA 'Godot/export_templates/4.7.2.stable'
+          New-Item -ItemType Directory -Force -Path $templateDir | Out-Null
+          $templates = Get-ChildItem "$temp/export" -Directory -Recurse | Where-Object { $_.Name -eq 'templates' } | Select-Object -First 1
+          if (-not $templates) { throw 'Godot export template folder was not found in the .tpz archive.' }
+          Copy-Item "$($templates.FullName)/*" $templateDir -Recurse -Force
+          "GODOT_EXE=$($godot.FullName)" | Out-File $env:GITHUB_ENV -Append
+          & $godot.FullName --version
+          if ($LASTEXITCODE -ne 0) { throw 'Godot editor failed to launch.' }
+
+      - name: Import project and compile scripts
+        shell: pwsh
+        run: |
+          & $env:GODOT_EXE --headless --editor --path "$PWD/project" --import --quit
+          if ($LASTEXITCODE -ne 0) { throw 'Godot project import or GDScript compile failed.' }
+
+      - name: Headless startup smoke test
+        shell: pwsh
+        run: |
+          & $env:GODOT_EXE --headless --path "$PWD/project" --quit-after 120
+          if ($LASTEXITCODE -ne 0) { throw 'Godot headless startup smoke test failed.' }
+
+      - name: Export Windows x64 executable
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build | Out-Null
+          & $env:GODOT_EXE --headless --path "$PWD/project" --export-release 'Windows Desktop' "$PWD/build/HORIZON_VELOCITY.exe"
+          if ($LASTEXITCODE -ne 0) { throw 'Windows export failed.' }
+          if (-not (Test-Path 'build/HORIZON_VELOCITY.exe')) { throw 'Expected Windows executable was not created.' }
+          Get-ChildItem build | Format-Table Name,Length
+
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: HORIZON_VELOCITY_WINDOWS
+          path: |
+            build/HORIZON_VELOCITY.exe
+            build/HORIZON_VELOCITY.pck
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,46 @@
+; Horizon Velocity — Aurora Coast
+; Original independent automotive festival game prototype
+config_version=5
+
+[application]
+config/name="Horizon Velocity"
+config/description="Drive the Aurora Coast. Race the horizon."
+run/main_scene="res://Main.tscn"
+config/features=PackedStringArray("4.3", "GL Compatibility")
+config/icon="res://assets/icon.png"
+
+[display]
+window/size/viewport_width=1600
+window/size/viewport_height=900
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/stretch/mode="canvas_items"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+environment/defaults/default_clear_color=Color(0.035, 0.07, 0.1, 1)
+
+[physics]
+3d/default_gravity=9.8
+3d/physics_engine="GodotPhysics3D"
+
+[gui]
+theme/default_font_multichannel_signed_distance_field=true
+
+[input]
+accelerate={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":87),Object(InputEventJoypadButton,"button_index":7)]}
+brake={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":83),Object(InputEventJoypadButton,"button_index":6)]}
+steer_left={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":65),Object(InputEventKey,"physical_keycode":16777231),Object(InputEventJoypadMotion,"axis":0,"axis_value":-1.0)]}
+steer_right={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":68),Object(InputEventKey,"physical_keycode":16777233),Object(InputEventJoypadMotion,"axis":0,"axis_value":1.0)]
+handbrake={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":32),Object(InputEventJoypadButton,"button_index":0)]}
+shift_up={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":16777238),Object(InputEventJoypadButton,"button_index":5)]}
+shift_down={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":16777237),Object(InputEventJoypadButton,"button_index":4)]}
+camera_next={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":67),Object(InputEventJoypadButton,"button_index":3)]}
+reset_car={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":82)]}
+pause_game={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":16777217),Object(InputEventJoypadButton,"button_index":6)]}
+look_back={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":88)]}
+
+[autoload]
+SaveData="*res://scripts/save_data.gd"
