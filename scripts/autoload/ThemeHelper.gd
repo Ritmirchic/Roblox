@@ -687,7 +687,6 @@ func make_nebula_sky(rotation_deg: float = 0.0, energy: float = 1.0) -> Sky:
 		proc.ground_horizon_color = Color(0.06, 0.08, 0.14)
 		sky.sky_material = proc
 	sky.process_mode = Sky.PROCESS_MODE_REALTIME if quality_bool("landmark_detail") else Sky.PROCESS_MODE_AUTOMATIC
-	var r := deg_to_rad(rotation_deg)
 	return sky
 
 

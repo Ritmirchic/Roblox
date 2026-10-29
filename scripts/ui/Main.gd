@@ -182,7 +182,7 @@ func _show_main_menu() -> void:
 				_menu_ship_spin.add_child(inst)
 				# Same specular language as in flight, otherwise the menu ship and
 				# the ship you fly look like two different assets.
-				var is_engine := GameData.modules[mid].has("thrust_force")
+				var is_engine: bool = bool(GameData.modules[mid].has("thrust_force"))
 				VFXFactory.tune_glb_materials(inst, 0.1 if is_engine else 0.06, 0.38 if is_engine else 0.46, is_engine)
 
 	if ResourceLoader.exists("res://assets/models/asteroids/ast_crystal_geode.glb"):

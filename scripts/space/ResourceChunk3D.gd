@@ -58,7 +58,9 @@ func _physics_process(delta: float) -> void:
 		if _glow_check_t <= 0.0:
 			_glow_check_t = 0.35
 			var near := false
-			var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
+			var cam: Camera3D = null
+			if is_inside_tree():
+				cam = get_viewport().get_camera_3d()
 			if cam != null:
 				near = global_position.distance_squared_to(cam.global_position) < 900.0
 			_magnetized_glow.visible = near
