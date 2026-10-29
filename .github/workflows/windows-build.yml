@@ -106,8 +106,14 @@ jobs:
       - name: Export Windows x64 executable
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path build | Out-Null
-          $output = & $env:GODOT_EXE --headless --path "$PWD/project" --export-release 'Windows Desktop' "$PWD/build/HORIZON_VELOCITY.exe" 2>&1
+          $workspace = $env:GITHUB_WORKSPACE
+          $project = Join-Path $workspace 'project'
+          $outDir = Join-Path $workspace 'build'
+          $exePath = Join-Path $outDir 'HORIZON_VELOCITY.exe'
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+          Write-Host "Export workspace: $workspace"
+          Write-Host "Executable target: $exePath"
+          $output = & $env:GODOT_EXE --headless --path $project --export-release 'Windows Desktop' $exePath 2>&1
           $code = $LASTEXITCODE
           $output | ForEach-Object { Write-Host $_ }
           if ($code -ne 0) {
@@ -115,13 +121,21 @@ jobs:
             Write-Output "::error title=Godot export diagnostic::$details"
             exit $code
           }
-          if (-not (Test-Path 'build/HORIZON_VELOCITY.exe')) { throw 'Expected Windows executable was not created.' }
-          Get-ChildItem build | Format-Table Name,Length
+          $found = Get-ChildItem -Path $workspace -Filter 'HORIZON_VELOCITY*' -Recurse -File -ErrorAction SilentlyContinue
+          if (-not (Test-Path -Path $exePath -PathType Leaf)) {
+            $where = ($found | ForEach-Object { $_.FullName + ' (' + $_.Length + ' bytes)' }) -join '; '
+            if (-not $where) { $where = 'No named executable or companion file found under workspace.' }
+            $where = ("Expected $exePath; $where") -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
+            Write-Output "::error title=Exported file not found::$where"
+            exit 1
+          }
+          Write-Host "Verified executable size: $((Get-Item $exePath).Length) bytes"
+          Get-ChildItem -Path $outDir -Force | Format-Table Name,Length
 
       - name: Upload Windows executable
         uses: actions/upload-artifact@v4
         with:
           name: HORIZON_VELOCITY_WINDOWS
-          path: build/
+          path: ${{ github.workspace }}/build/
           if-no-files-found: error
           retention-days: 30
