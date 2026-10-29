@@ -1,8 +1,12 @@
 # build outputs
 build/
 dist/
+!release/
 saves/
 *.o
 *.obj
 *.exe
+!release/*.exe
+*.zip
+!release/*.zip
 __pycache__/
