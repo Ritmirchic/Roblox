@@ -56,19 +56,28 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          Expand-Archive "$env:GODOT_TEMP/editor.zip" -DestinationPath "$env:GODOT_TEMP/editor" -Force
-          Rename-Item "$env:GODOT_TEMP/templates.tpz" 'templates.zip'
-          Expand-Archive "$env:GODOT_TEMP/templates.zip" -DestinationPath "$env:GODOT_TEMP/export" -Force
-          $godot = Get-ChildItem "$env:GODOT_TEMP/editor" -Filter 'Godot_v*_win64.exe' -Recurse | Select-Object -First 1
-          if (-not $godot) { throw 'Godot Windows editor executable was not found.' }
-          $templateDir = Join-Path $env:APPDATA 'Godot/export_templates/4.7.2.stable'
-          New-Item -ItemType Directory -Force -Path $templateDir | Out-Null
-          $templates = Get-ChildItem "$env:GODOT_TEMP/export" -Directory -Recurse | Where-Object { $_.Name -eq 'templates' } | Select-Object -First 1
-          if (-not $templates) { throw 'Godot export template folder was not found in the .tpz archive.' }
-          Copy-Item "$($templates.FullName)/*" $templateDir -Recurse -Force
-          "GODOT_EXE=$($godot.FullName)" | Out-File $env:GITHUB_ENV -Append
-          & $godot.FullName --version
-          if ($LASTEXITCODE -ne 0) { throw 'Godot editor failed to launch.' }
+          try {
+            Expand-Archive "$env:GODOT_TEMP/editor.zip" -DestinationPath "$env:GODOT_TEMP/editor" -Force
+            Write-Host "Editor archive extracted: $((Get-ChildItem "$env:GODOT_TEMP/editor" -Recurse -File | Measure-Object).Count) files"
+            Rename-Item "$env:GODOT_TEMP/templates.tpz" 'templates.zip'
+            Expand-Archive "$env:GODOT_TEMP/templates.zip" -DestinationPath "$env:GODOT_TEMP/export" -Force
+            Write-Host "Template archive extracted: $((Get-ChildItem "$env:GODOT_TEMP/export" -Recurse -File | Measure-Object).Count) files"
+            $godot = Get-ChildItem "$env:GODOT_TEMP/editor" -Filter 'Godot_v*_win64.exe' -Recurse | Select-Object -First 1
+            if (-not $godot) { throw "Godot Windows editor executable was not found in $env:GODOT_TEMP/editor" }
+            $templateDir = Join-Path $env:APPDATA 'Godot/export_templates/4.7.2.stable'
+            New-Item -ItemType Directory -Force -Path $templateDir | Out-Null
+            $templates = Get-ChildItem "$env:GODOT_TEMP/export" -Directory -Recurse | Where-Object { $_.Name -eq 'templates' } | Select-Object -First 1
+            if (-not $templates) { throw "Godot export template folder was not found. Extracted entries: $((Get-ChildItem "$env:GODOT_TEMP/export" -Force | Select-Object -ExpandProperty Name) -join ', ')" }
+            Copy-Item "$($templates.FullName)/*" $templateDir -Recurse -Force
+            Write-Host "Installed template entries: $((Get-ChildItem $templateDir -File | Measure-Object).Count)"
+            "GODOT_EXE=$($godot.FullName)" | Out-File $env:GITHUB_ENV -Append
+            & $godot.FullName --version
+            if ($LASTEXITCODE -ne 0) { throw "Godot editor --version failed with exit code $LASTEXITCODE" }
+          } catch {
+            $diagnostic = $_.Exception.ToString() -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
+            Write-Output "::error title=Godot installation diagnostic::$diagnostic"
+            throw
+          }
 
       - name: Import project and compile scripts
         shell: pwsh
