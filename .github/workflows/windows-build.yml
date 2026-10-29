@@ -94,8 +94,14 @@ jobs:
       - name: Headless startup smoke test
         shell: pwsh
         run: |
-          & $env:GODOT_EXE --headless --path "$PWD/project" --quit-after 120
-          if ($LASTEXITCODE -ne 0) { throw 'Godot headless startup smoke test failed.' }
+          $output = & $env:GODOT_EXE --headless --path "$PWD/project" --quit-after 120 2>&1
+          $code = $LASTEXITCODE
+          $output | ForEach-Object { Write-Host $_ }
+          if ($code -ne 0) {
+            $details = (($output | Select-Object -Last 16) -join ' | ') -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
+            Write-Output "::error title=Godot runtime diagnostic::$details"
+            exit $code
+          }
 
       - name: Export Windows x64 executable
         shell: pwsh
