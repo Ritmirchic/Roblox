@@ -1,0 +1,40 @@
+; Horizon Velocity — Aurora Coast vertical slice
+; Godot 4.x project, original procedural assets and branding.
+config_version=5
+
+[application]
+config/name="Horizon Velocity"
+config/description="A coastal driving festival. Find your line on the Aurora Coast."
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.4", "GL Compatibility")
+config/icon="res://assets/icon.svg"
+
+[display]
+window/size/viewport_width=1600
+window/size/viewport_height=900
+window/size/window_width_override=1440
+window/size/window_height_override=810
+window/stretch/mode="canvas_items"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+environment/defaults/default_clear_color=Color(0.035, 0.055, 0.09, 1)
+anti_aliasing/quality/msaa_3d=2
+
+[physics]
+3d/default_gravity=9.8
+
+[input]
+accelerate={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":87),Object(InputEventKey,"physical_keycode":4194320)]}
+brake={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":83),Object(InputEventKey,"physical_keycode":4194322)]}
+steer_left={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":65),Object(InputEventKey,"physical_keycode":4194311)]}
+steer_right={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":68),Object(InputEventKey,"physical_keycode":4194313)]}
+handbrake={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":32)]}
+shift_up={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":4194309)]}
+shift_down={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":4194310)]}
+change_camera={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":67)]}
+reset_car={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":82)]}
+world_map={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":77)]}
+interact={"deadzone":0.2,"events":[Object(InputEventKey,"physical_keycode":70)]}
