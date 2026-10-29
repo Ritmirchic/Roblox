@@ -144,13 +144,15 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $tag = 'horizon-velocity-v0.1.0-alpha'
-          $assets = @((Join-Path $env:GITHUB_WORKSPACE 'build/HORIZON_VELOCITY.exe'))
-          $pck = Join-Path $env:GITHUB_WORKSPACE 'build/HORIZON_VELOCITY.pck'
+          $workspace = $env:GITHUB_WORKSPACE
+          if ([string]::IsNullOrEmpty($workspace)) { Write-Output '::error title=Release preflight::GITHUB_WORKSPACE is missing.'; exit 1 }
+          $assets = @((Join-Path $workspace 'build/HORIZON_VELOCITY.exe'))
+          $pck = Join-Path $workspace 'build/HORIZON_VELOCITY.pck'
           if (Test-Path -Path $pck -PathType Leaf) { $assets += $pck }
           foreach ($asset in $assets) {
-            if (-not (Test-Path -Path $asset -PathType Leaf)) { throw "Release asset not found: $asset" }
+            if (-not (Test-Path -Path $asset -PathType Leaf)) { Write-Output "::error title=Release preflight::Missing regular asset file: $asset"; exit 1 }
           }
-          if ([string]::IsNullOrEmpty($env:GH_TOKEN)) { throw 'GITHUB_TOKEN is missing from the release step.' }
+          if ([string]::IsNullOrEmpty($env:GH_TOKEN)) { Write-Output '::error title=Release preflight::GH_TOKEN is missing.'; exit 1 }
           Write-Output "::notice title=Release publish::Preparing release $tag with $($assets.Count) asset(s)."
           $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
           $body = @{
