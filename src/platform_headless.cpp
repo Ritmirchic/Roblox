@@ -101,6 +101,11 @@ int main(int argc, char** argv) {
     g_renderer.set.height = resH;
     g_renderer.init(resW, resH);
     g_renderer.set.viewDist = 150;
+    if (getenv("FRAC_SETTINGS")) loadSettings();
+    if (getenv("FRAC_SCALE")) {           // exercise the dynamic-resolution path
+        int sc = atoi(getenv("FRAC_SCALE"));
+        if (sc >= 20 && sc <= 200) g_renderer.set.renderScale = sc;
+    }
     static std::vector<uint8_t> matbuf;
     if (getenv("FRAC_MATDBG")) {
         if (matbuf.size() < size_t(resW) * resH) matbuf.assign(size_t(resW) * resH, 0);

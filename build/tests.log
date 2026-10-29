@@ -48,7 +48,7 @@
 [test] save / load destroyed world
 [map] loading WESTHAVEN SUBURBS (620x120x620)
 [map] ground level 1.40 m
-[map] build 201ms mesh 105ms chunks=12168
+[map] build 190ms mesh 119ms chunks=12168
   objective 'BREACH THE EAST WALL' baseline 6842 voxels at 47.0,8.8,22.5
   objective 'DESTROY THE GARAGE WALL' baseline 4931 voxels at 49.0,3.4,21.0
   objective 'SMASH THE HOUSE WINDOWS' baseline 6055 voxels at 47.0,8.2,40.5
@@ -65,7 +65,7 @@
   PASS: saveGame writes a file
 [map] loading WESTHAVEN SUBURBS (620x120x620)
 [map] ground level 1.40 m
-[map] build 203ms mesh 103ms chunks=12168
+[map] build 206ms mesh 106ms chunks=12168
   objective 'BREACH THE EAST WALL' baseline 6842 voxels at 47.0,8.8,22.5
   objective 'DESTROY THE GARAGE WALL' baseline 4931 voxels at 49.0,3.4,21.0
   objective 'SMASH THE HOUSE WINDOWS' baseline 6055 voxels at 47.0,8.2,40.5
@@ -78,7 +78,7 @@
   PASS: map can be rebuilt cleanly
 [map] loading WESTHAVEN SUBURBS (620x120x620)
 [map] ground level 1.40 m
-[map] build 180ms mesh 100ms chunks=12168
+[map] build 181ms mesh 128ms chunks=12168
   objective 'BREACH THE EAST WALL' baseline 6842 voxels at 47.0,8.8,22.5
   objective 'DESTROY THE GARAGE WALL' baseline 4931 voxels at 49.0,3.4,21.0
   objective 'SMASH THE HOUSE WINDOWS' baseline 6055 voxels at 47.0,8.2,40.5

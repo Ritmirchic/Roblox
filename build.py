@@ -61,7 +61,7 @@ def build_linux():
     return out
 
 
-def build_windows(version="1.0.0"):
+def build_windows(version="1.0.1"):
     zig = find_zig()
     os.makedirs(DIST, exist_ok=True)
     raw = os.path.join(BUILD, "fracture_win_raw.exe")

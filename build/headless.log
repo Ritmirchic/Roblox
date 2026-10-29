@@ -1,8 +1,8 @@
-[init] FRACTURE: TOTAL DESTRUCTION v1.0.0
+[init] FRACTURE: TOTAL DESTRUCTION v1.0.1
 [init] ready
 [map] loading WESTHAVEN SUBURBS (620x120x620)
 [map] ground level 1.40 m
-[map] build 185ms mesh 105ms chunks=12168
+[map] build 192ms mesh 101ms chunks=12168
   objective 'BREACH THE EAST WALL' baseline 6842 voxels at 47.0,8.8,22.5
   objective 'DESTROY THE GARAGE WALL' baseline 4931 voxels at 49.0,3.4,21.0
   objective 'SMASH THE HOUSE WINDOWS' baseline 6055 voxels at 47.0,8.2,40.5
@@ -119,23 +119,23 @@
 [frame 3120] state=4 fps=60.0 tris=37724 chunks=405 debris=26 bodies=1 parts=88 cam=49.6,5.0,22.5
 [frame 3150] state=4 fps=60.0 tris=37724 chunks=405 debris=26 bodies=1 parts=62 cam=49.6,5.0,22.5
 [frame 3180] state=4 fps=60.0 tris=37724 chunks=405 debris=26 bodies=1 parts=43 cam=49.6,5.0,22.5
-[frame 3210] state=4 fps=60.0 tris=37708 chunks=404 debris=26 bodies=1 parts=36 cam=49.6,5.0,22.5
+[frame 3210] state=4 fps=60.0 tris=37724 chunks=405 debris=26 bodies=1 parts=36 cam=49.6,5.0,22.5
 [obj] sandbox: destroyed=14375 debris=26 bodies=1 parts=39 chunks=12168
 [script] END-H
-[frame 3240] state=4 fps=60.0 tris=37724 chunks=405 debris=26 bodies=1 parts=34 cam=49.6,5.0,22.5
-[frame 3270] state=4 fps=60.0 tris=37724 chunks=405 debris=26 bodies=1 parts=36 cam=49.6,5.0,22.5
-[frame 3300] state=4 fps=60.0 tris=37724 chunks=405 debris=26 bodies=1 parts=32 cam=49.6,5.0,22.5
-[frame 3330] state=4 fps=60.0 tris=37724 chunks=405 debris=26 bodies=1 parts=31 cam=49.6,5.0,22.5
-[frame 3360] state=4 fps=60.0 tris=37392 chunks=395 debris=26 bodies=1 parts=126 cam=49.6,5.0,22.5
-[frame 3390] state=4 fps=60.0 tris=37724 chunks=405 debris=26 bodies=1 parts=111 cam=49.6,5.0,22.5
-[frame 3420] state=4 fps=60.0 tris=37724 chunks=405 debris=26 bodies=1 parts=100 cam=49.6,5.0,22.5
-[frame 3450] state=4 fps=60.0 tris=37724 chunks=405 debris=26 bodies=1 parts=74 cam=49.6,5.0,22.5
-[frame 3480] state=4 fps=60.0 tris=37724 chunks=405 debris=26 bodies=1 parts=52 cam=49.6,5.0,22.5
-[frame 3510] state=4 fps=60.0 tris=37724 chunks=405 debris=26 bodies=1 parts=30 cam=49.6,5.0,22.5
-[frame 3540] state=4 fps=60.0 tris=37724 chunks=405 debris=21 bodies=1 parts=4 cam=49.6,5.0,22.5
-[frame 3570] state=4 fps=60.0 tris=37724 chunks=405 debris=20 bodies=1 parts=0 cam=49.6,5.0,22.5
-[frame 3600] state=4 fps=60.0 tris=37724 chunks=405 debris=18 bodies=1 parts=0 cam=49.6,5.0,22.5
-[frame 3630] state=4 fps=60.0 tris=37724 chunks=405 debris=16 bodies=1 parts=0 cam=49.6,5.0,22.5
+[frame 3240] state=4 fps=60.0 tris=37708 chunks=404 debris=26 bodies=1 parts=34 cam=49.6,5.0,22.5
+[frame 3270] state=4 fps=60.0 tris=37708 chunks=404 debris=26 bodies=1 parts=36 cam=49.6,5.0,22.5
+[frame 3300] state=4 fps=60.0 tris=37708 chunks=404 debris=26 bodies=1 parts=32 cam=49.6,5.0,22.5
+[frame 3330] state=4 fps=60.0 tris=37708 chunks=404 debris=26 bodies=1 parts=31 cam=49.6,5.0,22.5
+[frame 3360] state=4 fps=60.0 tris=37360 chunks=393 debris=26 bodies=1 parts=126 cam=49.6,5.0,22.5
+[frame 3390] state=4 fps=60.0 tris=37708 chunks=404 debris=26 bodies=1 parts=111 cam=49.6,5.0,22.5
+[frame 3420] state=4 fps=60.0 tris=37708 chunks=404 debris=26 bodies=1 parts=100 cam=49.6,5.0,22.5
+[frame 3450] state=4 fps=60.0 tris=37708 chunks=404 debris=26 bodies=1 parts=74 cam=49.6,5.0,22.5
+[frame 3480] state=4 fps=60.0 tris=37708 chunks=404 debris=26 bodies=1 parts=52 cam=49.6,5.0,22.5
+[frame 3510] state=4 fps=60.0 tris=37708 chunks=404 debris=26 bodies=1 parts=30 cam=49.6,5.0,22.5
+[frame 3540] state=4 fps=60.0 tris=37708 chunks=404 debris=21 bodies=1 parts=4 cam=49.6,5.0,22.5
+[frame 3570] state=4 fps=60.0 tris=37708 chunks=404 debris=20 bodies=1 parts=0 cam=49.6,5.0,22.5
+[frame 3600] state=4 fps=60.0 tris=37708 chunks=404 debris=18 bodies=1 parts=0 cam=49.6,5.0,22.5
+[frame 3630] state=4 fps=60.0 tris=37708 chunks=404 debris=16 bodies=1 parts=0 cam=49.6,5.0,22.5
 [frame 3660] state=4 fps=60.0 tris=37724 chunks=405 debris=14 bodies=1 parts=0 cam=49.6,5.0,22.5
 [frame 3690] state=4 fps=60.0 tris=37724 chunks=405 debris=13 bodies=1 parts=0 cam=49.6,5.0,22.5
 [frame 3720] state=4 fps=60.0 tris=37724 chunks=405 debris=10 bodies=1 parts=0 cam=49.6,5.0,22.5
@@ -144,16 +144,16 @@
 [frame 3810] state=4 fps=60.0 tris=37724 chunks=405 debris=8 bodies=1 parts=0 cam=49.6,5.0,22.5
 [frame 3840] state=4 fps=60.0 tris=37724 chunks=405 debris=5 bodies=1 parts=0 cam=49.6,5.0,22.5
 [frame 3870] state=4 fps=60.0 tris=37724 chunks=405 debris=2 bodies=1 parts=0 cam=49.6,5.0,22.5
-[frame 3900] state=4 fps=60.0 tris=37708 chunks=404 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
-[frame 3930] state=4 fps=60.0 tris=37708 chunks=404 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
-[frame 3960] state=4 fps=60.0 tris=37708 chunks=404 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
-[frame 3990] state=4 fps=60.0 tris=37708 chunks=404 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
-[frame 4020] state=4 fps=60.0 tris=37708 chunks=404 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
-[frame 4050] state=4 fps=60.0 tris=37708 chunks=404 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
-[frame 4080] state=4 fps=60.0 tris=37708 chunks=404 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
-[frame 4110] state=4 fps=60.0 tris=37708 chunks=404 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
-[frame 4140] state=4 fps=60.0 tris=37708 chunks=404 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
-[frame 4170] state=4 fps=60.0 tris=37708 chunks=404 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
+[frame 3900] state=4 fps=60.0 tris=37724 chunks=405 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
+[frame 3930] state=4 fps=60.0 tris=37724 chunks=405 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
+[frame 3960] state=4 fps=60.0 tris=37724 chunks=405 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
+[frame 3990] state=4 fps=60.0 tris=37724 chunks=405 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
+[frame 4020] state=4 fps=60.0 tris=37724 chunks=405 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
+[frame 4050] state=4 fps=60.0 tris=37724 chunks=405 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
+[frame 4080] state=4 fps=60.0 tris=37724 chunks=405 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
+[frame 4110] state=4 fps=60.0 tris=37724 chunks=405 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
+[frame 4140] state=4 fps=60.0 tris=37724 chunks=405 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
+[frame 4170] state=4 fps=60.0 tris=37724 chunks=405 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
 [frame 4200] state=4 fps=60.0 tris=37708 chunks=404 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
 [frame 4230] state=4 fps=60.0 tris=37708 chunks=404 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5
 [frame 4260] state=4 fps=60.0 tris=37708 chunks=404 debris=0 bodies=1 parts=0 cam=49.6,5.0,22.5

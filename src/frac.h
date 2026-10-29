@@ -14,7 +14,7 @@
 #include <functional>
 
 // ------------------------------------------------------------------ config
-#define FRACTURE_VERSION "1.0.0"
+#define FRACTURE_VERSION "1.0.1"
 #define CH 16                 // chunk edge in voxels
 #define CHV (CH * CH * CH)
 // Function-key codes shared by both platforms (Win32 virtual-key values)
@@ -866,6 +866,8 @@ void gameResetWorld();
 void resetLoadout();
 int objectiveNeed(const Objective& o);
 void applyGraphicsPreset(int idx);
+void loadSettings();
+void saveSettings();
 void gameLoadMenuBackdrop();
 void renderMenuBackdrop();
 void buildMap(int idx);

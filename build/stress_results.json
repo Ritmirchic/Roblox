@@ -3,7 +3,7 @@
     "test": "A",
     "title": "Sustained destruction throughput",
     "status": "PASS",
-    "detail": "28769 voxels destroyed, no crash, 87.7s wall clock",
+    "detail": "28769 voxels destroyed, no crash, 88.6s wall clock",
     "metrics": {
       "voxels": 28769,
       "max_tris": 43540
@@ -24,7 +24,7 @@
     "test": "C",
     "title": "Particle/explosion saturation",
     "status": "PASS",
-    "detail": "peak 1159 particles alive, no crash, 65.0s",
+    "detail": "peak 1159 particles alive, no crash, 65.1s",
     "metrics": {
       "peak_particles": 1159,
       "fps_end": 60.0
@@ -44,7 +44,7 @@
     "test": "E",
     "title": "All maps build (voxels + mesh + missions)",
     "status": "PASS",
-    "detail": "map0: 192+111ms 950ch 8obj; map1: 200+97ms 820ch 10obj; map2: 217+138ms 1239ch 9obj; map3: 230+102ms 1135ch 8obj; map4: 240+205ms 1123ch 9obj; map5: 186+168ms 1178ch 9obj",
+    "detail": "map0: 177+100ms 950ch 8obj; map1: 205+89ms 820ch 10obj; map2: 215+128ms 1239ch 9obj; map3: 231+99ms 1135ch 8obj; map4: 240+195ms 1123ch 9obj; map5: 188+132ms 1178ch 9obj",
     "metrics": {
       "slowest_build_ms": 240
     }
@@ -53,7 +53,7 @@
     "test": "F",
     "title": "Renderer stress at 1600x900, all view angles",
     "status": "PASS",
-    "detail": "6/6 frames captured, 11.9s, no crash at 1600x900",
+    "detail": "6/6 frames captured, 11.8s, no crash at 1600x900",
     "metrics": {
       "shots": 6,
       "max_tris": 30706
@@ -73,10 +73,10 @@
     "test": "H",
     "title": "Long-run stability (2400 frames of continuous demolition)",
     "status": "PASS",
-    "detail": "14375 voxels destroyed, 404 chunks alive, 88.9s, no crash",
+    "detail": "14375 voxels destroyed, 404 chunks alive, 88.5s, no crash",
     "metrics": {
       "voxels": 14375,
-      "seconds": 88.9
+      "seconds": 88.5
     }
   }
 ]

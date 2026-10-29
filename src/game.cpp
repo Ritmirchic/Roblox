@@ -1569,7 +1569,53 @@ void gameRender() {
     }
 }
 
+// Persist the handful of settings the menus expose. Every value is range-checked on load, so a
+// truncated or hand-edited file can never put the game into an unusable state.
+void saveSettings() {
+    ensureSaveDir();
+    std::string path = g_saveDir + "/settings.cfg";
+    FILE* f = fopen(path.c_str(), "w");
+    if (!f) {
+        logf("[settings] could not write %s", path.c_str());
+        return;
+    }
+    fprintf(f, "version 1\n");
+    fprintf(f, "preset %d\n", g_game.qualityPreset);
+    fprintf(f, "master %d\n", int(g_audio.master * 100.0f + 0.5f));
+    fprintf(f, "sfx %d\n", int(g_audio.sfxVol * 100.0f + 0.5f));
+    fprintf(f, "music %d\n", int(g_audio.musicVol * 100.0f + 0.5f));
+    fprintf(f, "sens %d\n", int(g_game.sens * 100.0f + 0.5f));
+    fclose(f);
+}
+
+void loadSettings() {
+    std::string path = g_saveDir + "/settings.cfg";
+    FILE* f = fopen(path.c_str(), "r");
+    if (!f) return;
+    char key[32];
+    int preset = -1, master = -1, sfx = -1, music = -1, sens = -1;
+    FILE* guard = f;
+    while (fscanf(guard, "%31s", key) == 1) {
+        long v = 0;
+        if (fscanf(guard, "%ld", &v) != 1) break;
+        if (!strcmp(key, "preset")) preset = int(v);
+        else if (!strcmp(key, "master")) master = int(v);
+        else if (!strcmp(key, "sfx")) sfx = int(v);
+        else if (!strcmp(key, "music")) music = int(v);
+        else if (!strcmp(key, "sens")) sens = int(v);
+    }
+    fclose(f);
+    if (preset >= 0 && preset <= 4) applyGraphicsPreset(preset);
+    if (master >= 0) g_audio.master = clampi(master, 0, 100) / 100.0f;
+    if (sfx >= 0) g_audio.sfxVol = clampi(sfx, 0, 100) / 100.0f;
+    if (music >= 0) g_audio.musicVol = clampi(music, 0, 100) / 100.0f;
+    if (sens >= 5) g_game.sens = clampf(float(sens) / 100.0f, 0.05f, 1.2f);
+    logf("[settings] loaded (preset %d, master %d%%, sens %.2f)", g_game.qualityPreset,
+         int(g_audio.master * 100.0f), g_game.sens);
+}
+
 void gameShutdown() {
+    saveSettings();
     g_game.world.free();
     logf("[shutdown]");
 }

@@ -135,7 +135,7 @@ def make_manifest():
     return (b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
             b'<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">\r\n'
             b' <assemblyIdentity type="win32" name="Fracture.TotalDestruction"'
-            b' version="1.0.0.0" processorArchitecture="amd64"/>\r\n'
+            b' version="1.0.1.0" processorArchitecture="amd64"/>\r\n'
             b' <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3"><security>'
             b'<requestedPrivileges><requestedExecutionLevel level="asInvoker"'
             b' uiAccess="false"/></requestedPrivileges></security></trustInfo>\r\n'
@@ -145,7 +145,7 @@ def make_manifest():
             b'</assembly>\r\n')
 
 
-def make_version(version="1.0.0"):
+def make_version(version="1.0.1"):
     parts = [int(x) for x in version.split(".")]
     while len(parts) < 4:
         parts.append(0)
@@ -190,7 +190,7 @@ def main():
         print("usage: pe_res.py in.exe out.exe [version]")
         return 1
     src, dst = sys.argv[1], sys.argv[2]
-    version = sys.argv[3] if len(sys.argv) > 3 else "1.0.0"
+    version = sys.argv[3] if len(sys.argv) > 3 else "1.0.1"
     pe = PE(open(src, "rb").read())
     entries = []
     ico = os.path.join(ROOT, "assets", "icon.ico")
