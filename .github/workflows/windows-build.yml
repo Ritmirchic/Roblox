@@ -127,7 +127,8 @@ jobs:
           if (-not (Test-Path -Path $exePath -PathType Leaf)) {
             $where = ($found | ForEach-Object { $_.FullName + ' (' + $_.Length + ' bytes)' }) -join '; '
             if (-not $where) { $where = 'No named executable or companion file found under workspace.' }
-            $where = ("Expected $exePath; $where") -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
+            $engineLog = (($output | Select-Object -Last 12) -join ' | ')
+            $where = ("Expected $exePath; $files=$where; Godot=$engineLog") -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
             Write-Output "::error title=Exported file not found::$where"
             exit 1
           }
