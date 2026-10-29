@@ -107,8 +107,14 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path build | Out-Null
-          & $env:GODOT_EXE --headless --path "$PWD/project" --export-release 'Windows Desktop' "$PWD/build/HORIZON_VELOCITY.exe"
-          if ($LASTEXITCODE -ne 0) { throw 'Windows export failed.' }
+          $output = & $env:GODOT_EXE --headless --path "$PWD/project" --export-release 'Windows Desktop' "$PWD/build/HORIZON_VELOCITY.exe" 2>&1
+          $code = $LASTEXITCODE
+          $output | ForEach-Object { Write-Host $_ }
+          if ($code -ne 0) {
+            $details = (($output | Select-Object -Last 16) -join ' | ') -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
+            Write-Output "::error title=Godot export diagnostic::$details"
+            exit $code
+          }
           if (-not (Test-Path 'build/HORIZON_VELOCITY.exe')) { throw 'Expected Windows executable was not created.' }
           Get-ChildItem build | Format-Table Name,Length
 
