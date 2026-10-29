@@ -48,6 +48,7 @@ static func label(text: String, size: int, color: Color) -> Label:
 	result.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.36))
 	result.add_theme_constant_override("shadow_offset_x", 1)
 	result.add_theme_constant_override("shadow_offset_y", 1)
+	result.size = result.get_combined_minimum_size()
 	return result
 
 

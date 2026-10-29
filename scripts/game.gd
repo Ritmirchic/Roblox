@@ -116,6 +116,7 @@ func _build_hud() -> void:
 	top.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	top.position = Vector2(32, 26)
 	top.custom_minimum_size = Vector2(300, 84)
+	top.size = Vector2(300, 84)
 	top.add_theme_stylebox_override(
 		"panel", UISkin.panel_style(Color(0.025, 0.07, 0.09, 0.78), Color(0.30, 0.80, 0.76, 0.45))
 	)
@@ -132,6 +133,7 @@ func _build_hud() -> void:
 	bottom.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	bottom.position = Vector2(-322, -114)
 	bottom.custom_minimum_size = Vector2(290, 78)
+	bottom.size = Vector2(290, 78)
 	bottom.add_theme_stylebox_override(
 		"panel", UISkin.panel_style(Color(0.025, 0.07, 0.09, 0.78), Color(0.30, 0.80, 0.76, 0.38))
 	)
@@ -243,6 +245,7 @@ func _show_menu() -> void:
 	var hero := UISkin.label("HORIZON\nVELOCITY", 60, Color("f5f3ea"))
 	hero.position = Vector2(55, 145)
 	hero.custom_minimum_size = Vector2(550, 170)
+	hero.size = Vector2(550, 170)
 	hero.add_theme_font_size_override("font_size", 64)
 	hero.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.45))
 	hero.add_theme_constant_override("shadow_offset_x", 2)
@@ -254,7 +257,8 @@ func _show_menu() -> void:
 	var menu_panel := PanelContainer.new()
 	menu_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	menu_panel.position = Vector2(-445, 134)
-	menu_panel.custom_minimum_size = Vector2(390, 542)
+	menu_panel.custom_minimum_size = Vector2(390, 580)
+	menu_panel.size = Vector2(390, 580)
 	menu_panel.add_theme_stylebox_override(
 		"panel", UISkin.panel_style(Color(0.035, 0.075, 0.095, 0.90), Color(0.28, 0.79, 0.73, 0.5))
 	)
@@ -318,6 +322,7 @@ func _show_event_menu() -> void:
 	content.set_anchors_preset(Control.PRESET_CENTER)
 	content.position = Vector2(-350, -132)
 	content.custom_minimum_size = Vector2(700, 465)
+	content.size = Vector2(700, 465)
 	content.add_theme_constant_override("separation", 14)
 	ui_root.add_child(content)
 	for i in range(EVENT_DATA.size()):
@@ -652,6 +657,7 @@ func _show_settings() -> void:
 	panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	panel.position = Vector2(-320, 122)
 	panel.custom_minimum_size = Vector2(640, 650)
+	panel.size = Vector2(640, 650)
 	panel.add_theme_stylebox_override(
 		"panel", UISkin.panel_style(Color(0.035, 0.075, 0.092, 0.96), Color(0.30, 0.80, 0.76, 0.55))
 	)
@@ -901,6 +907,7 @@ func _center_panel(panel_size: Vector2) -> PanelContainer:
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.position = -panel_size * 0.5
 	panel.custom_minimum_size = panel_size
+	panel.size = panel_size
 	panel.add_theme_stylebox_override(
 		"panel", UISkin.panel_style(Color(0.035, 0.075, 0.092, 0.96), Color(0.30, 0.80, 0.76, 0.55))
 	)
