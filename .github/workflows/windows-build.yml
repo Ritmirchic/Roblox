@@ -88,7 +88,8 @@ jobs:
           $output | ForEach-Object { Write-Host $_ }
           $hasEngineErrors = (($output -join "`n") -match '(?m)^(SCRIPT ERROR:|ERROR:)')
           if ($code -ne 0 -or $hasEngineErrors) {
-            $details = (($output | Select-Object -Last 16) -join ' | ') -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
+            $errorLines = $output | Where-Object { "$_" -match '(SCRIPT ERROR:|ERROR:)' }
+            $details = ($errorLines -join ' | ') -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
             Write-Output "::error title=Godot import diagnostic::$details"
             if ($code -ne 0) { exit $code }
             exit 1
@@ -102,7 +103,8 @@ jobs:
           $output | ForEach-Object { Write-Host $_ }
           $hasEngineErrors = (($output -join "`n") -match '(?m)^(SCRIPT ERROR:|ERROR:)')
           if ($code -ne 0 -or $hasEngineErrors) {
-            $details = (($output | Select-Object -Last 20) -join ' | ') -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
+            $errorLines = $output | Where-Object { "$_" -match '(SCRIPT ERROR:|ERROR:)' }
+            $details = ($errorLines -join ' | ') -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
             Write-Output "::error title=Godot runtime diagnostic::$details"
             if ($code -ne 0) { exit $code }
             exit 1
@@ -124,7 +126,8 @@ jobs:
           $code = $LASTEXITCODE
           $output | ForEach-Object { Write-Host $_ }
           if ($null -ne $code -and $code -ne 0) {
-            $details = (($output | Select-Object -Last 16) -join ' | ') -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
+            $errorLines = $output | Where-Object { "$_" -match '(SCRIPT ERROR:|ERROR:)' }
+            $details = ($errorLines -join ' | ') -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
             Write-Output "::error title=Godot export diagnostic::$details"
             exit $code
           }
