@@ -1,12 +1,82 @@
 [
   {
+    "test": "A",
+    "title": "Sustained destruction throughput",
+    "status": "PASS",
+    "detail": "28769 voxels destroyed, no crash, 87.7s wall clock",
+    "metrics": {
+      "voxels": 28769,
+      "max_tris": 43540
+    }
+  },
+  {
+    "test": "B",
+    "title": "Structural collapse + debris physics",
+    "status": "PASS",
+    "detail": "4857 voxels removed, 1 structure bodies, 67 debris pieces",
+    "metrics": {
+      "bodies": 1,
+      "debris": 67,
+      "voxels": 4857
+    }
+  },
+  {
+    "test": "C",
+    "title": "Particle/explosion saturation",
+    "status": "PASS",
+    "detail": "peak 1159 particles alive, no crash, 65.0s",
+    "metrics": {
+      "peak_particles": 1159,
+      "fps_end": 60.0
+    }
+  },
+  {
+    "test": "D",
+    "title": "Save/load of destroyed geometry",
+    "status": "PASS",
+    "detail": "2 modified chunks written (2381 bytes), reload handler ran=True",
+    "metrics": {
+      "chunks": 2,
+      "bytes": 2381
+    }
+  },
+  {
+    "test": "E",
+    "title": "All maps build (voxels + mesh + missions)",
+    "status": "PASS",
+    "detail": "map0: 192+111ms 950ch 8obj; map1: 200+97ms 820ch 10obj; map2: 217+138ms 1239ch 9obj; map3: 230+102ms 1135ch 8obj; map4: 240+205ms 1123ch 9obj; map5: 186+168ms 1178ch 9obj",
+    "metrics": {
+      "slowest_build_ms": 240
+    }
+  },
+  {
+    "test": "F",
+    "title": "Renderer stress at 1600x900, all view angles",
+    "status": "PASS",
+    "detail": "6/6 frames captured, 11.9s, no crash at 1600x900",
+    "metrics": {
+      "shots": 6,
+      "max_tris": 30706
+    }
+  },
+  {
+    "test": "G",
+    "title": "Player physics (spawn in wall, fall from height)",
+    "status": "PASS",
+    "detail": "13 physics samples, min y=1.3822, sunk samples=0",
+    "metrics": {
+      "min_y": 1.3822,
+      "sunk": 0
+    }
+  },
+  {
     "test": "H",
     "title": "Long-run stability (2400 frames of continuous demolition)",
     "status": "PASS",
-    "detail": "14375 voxels destroyed, 404 chunks alive, 89.8s, no crash",
+    "detail": "14375 voxels destroyed, 404 chunks alive, 88.9s, no crash",
     "metrics": {
       "voxels": 14375,
-      "seconds": 89.8
+      "seconds": 88.9
     }
   }
 ]

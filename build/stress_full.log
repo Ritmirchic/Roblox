@@ -1,0 +1,37 @@
+running stress tests: A B C D E F G H
+
+[PASS] A: Sustained destruction throughput
+       28769 voxels destroyed, no crash, 87.7s wall clock
+       voxels=28769, max_tris=43540
+
+[PASS] B: Structural collapse + debris physics
+       4857 voxels removed, 1 structure bodies, 67 debris pieces
+       bodies=1, debris=67, voxels=4857
+
+[PASS] C: Particle/explosion saturation
+       peak 1159 particles alive, no crash, 65.0s
+       peak_particles=1159, fps_end=60.0
+
+[PASS] D: Save/load of destroyed geometry
+       2 modified chunks written (2381 bytes), reload handler ran=True
+       chunks=2, bytes=2381
+
+[PASS] E: All maps build (voxels + mesh + missions)
+       map0: 192+111ms 950ch 8obj; map1: 200+97ms 820ch 10obj; map2: 217+138ms 1239ch 9obj; map3: 230+102ms 1135ch 8obj; map4: 240+205ms 1123ch 9obj; map5: 186+168ms 1178ch 9obj
+       slowest_build_ms=240
+
+[PASS] F: Renderer stress at 1600x900, all view angles
+       6/6 frames captured, 11.9s, no crash at 1600x900
+       shots=6, max_tris=30706
+
+[PASS] G: Player physics (spawn in wall, fall from height)
+       13 physics samples, min y=1.3822, sunk samples=0
+       min_y=1.3822, sunk=0
+
+[PASS] H: Long-run stability (2400 frames of continuous demolition)
+       14375 voxels destroyed, 404 chunks alive, 88.9s, no crash
+       voxels=14375, seconds=88.9
+
+=== 8/8 stress tests passed ===
+results written to /home/user/Roblox/build/stress_results.json
+EXIT=0
