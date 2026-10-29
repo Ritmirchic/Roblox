@@ -279,12 +279,12 @@ func _loft(stations: Array) -> ArrayMesh:
 		for j in range(SIDES):
 			var angle := TAU * float(j) / SIDES
 			var taper := cos(angle)
-				var y: float = (
-					(float(row[2]) + float(row[3])) * 0.5
-					+ sin(angle) * (float(row[3]) - float(row[2])) * 0.5
-				)
-				var x: float = taper * float(row[1])
-				vertices.append(Vector3(x, y, float(row[0])))
+			var y: float = (
+				(float(row[2]) + float(row[3])) * 0.5
+				+ sin(angle) * (float(row[3]) - float(row[2])) * 0.5
+			)
+			var x: float = taper * float(row[1])
+			vertices.append(Vector3(x, y, float(row[0])))
 			uvs.append(Vector2(float(j) / SIDES, float(s) / maxf(stations.size() - 1, 1)))
 	for s in range(stations.size() - 1):
 		for j in range(SIDES):
