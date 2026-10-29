@@ -20,6 +20,8 @@ class ProjectSourceContract(unittest.TestCase):
             "scripts/minimap.gd",
             "scripts/input_setup.gd",
             "scripts/ui_skin.gd",
+            "tools/export_windows.sh",
+            "tools/build_matrix.sh",
             "assets/icon.svg",
         )
         for path in paths:
@@ -68,6 +70,10 @@ class ProjectSourceContract(unittest.TestCase):
         self.assertIn('platform="Windows Desktop"', preset)
         self.assertIn('binary_format/architecture="x86_64"', preset)
         self.assertIn("binary_format/embed_pck=true", preset)
+        self.assertIn("name=\"Windows Desktop (External PCK)\"", preset)
+        self.assertIn("binary_format/embed_pck=false", preset)
+        matrix = (ROOT / "tools/build_matrix.sh").read_text(encoding="utf-8")
+        self.assertIn("HV_ATTEMPTS:-10", matrix)
         self.assertIn("HORIZON_VELOCITY.exe", preset)
 
 

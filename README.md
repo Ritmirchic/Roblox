@@ -6,7 +6,7 @@ An original, source-first 3D driving-game vertical slice built for **Godot 4.x**
 
 1. Install a stable Godot 4.x Standard build (GDScript; no .NET needed).
 2. Open this folder as a Godot project and run `scenes/main.tscn` (or press **F6** / **F5** in the editor).
-3. To export a 64-bit Windows build, install matching Godot export templates, then choose **Project → Export → Windows Desktop → Export Project**. The included preset targets `build/HORIZON_VELOCITY.exe`. From a shell with Godot and matching export templates installed, run `./tools/export_windows.sh` (or set `GODOT_BIN` to your editor binary).
+3. To export a 64-bit Windows build, install matching Godot export templates. The project has embedded-PCK (single EXE) and external-PCK (EXE + data) presets; each supports Release and Debug exports. Run `./tools/export_windows.sh` (set `HV_PRESET`, `HV_EXPORT_MODE`, or `GODOT_BIN` to select an option). `./tools/build_matrix.sh` runs ten attempts for each of the four combinations, with the variants in parallel.
 
 The sandbox used to author this project is a minimal Linux container with no Unreal/Godot/Blender installation, no Windows cross-compiler, and no usable graphics display. Direct downloads of the Godot release binary were blocked at GitHub's release-asset host. Consequently, **no Windows executable has been generated or tested here**. The project source and export preset are real; an `.exe` is deliberately not represented as delivered.
 
