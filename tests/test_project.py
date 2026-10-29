@@ -28,9 +28,12 @@ class ProjectStructureTests(unittest.TestCase):
         self.assertIn('drivetrain == "RWD"', vehicle)
         self.assertIn('drivetrain == "FWD"', vehicle)
 
-    def test_catalog_copy_is_explicitly_typed_for_godot_inference(self):
+    def test_variant_based_values_have_explicit_godot_types(self):
         main = (PROJECT / "scripts/main.gd").read_text()
+        vehicle = (PROJECT / "scripts/vehicle.gd").read_text()
         self.assertIn("var result: Dictionary = item.duplicate()", main)
+        self.assertIn("var y: float = (", vehicle)
+        self.assertIn("var x: float = taper * float(row[1])", vehicle)
 
     def test_race_has_world_checkpoints_results_and_rewards(self):
         main = (PROJECT / "scripts/main.gd").read_text()

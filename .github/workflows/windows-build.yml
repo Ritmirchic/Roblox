@@ -157,7 +157,7 @@ jobs:
               tag_name = $tag
               target_commitish = $env:GITHUB_SHA
               name = 'Horizon Velocity 0.1.2-alpha — Windows x64 bundle'
-              body = 'Windows alpha startup fix: a GDScript type-inference parse error in main.gd prevented the scene and menu from loading. The failing catalog copy now has an explicit Dictionary type, and CI now treats Godot script-error log output as a failure. Download HORIZON_VELOCITY_WINDOWS.zip, extract both files into the same folder, and launch HORIZON_VELOCITY.exe. This is an experimental vertical slice, not a finished AAA release; interactive gameplay and visual QA remain outstanding.'
+              body = 'Windows alpha startup fix: GDScript type-inference parse errors in main.gd and vehicle.gd prevented scenes from loading. Values copied from the car catalog and loft arrays now have explicit types, and CI treats Godot script-error log output as a failure. Download HORIZON_VELOCITY_WINDOWS.zip, extract both files into the same folder, and launch HORIZON_VELOCITY.exe. This is an experimental vertical slice, not a finished AAA release; interactive gameplay and visual QA remain outstanding.'
               draft = $false
               prerelease = $true
             } | ConvertTo-Json
