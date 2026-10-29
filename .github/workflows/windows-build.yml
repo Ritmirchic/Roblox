@@ -122,8 +122,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: HORIZON_VELOCITY_WINDOWS
-          path: |
-            build/HORIZON_VELOCITY.exe
-            build/HORIZON_VELOCITY.pck
+          path: build/
           if-no-files-found: error
           retention-days: 30
