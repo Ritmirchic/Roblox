@@ -17,6 +17,11 @@
 #define FRACTURE_VERSION "1.0.0"
 #define CH 16                 // chunk edge in voxels
 #define CHV (CH * CH * CH)
+// Function-key codes shared by both platforms (Win32 virtual-key values)
+#define VK_KEY_F3 114
+#define VK_KEY_F5 116
+#define VK_KEY_F9 120
+#define VK_KEY_F11 122
 #define VOXSZ 0.2f            // metres per voxel
 #define NTEX 42
 #define GAME_NAME "FRACTURE: TOTAL DESTRUCTION"
@@ -802,6 +807,8 @@ struct Game {
     float menuAnim = 0;
     int lastToolSelected = TOOL_HAMMER;
     bool showMinimap = true;
+    bool dynamicResolution = true;   // adapt internal 3D resolution to hold the frame budget
+    int resolutionCap = 100;         // upper bound imposed by the quality preset
     int qualityPreset = 2;      // 0 LOW 1 MEDIUM 2 HIGH 3 VERY HIGH 4 ULTRA
     Vec3 menuCamTarget;
     float menuCamDist = 52.0f;

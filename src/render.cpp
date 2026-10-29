@@ -9,6 +9,10 @@
 Renderer g_renderer;
 
 int g_rasterHeight = 720;
+// tonemap lookup table: linear light 0..LUT_MAX -> 8-bit sRGB after ACES + exposure
+static const int LUT_N = 2048;
+static const float LUT_MAX = 4.0f;
+static const float LUT_SCALE = float(LUT_N - 1) / LUT_MAX;
 bool g_noFog = false;   // viewmodel: keep the held tool out of atmospheric fog
 static Vec3 s_fogCol(0.7f, 0.75f, 0.8f);
 uint8_t* g_dbgMatBuf = nullptr;
@@ -224,6 +228,15 @@ static inline void rasterTri(FrameCtx& fc, const XVert& a, const XVert& b, const
     float dWdy = invArea * (dw0dy * a.invw + dw1dy * b.invw + dw2dy * c.invw);
     float dVdx = invArea * (dw0dx * a_v + dw1dx * b_v + dw2dx * c_v);
     float dVdy = invArea * (dw0dy * a_v + dw1dy * b_v + dw2dy * c_v);
+    // LOD is chosen once per triangle from its screen-space UV gradient; the per-pixel
+    // step only nudges it by one level when the local gradient is much larger. This keeps
+    // the aliasing control of per-pixel LOD at a fraction of the cost.
+    float triG = (fmaxf(fabsf(dUdx) + fabsf(dVdx), fabsf(dUdy) + fabsf(dVdy))) * float(tw);
+    int lodTri = 0;
+    if (triG > 1.0f) {
+        int32_t tb = (int32_t)*(uint32_t*)&triG;
+        lodTri = clampi(((tb >> 23) & 0xFF) - 127, 0, nMip - 1);
+    }
     int curLod = -1;
     const uint8_t* mp = nullptr;
     int mw = 1, mh = 1;
@@ -248,17 +261,19 @@ static inline void rasterTri(FrameCtx& fc, const XVert& a, const XVert& b, const
                     float rw = 1.0f / invw;
                     float u = (b0 * a_u + b1 * b_u + b2 * c_u) * rw;
                     float v = (b0 * a_v + b1 * b_v + b2 * c_v) * rw;
-                    // per-pixel LOD from analytic gradients (integer log2 by exponent bits)
-                    float gx0 = (dUdx - u * dWdx) * rw, gx1 = (dVdx - v * dWdx) * rw;
-                    float gy0 = (dUdy - u * dWdy) * rw, gy1 = (dVdy - v * dWdy) * rw;
-                    float gx = fabsf(gx0) + fabsf(gx1), gy = fabsf(gy0) + fabsf(gy1);
-                    float g = (gx > gy ? gx : gy) * float(tw);
-                    int32_t bits = (int32_t)*(uint32_t*)&g;
-                    static int forceLod = getenv("FRAC_LOD") ? atoi(getenv("FRAC_LOD")) : -1;
-                    int lod = clampi(((bits >> 23) & 0xFF) - 127, 0, nMip - 1);
-                    if (forceLod >= 0) lod = clampi(forceLod, 0, nMip - 1);
-                    if (getenv("FRAC_LODDBG") && (x % 97 == 0) && (y % 61 == 0))
-                        logf("lod dbg x=%d y=%d u=%.4f v=%.4f g=%.5f lod=%d", x, y, u, v, g, lod);
+                    // per-pixel LOD: start from the triangle's level, bump one step for
+                    // pixels whose local gradient is much steeper
+                    int lod = lodTri;
+                    if (lodTri + 1 < nMip) {
+                        float gx0 = (dUdx - u * dWdx) * rw, gx1 = (dVdx - v * dWdx) * rw;
+                        float gy0 = (dUdy - u * dWdy) * rw, gy1 = (dVdy - v * dWdy) * rw;
+                        float g = (fmaxf(fabsf(gx0) + fabsf(gx1), fabsf(gy0) + fabsf(gy1))) *
+                                  float(tw);
+                        int32_t bits = (int32_t)*(uint32_t*)&g;
+                        int pl = ((bits >> 23) & 0xFF) - 127;
+                        if (pl > lodTri + 1) lod = lodTri + 1;
+                        else if (pl > lodTri) lod = lodTri + 1;
+                    }
                     if (lod != curLod) {
                         curLod = lod;
                         mp = t->mip[lod].data();
@@ -397,9 +412,17 @@ void Renderer::begin() {
 }
 
 void Renderer::drawSky() {
-    // skybox: inverted sphere-ish grid of quads, drawn without depth test
+    // skybox: inverted sphere-ish grid of quads, drawn without depth test.
+    // The sky is a smooth gradient + soft clouds, so it is rasterised into a quarter
+    // resolution scratch buffer and bilinearly upsampled: visually identical, ~16x cheaper
+    // than evaluating the barycentric path for every full-res pixel.
+    const int SKY_DIV = 4;
+    int sw = (width + SKY_DIV - 1) / SKY_DIV, sh = (height + SKY_DIV - 1) / SKY_DIV;
+    static std::vector<float> skyBuf;
+    if (int(skyBuf.size()) < sw * sh * 3) skyBuf.assign(size_t(sw) * sh * 3, 0.0f);
     const int seg = 40, rings = 20;
     const float R = 800.0f;
+    const float invDiv = 1.0f / float(SKY_DIV);
     FrameCtx fc;
     fc.rt = &rt;
     FrameCtx* fcp = &fc;
@@ -421,12 +444,12 @@ void Renderer::drawSky() {
                 // behind the camera: keep the vertex but pull it to the screen edge so the
                 // triangle still covers its part of the sky
                 xv.invw = 0.02f;
-                xv.sx = (cp.x >= 0 ? 1.0f : -1.0f) * width * 4.0f;
-                xv.sy = (cp.y >= 0 ? 1.0f : -1.0f) * height * 4.0f;
+                xv.sx = (cp.x >= 0 ? 1.0f : -1.0f) * sw * 4.0f;
+                xv.sy = (cp.y >= 0 ? 1.0f : -1.0f) * sh * 4.0f;
             } else {
                 float invw = 1.0f / cp.w;
-                xv.sx = (cp.x * invw * 0.5f + 0.5f) * width;
-                xv.sy = (0.5f - cp.y * invw * 0.5f) * height;
+                xv.sx = (cp.x * invw * 0.5f + 0.5f) * float(sw);
+                xv.sy = (0.5f - cp.y * invw * 0.5f) * float(sh);
                 xv.invw = invw;
             }
             xv.u = float(i) / seg;
@@ -445,7 +468,7 @@ void Renderer::drawSky() {
     const Tex* t = &sky;
     const uint8_t* mp = t->mip[0].data();
     int mw = t->mipW[0], mh = t->mipH[0];
-    float* col = rt.color.data();
+    float* col = skyBuf.data();
     for (int j = 0; j < rings; j++) {
         for (int i = 0; i < seg; i++) {
             XVert a = grid[size_t(j) * (seg + 1) + i];
@@ -462,10 +485,10 @@ void Renderer::drawSky() {
                 float area = (B.sx - A.sx) * (C.sy - A.sy) - (C.sx - A.sx) * (B.sy - A.sy);
                 if (fabsf(area) < 1e-6f) continue;
                 float invArea = 1.0f / area;
-                int minx = clampi(int(fminf(A.sx, fminf(B.sx, C.sx))), 0, width - 1);
-                int maxx = clampi(int(fmaxf(A.sx, fmaxf(B.sx, C.sx))), 0, width - 1);
-                int miny = clampi(int(fminf(A.sy, fminf(B.sy, C.sy))), 0, height - 1);
-                int maxy = clampi(int(fmaxf(A.sy, fmaxf(B.sy, C.sy))), 0, height - 1);
+                int minx = clampi(int(fminf(A.sx, fminf(B.sx, C.sx))), 0, sw - 1);
+                int maxx = clampi(int(fmaxf(A.sx, fmaxf(B.sx, C.sx))), 0, sw - 1);
+                int miny = clampi(int(fminf(A.sy, fminf(B.sy, C.sy))), 0, sh - 1);
+                int maxy = clampi(int(fmaxf(A.sy, fmaxf(B.sy, C.sy))), 0, sh - 1);
                 for (int y = miny; y <= maxy; y++) {
                     float fy = y + 0.5f;
                     for (int x = minx; x <= maxx; x++) {
@@ -487,7 +510,7 @@ void Renderer::drawSky() {
                         int ix = clampi(int(uu * mw), 0, mw - 1);
                         int iy = clampi(int(vv * mh), 0, mh - 1);
                         const uint8_t* sp = mp + (iy * mw + ix) * 4;
-                        float* cp = col + (y * width + x) * 3;
+                        float* cp = col + (y * sw + x) * 3;
                         cp[0] = sp[0] * (1.0f / 255.0f);
                         cp[1] = sp[1] * (1.0f / 255.0f);
                         cp[2] = sp[2] * (1.0f / 255.0f);
@@ -497,6 +520,32 @@ void Renderer::drawSky() {
         }
     }
     (void)fcp;
+    // bilinear upsample of the quarter-res sky into the full-res HDR buffer
+    float* dst = rt.color.data();
+    for (int y = 0; y < height; y++) {
+        float fy = (y + 0.5f) * invDiv - 0.5f;
+        int y0 = clampi(int(floorf(fy)), 0, sh - 1);
+        int y1 = std::min(y0 + 1, sh - 1);
+        float ty = saturate(fy - floorf(fy));
+        const float* r0 = &skyBuf[size_t(y0) * sw * 3];
+        const float* r1 = &skyBuf[size_t(y1) * sw * 3];
+        float* out = dst + size_t(y) * width * 3;
+        for (int x = 0; x < width; x++) {
+            float fx = (x + 0.5f) * invDiv - 0.5f;
+            int x0 = clampi(int(floorf(fx)), 0, sw - 1);
+            int x1 = std::min(x0 + 1, sw - 1);
+            float tx = saturate(fx - floorf(fx));
+            const float* p00 = &r0[x0 * 3];
+            const float* p10 = &r0[x1 * 3];
+            const float* p01 = &r1[x0 * 3];
+            const float* p11 = &r1[x1 * 3];
+            for (int c = 0; c < 3; c++) {
+                float a = p00[c] + (p10[c] - p00[c]) * tx;
+                float b = p01[c] + (p11[c] - p01[c]) * tx;
+                out[x * 3 + c] = a + (b - a) * ty;
+            }
+        }
+    }
 }
 
 // frustum planes from viewproj
@@ -610,6 +659,15 @@ void Renderer::drawWorld(World& w) {
         visible.push_back(&c->mesh);
         if (!c->tmesh.verts.empty()) visible.push_back(&c->tmesh);
     }
+    // sort front-to-back: with a z-buffer this lets occluded pixels skip texture fetch and
+    // shading entirely, which is the single biggest win in a dense voxel city
+    std::sort(visible.begin(), visible.end(), [&](const ChunkMesh* a, const ChunkMesh* b) {
+        Vec3 ca((a->bb.mn.x + a->bb.mx.x) * 0.5f, (a->bb.mn.y + a->bb.mx.y) * 0.5f,
+                (a->bb.mn.z + a->bb.mx.z) * 0.5f);
+        Vec3 cb((b->bb.mn.x + b->bb.mx.x) * 0.5f, (b->bb.mn.y + b->bb.mx.y) * 0.5f,
+                (b->bb.mn.z + b->bb.mx.z) * 0.5f);
+        return length(ca - camPos) < length(cb - camPos);
+    });
     statsChunks = int(visible.size());
     if (getenv("FRAC_DEBUGCULL")) {
         int total = 0, built = 0, distOk = 0, vis = 0;
@@ -799,6 +857,7 @@ static float* s_bloomB = nullptr;
 static int s_bw = 0, s_bh = 0;
 
 void Renderer::finish() {
+    auto tStart = std::chrono::high_resolution_clock::now();
     int W = width, H = height;
     // bloom
     if (set.bloom) {
@@ -857,33 +916,71 @@ void Renderer::finish() {
             }
         }
     }
-    // tonemap + upscale to output
+    // tonemap + upscale to output.
+    // ACES + sRGB used to be evaluated per channel per pixel (2.7M powf at 720p); a shared
+    // 1-D lookup table removes that cost and the pass is split across worker threads.
     int OW = set.width, OH = set.height;
     if (OW != rt.w || OH != rt.h) rt.ldr.assign(size_t(OW) * OH * 4, 0);
     float invW = float(W) / OW, invH = float(H) / OH;
     float vign = 0.32f;
-    for (int y = 0; y < OH; y++) {
+    static uint8_t lut[LUT_N];
+    static float lutExposure = -1.0f;
+    static int lutBloom = -1;
+    if (lutExposure != exposure || lutBloom != set.bloom) {
+        lutExposure = exposure;
+        lutBloom = set.bloom;
+        for (int i = 0; i < LUT_N; i++) {
+            float v = (float(i) / float(LUT_N - 1)) * LUT_MAX;
+            float t = aces(v);
+            lut[i] = uint8_t(saturate(toSRGB(t)) * 255.0f + 0.5f);
+        }
+    }
+    auto toneRow = [&](int y) {
         int sy = clampi(int(y * invH), 0, H - 1);
+        float dy = (y / float(OH) - 0.5f) * 2.0f;
+        float vigY = vign * dy * dy * 0.6f;
         for (int x = 0; x < OW; x++) {
             int sx = clampi(int(x * invW), 0, W - 1);
             const float* c = &rt.color[(sy * W + sx) * 3];
             float r = c[0] * exposure, g = c[1] * exposure, b = c[2] * exposure;
             if (set.bloom && s_bloomA) {
-                int bx = clampi(int(x * invW) / 4, 0, s_bw - 1);
-                int by = clampi(int(y * invH) / 4, 0, s_bh - 1);
+                int bx = clampi(sx / 4, 0, s_bw - 1);
+                int by = clampi(sy / 4, 0, s_bh - 1);
                 const float* bl = &s_bloomA[(by * s_bw + bx) * 3];
                 r += bl[0] * 0.55f; g += bl[1] * 0.55f; b += bl[2] * 0.55f;
             }
-            // vignette
-            float dx = (x / float(OW) - 0.5f) * 2.0f, dy = (y / float(OH) - 0.5f) * 2.0f;
-            float vig = 1.0f - vign * saturate(dx * dx * 0.6f + dy * dy * 0.6f);
-            r = aces(r) * vig; g = aces(g) * vig; b = aces(b) * vig;
+            float dx = (x / float(OW) - 0.5f) * 2.0f;
+            float vig = 1.0f - vign * dx * dx * 0.6f - vigY;
+            if (vig < 0.0f) vig = 0.0f;
+            r *= vig; g *= vig; b *= vig;
             uint8_t* p = &rt.ldr[(y * OW + x) * 4];
-            p[0] = uint8_t(toSRGB(r) * 255.0f + 0.5f);
-            p[1] = uint8_t(toSRGB(g) * 255.0f + 0.5f);
-            p[2] = uint8_t(toSRGB(b) * 255.0f + 0.5f);
+            p[0] = lut[clampi(int(r * LUT_SCALE), 0, LUT_N - 1)];
+            p[1] = lut[clampi(int(g * LUT_SCALE), 0, LUT_N - 1)];
+            p[2] = lut[clampi(int(b * LUT_SCALE), 0, LUT_N - 1)];
             p[3] = 255;
         }
+    };
+    {
+        int bands = clampi(int(std::thread::hardware_concurrency()), 1, 8);
+        if (bands > OH / 32 && OH >= 32) bands = std::max(1, OH / 32);
+        if (bands <= 1) {
+            for (int y = 0; y < OH; y++) toneRow(y);
+        } else {
+            std::vector<std::thread> th;
+            for (int b = 0; b < bands; b++) {
+                int y0 = b * OH / bands, y1 = (b + 1) * OH / bands;
+                th.emplace_back([&, y0, y1]() {
+                    for (int y = y0; y < y1; y++) toneRow(y);
+                });
+            }
+            for (auto& t : th) t.join();
+        }
+    }
+    if (getenv("FRAC_PROF")) {
+        auto tEnd = std::chrono::high_resolution_clock::now();
+        logf("[prof] finish %.1fms  tris=%d verts=%d chunks=%d",
+             std::chrono::duration<double, std::milli>(tEnd - tStart).count(), statsTris,
+             statsVerts, statsChunks);
     }
 }
 

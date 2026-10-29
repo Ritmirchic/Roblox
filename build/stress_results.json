@@ -1,0 +1,12 @@
+[
+  {
+    "test": "H",
+    "title": "Long-run stability (2400 frames of continuous demolition)",
+    "status": "PASS",
+    "detail": "14375 voxels destroyed, 404 chunks alive, 89.8s, no crash",
+    "metrics": {
+      "voxels": 14375,
+      "seconds": 89.8
+    }
+  }
+]

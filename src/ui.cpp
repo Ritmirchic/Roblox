@@ -596,7 +596,9 @@ void applyGraphicsPreset(int idx) {
             R.set.bloom = 1;
             break;
     }
-    logf("[settings] graphics preset %d applied", g_game.qualityPreset);
+    g_game.resolutionCap = R.set.renderScale;
+    logf("[settings] graphics preset %d applied (resolution cap %d%%)", g_game.qualityPreset,
+         g_game.resolutionCap);
 }
 
 void renderMenu() {

@@ -224,10 +224,15 @@ int main(int argc, char** argv) {
                 continue;
             } else if (c.op == "key") {
                 int k = (int)c.a;
-                if (c.b == 0 && c.c == 0) {
-                    g_input.keys[k] = true;
-                    g_input.keyPressed[k] = true;
-                }
+                g_input.keys[k] = true;
+                g_input.keyPressed[k] = true;
+                gameHandleKey(k, true);
+                ci++;
+                continue;
+            } else if (c.op == "keyup") {
+                int k = (int)c.a;
+                g_input.keys[k] = false;
+                gameHandleKey(k, false);
                 ci++;
                 continue;
             } else if (c.op == "hold") {

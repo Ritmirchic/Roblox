@@ -1324,10 +1324,48 @@ bool loadGame(int slot) {
 bool saveSandbox(const char* name) { return saveGame(9); }
 bool loadSandbox(const char* name) { return loadGame(9); }
 
+// ------------------------------------------------------------------ dynamic resolution
+// This is a software rasteriser: fill rate is the bottleneck, and it scales directly with
+// (render scale)^2. Rather than shipping one fixed resolution that is too slow on a laptop
+// and too soft on a desktop, the internal resolution is trimmed/raised to hold the frame
+// budget. The UI is drawn at native resolution either way, so only the 3D view changes.
+static float g_resAccum = 0;
+static int g_resSamples = 0;
+
+void updateDynamicResolution(float dt) {
+    Renderer& R = g_renderer;
+    if (!g_game.dynamicResolution) return;
+    if (g_game.state != GS_PLAYING && g_game.state != GS_PAUSED) return;
+    // use measured wall-clock frame time, not the simulation dt: the headless harness runs a
+    // fixed 60 Hz step, and on real hardware the two differ only when we are actually slow
+    static std::chrono::high_resolution_clock::time_point last = 
+        std::chrono::high_resolution_clock::now();
+    auto now = std::chrono::high_resolution_clock::now();
+    float real = std::chrono::duration<double>(now - last).count();
+    last = now;
+    if (real <= 0.0f || real > 0.5f) return;   // ignore pauses/loading hitches
+    g_resAccum += real;
+    g_resSamples++;
+    if (g_resSamples < 40) return;
+    float avg = g_resAccum / float(g_resSamples);
+    g_resAccum = 0;
+    g_resSamples = 0;
+    int& scale = R.set.renderScale;
+    int presetCap = g_game.resolutionCap;   // never exceed what the quality preset allows
+    if (avg > 1.0f / 50.0f && scale > 50) {
+        // too slow: drop in proportion to how far off we are
+        int drop = (avg > 1.0f / 30.0f) ? 10 : 5;
+        scale = std::max(50, scale - drop);
+    } else if (avg < 1.0f / 58.0f && scale < presetCap) {
+        scale = std::min(presetCap, scale + 2);
+    }
+}
+
 // ------------------------------------------------------------------ main update
 void gameUpdate(float dt) {
     g_game.deltaTime = dt;
     g_game.worldTime += dt;
+    updateDynamicResolution(dt);
     g_camPosForBuild = g_game.player.pos;
     if (g_game.state == GS_PLAYING) {
         updatePlayer(dt);
@@ -1501,9 +1539,16 @@ void gameRender() {
         return;
     }
     updateCamera();
+    auto tp0 = std::chrono::high_resolution_clock::now();
     R.begin();
     R.drawSky();
+    auto tp1 = std::chrono::high_resolution_clock::now();
     R.drawWorld(g_game.world);
+    auto tp2 = std::chrono::high_resolution_clock::now();
+    if (getenv("FRAC_PROF"))
+        logf("[prof] sky %.1fms world %.1fms",
+             std::chrono::duration<double, std::milli>(tp1 - tp0).count(),
+             std::chrono::duration<double, std::milli>(tp2 - tp1).count());
     // world space markers for collectibles
     g_phys.draw();
     g_fx.render();
@@ -1549,7 +1594,7 @@ void gameHandleKey(int key, bool down) {
             g_game.toastTime = 1.4f;
             return;
         }
-        if (key == 'F5') {
+        if (key == VK_KEY_F5) {
             ensureSaveDir();
             bool ok = saveGame(8);
             g_game.toast = ok ? "GAME SAVED (QUICK SLOT)" : "SAVE FAILED";
@@ -1557,7 +1602,7 @@ void gameHandleKey(int key, bool down) {
             if (ok) g_audio.play2d(SND_BEEP, 0.5f, 1.3f);
             return;
         }
-        if (key == 'F9') {
+        if (key == VK_KEY_F9) {
             bool ok = loadGame(8);
             g_game.toast = ok ? "QUICK SAVE LOADED" : "NO QUICK SAVE";
             g_game.toastTime = 2.0f;
