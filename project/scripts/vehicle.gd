@@ -434,8 +434,8 @@ func _build_wheels(accent: Material) -> void:
 func _build_camera() -> void:
 	_camera = Camera3D.new()
 	_camera.fov = 76.0
-	_camera.current = true
 	add_child(_camera)
+	_camera.make_current()
 	_camera.global_position = global_position + Vector3(0, 4, 8)
 	_camera.look_at(global_position + Vector3(0, 1, -4), Vector3.UP)
 
