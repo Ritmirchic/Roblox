@@ -17,6 +17,10 @@ const GEAR_SPEEDS := [12.0, 20.0, 31.0, 44.0, 58.0, 76.0]
 @export var power_multiplier := 1.0
 @export var grip_multiplier := 1.0
 @export var suspension_multiplier := 1.0
+@export var weather_grip := 1.0
+var headlights_enabled := false
+var mph_units := false
+var headlight_lights: Array[SpotLight3D] = []
 var gear := 1
 var is_reversing := false
 var rpm := 950.0
@@ -44,6 +48,10 @@ var wheel_lengths: Array[float] = [
 var cameras: Array[Camera3D] = []
 var engine_audio: AudioStreamPlayer3D
 var body_color_material: StandardMaterial3D
+var steering_wheel_node: Node3D
+var cockpit_speed_display: Label3D
+var cockpit_gear_display: Label3D
+var cockpit_rpm_display: Label3D
 
 
 func _ready() -> void:
@@ -56,7 +64,6 @@ func _ready() -> void:
 	max_contacts_reported = 8
 	contact_monitor = true
 	_build_visuals()
-	_build_cameras()
 	_build_audio()
 
 
@@ -95,6 +102,19 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("shift_down") and not ai_enabled:
 		gear = maxi(gear - 1, 1)
 	_update_audio()
+	_update_cockpit_instruments()
+
+
+func _update_cockpit_instruments() -> void:
+	if cockpit_speed_display:
+		var display_speed := speed_kph() * 0.621371 if mph_units else speed_kph()
+		cockpit_speed_display.text = "%03d" % int(display_speed)
+	if cockpit_rpm_display:
+		cockpit_rpm_display.text = "RPM %04d" % int(rpm)
+	if cockpit_gear_display:
+		cockpit_gear_display.text = "R" if is_reversing else str(gear)
+	if steering_wheel_node:
+		steering_wheel_node.rotation.z = wheel_steer * 2.2
 
 
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
@@ -165,9 +185,9 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 			longitudinal_force -= signf(longitudinal_speed) * brake_value * BRAKE_FORCE * 0.25
 		if handbrake_value > 0.0 and i >= 2:
 			longitudinal_force -= signf(longitudinal_speed) * handbrake_value * BRAKE_FORCE * 0.5
-		var grip := MAX_GRIP * grip_multiplier
+		var grip := MAX_GRIP * grip_multiplier * weather_grip
 		if hit.collider != null and hit.collider.is_in_group("loose_surface"):
-			grip = 0.72
+			grip = 0.72 * weather_grip * grip_multiplier
 		if handbrake_value > 0.1 and i >= 2:
 			grip *= 0.62
 		var force_limit := normal_load * grip
@@ -277,6 +297,16 @@ func _build_visuals() -> void:
 		_add_box(
 			"LEDHeadlamp", Vector3(0.4, 0.15, 0.08), Vector3(x, 0.68, -2.0), headlight_material
 		)
+		var spot := SpotLight3D.new()
+		spot.name = "AdaptiveHeadlight"
+		spot.position = Vector3(x, 0.68, -1.92)
+		spot.spot_range = 62.0
+		spot.spot_angle = 30.0
+		spot.light_energy = 2.0
+		spot.shadow_enabled = false
+		spot.visible = false
+		add_child(spot)
+		headlight_lights.append(spot)
 	var tail_material := StandardMaterial3D.new()
 	tail_material.albedo_color = Color("ff4037")
 	tail_material.emission_enabled = true
@@ -413,6 +443,15 @@ func _add_interior() -> void:
 		Vector3(0.28, 0.94, -0.71),
 		_emissive(Color("77a8b4"), Color("246278"))
 	)
+	cockpit_speed_display = _add_cockpit_label(
+		"InstrumentSpeed", "000", Vector3(-0.52, 0.97, -0.776), 30, Color("7af0d6")
+	)
+	cockpit_rpm_display = _add_cockpit_label(
+		"InstrumentRPM", "RPM 0900", Vector3(-0.52, 0.84, -0.776), 13, Color("e4bb70")
+	)
+	cockpit_gear_display = _add_cockpit_label(
+		"GearDisplay", "1", Vector3(0.28, 0.96, -0.742), 28, Color("86f4df")
+	)
 	_add_box("CenterConsole", Vector3(0.43, 0.18, 0.76), Vector3(0.24, 0.57, 0.04), cabin_dark)
 	for x in [-0.43, 0.43]:
 		_add_box("SportSeat", Vector3(0.48, 0.66, 0.58), Vector3(x, 0.54, 0.58), seat_mat)
@@ -429,32 +468,73 @@ func _add_interior() -> void:
 
 
 func _add_steering_wheel() -> void:
+	steering_wheel_node = Node3D.new()
+	steering_wheel_node.name = "AnimatedSteeringWheel"
+	steering_wheel_node.position = Vector3(-0.39, 0.77, -0.47)
+	add_child(steering_wheel_node)
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var center := Vector3(-0.39, 0.77, -0.47)
 	var radius := 0.23
 	var tube := 0.027
 	for i in range(28):
 		var a0 := TAU * float(i) / 28.0
 		var a1 := TAU * float(i + 1) / 28.0
-		var p0 := center + Vector3(cos(a0) * radius, sin(a0) * radius, 0)
-		var p1 := center + Vector3(cos(a1) * radius, sin(a1) * radius, 0)
-		var p2 := center + Vector3(cos(a1) * (radius - tube), sin(a1) * (radius - tube), 0)
-		var p3 := center + Vector3(cos(a0) * (radius - tube), sin(a0) * (radius - tube), 0)
+		var p0 := Vector3(cos(a0) * radius, sin(a0) * radius, 0)
+		var p1 := Vector3(cos(a1) * radius, sin(a1) * radius, 0)
+		var p2 := Vector3(cos(a1) * (radius - tube), sin(a1) * (radius - tube), 0)
+		var p3 := Vector3(cos(a0) * (radius - tube), sin(a0) * (radius - tube), 0)
 		_add_mesh_triangle(st, p0, p1, p2)
 		_add_mesh_triangle(st, p0, p2, p3)
 	st.generate_normals()
 	var rim := MeshInstance3D.new()
-	rim.name = "SteeringWheel"
+	rim.name = "SteeringWheelRim"
 	rim.mesh = st.commit()
-	rim.material_override = _material(Color("161a1d"), 0.1, 0.82)
-	add_child(rim)
+	var rim_material := _material(Color("161a1d"), 0.1, 0.82)
+	rim_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	rim.material_override = rim_material
+	steering_wheel_node.add_child(rim)
+	var spoke_material := _material(Color("9aa6a8"), 0.7, 0.34)
+	for spoke in range(3):
+		var angle := TAU * float(spoke) / 3.0 - PI / 2.0
+		var bar := MeshInstance3D.new()
+		var bar_mesh := BoxMesh.new()
+		bar_mesh.size = Vector3(0.036, 0.15, 0.038)
+		bar.mesh = bar_mesh
+		bar.position = Vector3(cos(angle) * 0.095, sin(angle) * 0.095, 0.005)
+		bar.rotation.z = -angle - PI / 2.0
+		bar.material_override = spoke_material
+		steering_wheel_node.add_child(bar)
+	var hub := MeshInstance3D.new()
+	var hub_mesh := CylinderMesh.new()
+	hub_mesh.top_radius = 0.055
+	hub_mesh.bottom_radius = 0.055
+	hub_mesh.height = 0.05
+	hub.mesh = hub_mesh
+	hub.rotation.x = PI / 2.0
+	hub.material_override = _material(Color("e6ad5c"), 0.65, 0.3)
+	steering_wheel_node.add_child(hub)
 	_add_box(
 		"SteeringColumn",
 		Vector3(0.08, 0.08, 0.3),
 		Vector3(-0.39, 0.76, -0.32),
 		_material(Color("33393b"), 0.65, 0.48)
 	)
+
+
+func _add_cockpit_label(
+	node_name: String, value: String, position: Vector3, font_size: int, color: Color
+) -> Label3D:
+	var label := Label3D.new()
+	label.name = node_name
+	label.text = value
+	label.position = position
+	label.font_size = font_size
+	label.pixel_size = 0.003
+	label.modulate = color
+	label.outline_size = 0
+	label.shaded = false
+	add_child(label)
+	return label
 
 
 func _add_wheel(parent: Node3D, _index: int) -> void:
@@ -551,10 +631,6 @@ func _add_camera_anchor() -> void:
 	set_camera_mode(0)
 
 
-func _build_cameras() -> void:
-	pass
-
-
 func set_camera_mode(mode: int) -> void:
 	camera_mode = posmod(mode, cameras.size())
 	for i in range(cameras.size()):
@@ -585,6 +661,14 @@ func apply_paint(color: Color) -> void:
 	paint_color = color
 	if body_color_material:
 		body_color_material.albedo_color = color
+
+
+func set_night_mode(enabled: bool) -> void:
+	if headlights_enabled == enabled:
+		return
+	headlights_enabled = enabled
+	for light in headlight_lights:
+		light.visible = enabled
 
 
 func reset_to(position: Vector3, facing: Vector3 = Vector3.FORWARD) -> void:

@@ -19,6 +19,7 @@ class ProjectSourceContract(unittest.TestCase):
             "scripts/world.gd",
             "scripts/minimap.gd",
             "scripts/input_setup.gd",
+            "scripts/ui_skin.gd",
             "assets/icon.svg",
         )
         for path in paths:
@@ -34,16 +35,33 @@ class ProjectSourceContract(unittest.TestCase):
         self.assertEqual(channels, 1)
         self.assertEqual(sample_rate, 22050)
 
-    def test_driving_and_race_systems_are_wired(self):
+    def test_driving_racing_weather_and_cockpit_hooks_exist(self):
         car = (ROOT / "scripts/car.gd").read_text(encoding="utf-8")
         game = (ROOT / "scripts/game.gd").read_text(encoding="utf-8")
         world = (ROOT / "scripts/world.gd").read_text(encoding="utf-8")
-        for feature in ("_integrate_forces", "intersect_ray", "SUSPENSION_STIFFNESS", "drivetrain", "apply_force"):
+        for feature in (
+            "_integrate_forces",
+            "intersect_ray",
+            "SUSPENSION_STIFFNESS",
+            "drivetrain",
+            "apply_force",
+            "cockpit_speed_display",
+            "steering_wheel_node.rotation.z",
+        ):
             self.assertIn(feature, car)
-        for feature in ("_begin_race", "_update_race_progress", "_finish_race", "_save_game", "_load_save"):
+        for feature in (
+            "_begin_race",
+            "_update_race_progress",
+            "_finish_race",
+            "_save_game",
+            "_load_save",
+        ):
             self.assertIn(feature, game)
-        self.assertEqual(world.count('"Azure Run"') + world.count('"Greenvale Rally"') + world.count('"Silver Pass"'), 3)
+        route_names = ("Azure Run", "Greenvale Rally", "Silver Pass")
+        self.assertEqual(sum(world.count(f'"{name}"') for name in route_names), 3)
         self.assertIn("create_trimesh_shape", world)
+        for feature in ("set_weather", "_apply_day_phase", "CPUParticles3D"):
+            self.assertIn(feature, world)
 
     def test_windows_export_targets_64_bit_with_embedded_data(self):
         preset = (ROOT / "export_presets.cfg").read_text(encoding="utf-8")

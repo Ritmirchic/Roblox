@@ -6,6 +6,17 @@ const GRID_STEP := 5.0
 var routes: Array[Array] = []
 var route_names := ["Azure Run", "Greenvale Rally", "Silver Pass"]
 var route_widths := [12.0, 9.0, 10.0]
+var sky_material: ProceduralSkyMaterial
+var weather_environment: Environment
+var sun_light: DirectionalLight3D
+var rain_particles: CPUParticles3D
+var weather_names := ["CLEAR", "RAIN", "HEAVY RAIN", "FOG"]
+var weather_index := 0
+var road_grip := 1.0
+var time_phase := 0.72
+var is_night := false
+var road_materials: Array[StandardMaterial3D] = []
+var road_base_roughness: Array[float] = []
 
 
 func _ready() -> void:
@@ -15,6 +26,41 @@ func _ready() -> void:
 	_build_vegetation()
 	_build_festival()
 	_build_landmarks()
+	_build_weather_fx()
+	_apply_day_phase()
+
+
+func _process(delta: float) -> void:
+	time_phase = fposmod(time_phase + delta / 900.0, 1.0)
+	_apply_day_phase()
+
+
+func set_time_phase(phase: float) -> void:
+	time_phase = fposmod(phase, 1.0)
+	_apply_day_phase()
+
+
+func set_weather(index: int) -> void:
+	weather_index = posmod(index, weather_names.size())
+	road_grip = [1.0, 0.80, 0.66, 0.94][weather_index]
+	if weather_environment:
+		weather_environment.fog_density = [0.0028, 0.0045, 0.007, 0.022][weather_index]
+		weather_environment.fog_light_color = (
+			Color("c1c8c5") if weather_index == 3 else Color("d99872")
+		)
+	for i in range(road_materials.size()):
+		var base := road_base_roughness[i]
+		road_materials[i].roughness = (
+			maxf(0.20, base * 0.34) if weather_index == 1 or weather_index == 2 else base
+		)
+	if rain_particles:
+		rain_particles.emitting = weather_index == 1 or weather_index == 2
+		rain_particles.amount = 450 if weather_index == 1 else 1000
+
+
+func set_weather_anchor(position: Vector3) -> void:
+	if rain_particles:
+		rain_particles.global_position = position + Vector3(0.0, 13.0, 0.0)
 
 
 func terrain_height(x: float, z: float) -> float:
@@ -26,12 +72,44 @@ func terrain_height(x: float, z: float) -> float:
 	return mountain + forest_hills + farm_roll + desert_rise + wave
 
 
+func _build_weather_fx() -> void:
+	rain_particles = CPUParticles3D.new()
+	rain_particles.name = "LocalRain"
+	rain_particles.amount = 450
+	rain_particles.lifetime = 1.4
+	rain_particles.emitting = false
+	rain_particles.local_coords = false
+	rain_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	rain_particles.emission_box_extents = Vector3(24.0, 9.0, 24.0)
+	rain_particles.direction = Vector3(0.0, -1.0, 0.0)
+	rain_particles.spread = 5.0
+	rain_particles.initial_velocity_min = 25.0
+	rain_particles.initial_velocity_max = 34.0
+	rain_particles.gravity = Vector3(0.0, -3.0, 0.0)
+	rain_particles.visibility_aabb = AABB(Vector3(-40, -30, -40), Vector3(80, 60, 80))
+	var rain_mesh := QuadMesh.new()
+	rain_mesh.size = Vector2(0.025, 0.28)
+	rain_particles.mesh = rain_mesh
+	var rain_material := StandardMaterial3D.new()
+	rain_material.albedo_color = Color(0.55, 0.78, 0.89, 0.42)
+	rain_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	rain_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rain_material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	rain_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	rain_particles.material_override = rain_material
+	rain_particles.cast_shadows = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(rain_particles)
+	set_weather(weather_index)
+
+
 func _build_environment() -> void:
 	var env := WorldEnvironment.new()
 	var settings := Environment.new()
 	settings.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
 	var sky_mat := ProceduralSkyMaterial.new()
+	sky_material = sky_mat
+	weather_environment = settings
 	sky_mat.sky_top_color = Color("17344d")
 	sky_mat.sky_horizon_color = Color("f3a76b")
 	sky_mat.ground_bottom_color = Color("17232d")
@@ -51,6 +129,7 @@ func _build_environment() -> void:
 	env.environment = settings
 	add_child(env)
 	var sun := DirectionalLight3D.new()
+	sun_light = sun
 	sun.rotation_degrees = Vector3(-32.0, -28.0, 0.0)
 	sun.light_color = Color("ffe0bb")
 	sun.light_energy = 1.45
@@ -77,6 +156,25 @@ func _build_environment() -> void:
 	sea_mat.emission = Color("052a3b")
 	water.material_override = sea_mat
 	add_child(water)
+
+
+func _apply_day_phase() -> void:
+	if not sun_light or not sky_material or not weather_environment:
+		return
+	var elevation := sin((time_phase - 0.25) * TAU)
+	is_night = elevation < -0.17
+	sun_light.rotation_degrees = Vector3(-48.0 * elevation, -28.0, 0.0)
+	sun_light.light_energy = clampf((elevation + 0.22) * 1.25, 0.12, 1.45)
+	sun_light.light_color = Color("ffc18c").lerp(Color("fff4dc"), clampf(elevation * 1.5, 0.0, 1.0))
+	var day_mix := clampf((elevation + 0.35) / 0.85, 0.0, 1.0)
+	sky_material.sky_top_color = Color("071522").lerp(Color("173b5a"), day_mix)
+	sky_material.sky_horizon_color = Color("20334b").lerp(Color("e8a06d"), day_mix)
+	sky_material.ground_bottom_color = Color("08141d").lerp(Color("1b2a33"), day_mix)
+	sky_material.ground_horizon_color = Color("243447").lerp(Color("c98261"), day_mix)
+	weather_environment.ambient_light_energy = lerpf(0.46, 0.78, day_mix)
+	weather_environment.ambient_light_sky_contribution = lerpf(0.32, 0.62, day_mix)
+	if weather_index == 0:
+		weather_environment.fog_light_color = Color("9ab3c3").lerp(Color("d99872"), day_mix)
 
 
 func _build_land() -> void:
@@ -241,6 +339,8 @@ func _build_road_surface(points: Array[Vector3], width: float, color: Color, dir
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color.WHITE
 	mat.roughness = 0.88
+	road_materials.append(mat)
+	road_base_roughness.append(mat.roughness)
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	road.material_override = mat
 	add_child(road)

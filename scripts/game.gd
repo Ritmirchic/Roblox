@@ -4,6 +4,7 @@ const CarScript = preload("res://scripts/car.gd")
 const WorldScript = preload("res://scripts/world.gd")
 const MiniMapScript = preload("res://scripts/minimap.gd")
 const InputSetup = preload("res://scripts/input_setup.gd")
+const UISkin = preload("res://scripts/ui_skin.gd")
 const SAVE_PATH := "user://horizon_velocity.cfg"
 const PAINTS := [
 	Color("20c5c5"),
@@ -116,15 +117,15 @@ func _build_hud() -> void:
 	top.position = Vector2(32, 26)
 	top.custom_minimum_size = Vector2(300, 84)
 	top.add_theme_stylebox_override(
-		"panel", _panel_style(Color(0.025, 0.07, 0.09, 0.78), Color(0.30, 0.80, 0.76, 0.45))
+		"panel", UISkin.panel_style(Color(0.025, 0.07, 0.09, 0.78), Color(0.30, 0.80, 0.76, 0.45))
 	)
 	hud_layer.add_child(top)
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 2)
 	top.add_child(vbox)
-	var brand := _label("AURORA COAST  /  VELOCITY FESTIVAL", 12, Color("72dcd0"))
+	var brand := UISkin.label("AURORA COAST  /  VELOCITY FESTIVAL", 12, Color("72dcd0"))
 	vbox.add_child(brand)
-	speed_label = _label("000  KM/H", 34, Color("f5f4ec"))
+	speed_label = UISkin.label("000  KM/H", 34, Color("f5f4ec"))
 	speed_label.add_theme_font_size_override("font_size", 32)
 	vbox.add_child(speed_label)
 	var bottom := PanelContainer.new()
@@ -132,14 +133,14 @@ func _build_hud() -> void:
 	bottom.position = Vector2(-322, -114)
 	bottom.custom_minimum_size = Vector2(290, 78)
 	bottom.add_theme_stylebox_override(
-		"panel", _panel_style(Color(0.025, 0.07, 0.09, 0.78), Color(0.30, 0.80, 0.76, 0.38))
+		"panel", UISkin.panel_style(Color(0.025, 0.07, 0.09, 0.78), Color(0.30, 0.80, 0.76, 0.38))
 	)
 	hud_layer.add_child(bottom)
 	var bottom_v := VBoxContainer.new()
 	bottom.add_child(bottom_v)
-	status_label = _label("GEAR 01   ·   RWD", 15, Color("d8e6e5"))
+	status_label = UISkin.label("GEAR 01   ·   RWD", 15, Color("d8e6e5"))
 	bottom_v.add_child(status_label)
-	race_label = _label("FREE ROAM  /  AURORA COAST", 13, Color("e8b86e"))
+	race_label = UISkin.label("FREE ROAM  /  AURORA COAST", 13, Color("e8b86e"))
 	bottom_v.add_child(race_label)
 	map_widget = MiniMapScript.new()
 	map_widget.set_anchors_preset(Control.PRESET_TOP_RIGHT)
@@ -147,7 +148,7 @@ func _build_hud() -> void:
 	map_widget.size = Vector2(184, 184)
 	map_widget.map_center = Vector2(0, 0)
 	hud_layer.add_child(map_widget)
-	var controls := _label(
+	var controls := UISkin.label(
 		"WASD  DRIVE     SPACE  HANDBRAKE     C  CAMERA     R  RESET     ESC  PAUSE",
 		13,
 		Color("dce5e1")
@@ -158,6 +159,11 @@ func _build_hud() -> void:
 
 
 func _process(delta: float) -> void:
+	if is_instance_valid(player) and is_instance_valid(world):
+		player.weather_grip = world.road_grip
+		player.mph_units = use_mph
+		player.set_night_mode(world.is_night)
+		world.set_weather_anchor(player.global_position)
 	if game_mode == "drive" or game_mode == "race":
 		_update_hud()
 	if race_active and current_screen != "pause" and current_screen != "map":
@@ -228,13 +234,13 @@ func _show_menu() -> void:
 	background.color = Color(0.018, 0.045, 0.067, 0.73)
 	background.mouse_filter = Control.MOUSE_FILTER_STOP
 	ui_root.add_child(background)
-	var top_brand := _label("H V   /   A U R O R A  C O A S T", 17, Color("76ded1"))
+	var top_brand := UISkin.label("H V   /   A U R O R A  C O A S T", 17, Color("76ded1"))
 	top_brand.position = Vector2(54, 42)
 	ui_root.add_child(top_brand)
-	var edition := _label("DRIVING FESTIVAL   •   01 / 03 REGIONS", 13, Color("b5c9c8"))
+	var edition := UISkin.label("DRIVING FESTIVAL   •   01 / 03 REGIONS", 13, Color("b5c9c8"))
 	edition.position = Vector2(55, 74)
 	ui_root.add_child(edition)
-	var hero := _label("HORIZON\nVELOCITY", 60, Color("f5f3ea"))
+	var hero := UISkin.label("HORIZON\nVELOCITY", 60, Color("f5f3ea"))
 	hero.position = Vector2(55, 145)
 	hero.custom_minimum_size = Vector2(550, 170)
 	hero.add_theme_font_size_override("font_size", 64)
@@ -242,7 +248,7 @@ func _show_menu() -> void:
 	hero.add_theme_constant_override("shadow_offset_x", 2)
 	hero.add_theme_constant_override("shadow_offset_y", 3)
 	ui_root.add_child(hero)
-	var tagline := _label("FIND YOUR LINE.  OWN THE COAST.", 17, Color("e8b66e"))
+	var tagline := UISkin.label("FIND YOUR LINE.  OWN THE COAST.", 17, Color("e8b66e"))
 	tagline.position = Vector2(60, 313)
 	ui_root.add_child(tagline)
 	var menu_panel := PanelContainer.new()
@@ -250,37 +256,47 @@ func _show_menu() -> void:
 	menu_panel.position = Vector2(-445, 134)
 	menu_panel.custom_minimum_size = Vector2(390, 542)
 	menu_panel.add_theme_stylebox_override(
-		"panel", _panel_style(Color(0.035, 0.075, 0.095, 0.90), Color(0.28, 0.79, 0.73, 0.5))
+		"panel", UISkin.panel_style(Color(0.035, 0.075, 0.095, 0.90), Color(0.28, 0.79, 0.73, 0.5))
 	)
 	ui_root.add_child(menu_panel)
 	var menu_box := VBoxContainer.new()
 	menu_box.add_theme_constant_override("separation", 12)
 	menu_panel.add_child(menu_box)
-	var season := _label("YOUR FESTIVAL", 12, Color("78d8cc"))
+	var season := UISkin.label("YOUR FESTIVAL", 12, Color("78d8cc"))
 	menu_box.add_child(season)
-	var driver := _label("DRIVER   /   NEWCOMER", 21, Color("f3f4ed"))
+	var driver := UISkin.label("DRIVER   /   NEWCOMER", 21, Color("f3f4ed"))
 	menu_box.add_child(driver)
-	var account := _label(
+	var account := UISkin.label(
 		"%s CREDITS     ·     %d EVENTS WON" % [_format_number(credits), event_completions],
 		13,
 		Color("b3c6c5")
 	)
 	menu_box.add_child(account)
-	menu_box.add_child(_spacer(8))
-	menu_box.add_child(_menu_button("FREE ROAM", "Drive the coast at your pace", _start_free_roam))
+	menu_box.add_child(UISkin.spacer(8))
 	menu_box.add_child(
-		_menu_button("FESTIVAL EVENTS", "Three routes · race the clock and AI", _show_event_menu)
+		UISkin.menu_button("FREE ROAM", "Drive the coast at your pace", _start_free_roam)
 	)
-	menu_box.add_child(_menu_button("GARAGE", "Tune, repair and personalize your R7", _show_garage))
-	menu_box.add_child(_menu_button("SETTINGS", "Display · graphics · speed units", _show_settings))
-	menu_box.add_child(_spacer(5))
 	menu_box.add_child(
-		_menu_button("EXIT TO DESKTOP", "Close the game", func(): get_tree().quit(), false)
+		UISkin.menu_button(
+			"FESTIVAL EVENTS", "Three routes · race the clock and AI", _show_event_menu
+		)
 	)
-	var footer := _label("WASD DRIVE   /   SPACE HANDBRAKE   /   C CAMERA", 12, Color("c0cfcc"))
+	menu_box.add_child(
+		UISkin.menu_button("GARAGE", "Tune, repair and personalize your R7", _show_garage)
+	)
+	menu_box.add_child(
+		UISkin.menu_button("SETTINGS", "Display · graphics · speed units", _show_settings)
+	)
+	menu_box.add_child(UISkin.spacer(5))
+	menu_box.add_child(
+		UISkin.menu_button("EXIT TO DESKTOP", "Close the game", func(): get_tree().quit(), false)
+	)
+	var footer := UISkin.label(
+		"WASD DRIVE   /   SPACE HANDBRAKE   /   C CAMERA", 12, Color("c0cfcc")
+	)
 	footer.position = Vector2(56, 841)
 	ui_root.add_child(footer)
-	var map_note := _label(
+	var map_note := UISkin.label(
 		"AZURE COAST   ·   GREENVALE FOREST   ·   SILVER MOUNTAINS", 12, Color("9bb0b2")
 	)
 	map_note.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
@@ -306,7 +322,7 @@ func _show_event_menu() -> void:
 	ui_root.add_child(content)
 	for i in range(EVENT_DATA.size()):
 		var event: Dictionary = EVENT_DATA[i]
-		var btn := _menu_button(
+		var btn := UISkin.menu_button(
 			"%02d   %s" % [i + 1, event.name],
 			(
 				"%s   /   %s    ·    REWARD %s CR"
@@ -316,7 +332,7 @@ func _show_event_menu() -> void:
 		)
 		btn.custom_minimum_size = Vector2(690, 116)
 		content.add_child(btn)
-	var back := _menu_button("BACK TO FESTIVAL", "Return to the coast", _show_menu, false)
+	var back := UISkin.menu_button("BACK TO FESTIVAL", "Return to the coast", _show_menu, false)
 	back.custom_minimum_size = Vector2(690, 76)
 	content.add_child(back)
 
@@ -368,7 +384,7 @@ func _create_checkpoint_marker(position: Vector3, finish: bool, forward: Vector3
 	var marker := Node3D.new()
 	marker.name = "FinishGate" if finish else "CheckpointGate"
 	marker.position = position + Vector3.UP * 0.15
-	var material := _glow_material(Color("eab66c") if finish else Color("5de1d2"))
+	var material := UISkin.glow_material(Color("eab66c") if finish else Color("5de1d2"))
 	for x in [-5.5, 5.5]:
 		var post := MeshInstance3D.new()
 		var box := BoxMesh.new()
@@ -453,21 +469,27 @@ func _show_results(place: int, reward: int) -> void:
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 13)
 	panel.add_child(column)
-	column.add_child(_label("EVENT COMPLETE   /   AURORA COAST", 13, Color("6fdbcf")))
-	column.add_child(_label(EVENT_DATA[event_index].name, 38, Color("f3f2ea")))
+	column.add_child(UISkin.label("EVENT COMPLETE   /   AURORA COAST", 13, Color("6fdbcf")))
+	column.add_child(UISkin.label(EVENT_DATA[event_index].name, 38, Color("f3f2ea")))
 	column.add_child(
-		_label("P%d   /   %d DRIVERS" % [place, opponents.size() + 1], 28, Color("eab66c"))
+		UISkin.label("P%d   /   %d DRIVERS" % [place, opponents.size() + 1], 28, Color("eab66c"))
 	)
-	column.add_child(_label("FINISH TIME     %05.2f s" % race_time, 20, Color("dce7e4")))
-	column.add_child(_label("REWARD     +%s CR" % _format_number(reward), 20, Color("75dcd0")))
+	column.add_child(UISkin.label("FINISH TIME     %05.2f s" % race_time, 20, Color("dce7e4")))
 	column.add_child(
-		_label("GARAGE BALANCE     %s CR" % _format_number(credits), 14, Color("a9bdbb"))
+		UISkin.label("REWARD     +%s CR" % _format_number(reward), 20, Color("75dcd0"))
 	)
-	column.add_child(_spacer(8))
-	column.add_child(_menu_button("KEEP DRIVING", "Return to the festival grounds", _resume_game))
-	column.add_child(_menu_button("EVENT CALENDAR", "Pick another race", _show_event_menu, false))
 	column.add_child(
-		_menu_button("FESTIVAL MENU", "Save is written automatically", _show_menu, false)
+		UISkin.label("GARAGE BALANCE     %s CR" % _format_number(credits), 14, Color("a9bdbb"))
+	)
+	column.add_child(UISkin.spacer(8))
+	column.add_child(
+		UISkin.menu_button("KEEP DRIVING", "Return to the festival grounds", _resume_game)
+	)
+	column.add_child(
+		UISkin.menu_button("EVENT CALENDAR", "Pick another race", _show_event_menu, false)
+	)
+	column.add_child(
+		UISkin.menu_button("FESTIVAL MENU", "Save is written automatically", _show_menu, false)
 	)
 
 
@@ -482,12 +504,18 @@ func _show_pause() -> void:
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 12)
 	panel.add_child(column)
-	column.add_child(_label("TAKE A BREATHER", 32, Color("f3f2ea")))
-	column.add_child(_label("AURORA COAST   /   IN-GAME PAUSE", 13, Color("75dcd0")))
-	column.add_child(_menu_button("RESUME DRIVE", "Back to the road", _resume_game))
-	column.add_child(_menu_button("GARAGE", "Paint and upgrade your car", _show_garage, false))
-	column.add_child(_menu_button("FESTIVAL MENU", "Return to the festival", _show_menu, false))
-	column.add_child(_menu_button("SETTINGS", "Display and driving options", _show_settings, false))
+	column.add_child(UISkin.label("TAKE A BREATHER", 32, Color("f3f2ea")))
+	column.add_child(UISkin.label("AURORA COAST   /   IN-GAME PAUSE", 13, Color("75dcd0")))
+	column.add_child(UISkin.menu_button("RESUME DRIVE", "Back to the road", _resume_game))
+	column.add_child(
+		UISkin.menu_button("GARAGE", "Paint and upgrade your car", _show_garage, false)
+	)
+	column.add_child(
+		UISkin.menu_button("FESTIVAL MENU", "Return to the festival", _show_menu, false)
+	)
+	column.add_child(
+		UISkin.menu_button("SETTINGS", "Display and driving options", _show_settings, false)
+	)
 
 
 func _show_garage() -> void:
@@ -499,15 +527,15 @@ func _show_garage() -> void:
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 11)
 	panel.add_child(column)
-	column.add_child(_label("OWNED   ·   R7 CLUBSPORT", 15, Color("72dcd0")))
+	column.add_child(UISkin.label("OWNED   ·   R7 CLUBSPORT", 15, Color("72dcd0")))
 	column.add_child(
-		_label(
+		UISkin.label(
 			"A hand-built coastal grand tourer.\n1320 kg   ·   RWD   ·   6-speed automatic",
 			17,
 			Color("e1e8e4")
 		)
 	)
-	column.add_child(_label("PAINT", 12, Color("e8b66e")))
+	column.add_child(UISkin.label("PAINT", 12, Color("e8b66e")))
 	var paints := HBoxContainer.new()
 	paints.add_theme_constant_override("separation", 10)
 	for i in range(PAINTS.size()):
@@ -524,7 +552,7 @@ func _show_garage() -> void:
 		paints.add_child(swatch)
 	column.add_child(paints)
 	column.add_child(
-		_menu_button(
+		UISkin.menu_button(
 			"ENGINE STAGE %d  ·  +%d%% POWER" % [engine_upgrade, engine_upgrade * 14],
 			(
 				"Install stage %d   /   %s CR"
@@ -534,7 +562,7 @@ func _show_garage() -> void:
 		)
 	)
 	column.add_child(
-		_menu_button(
+		UISkin.menu_button(
 			"HANDLING PACKAGE %d" % handling_upgrade,
 			"Adjustable suspension and grippier tires   /   2,800 CR",
 			_upgrade_handling,
@@ -542,15 +570,19 @@ func _show_garage() -> void:
 		)
 	)
 	column.add_child(
-		_menu_button(
+		UISkin.menu_button(
 			"REPAIR & RESET TUNING",
 			"Restore the baseline tune   /   FREE",
 			func(): _repair_car(),
 			false
 		)
 	)
-	column.add_child(_label("CREDITS     %s CR" % _format_number(credits), 14, Color("a9bdbb")))
-	column.add_child(_menu_button("BACK", "Return to previous screen", _back_from_garage, false))
+	column.add_child(
+		UISkin.label("CREDITS     %s CR" % _format_number(credits), 14, Color("a9bdbb"))
+	)
+	column.add_child(
+		UISkin.menu_button("BACK", "Return to previous screen", _back_from_garage, false)
+	)
 
 
 func _set_paint(index: int) -> void:
@@ -616,20 +648,27 @@ func _show_settings() -> void:
 	_add_screen_heading(
 		"DRIVING SETTINGS", "Scalable presentation   /   tuned for keyboard and gamepad"
 	)
-	var panel := _center_panel(Vector2(640, 500))
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	panel.position = Vector2(-320, 122)
+	panel.custom_minimum_size = Vector2(640, 650)
+	panel.add_theme_stylebox_override(
+		"panel", UISkin.panel_style(Color(0.035, 0.075, 0.092, 0.96), Color(0.30, 0.80, 0.76, 0.55))
+	)
+	ui_root.add_child(panel)
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 11)
 	panel.add_child(column)
-	column.add_child(_label("GRAPHICS", 13, Color("71dacf")))
+	column.add_child(UISkin.label("GRAPHICS", 13, Color("71dacf")))
 	column.add_child(
-		_menu_button(
+		UISkin.settings_button(
 			"SHADOWS   ·   %s" % ("HIGH" if shadow_quality else "LOW"),
 			"Toggle real-time directional shadows",
 			func(): _toggle_shadows()
 		)
 	)
 	column.add_child(
-		_menu_button(
+		UISkin.settings_button(
 			(
 				"DISPLAY   ·   %s"
 				% (
@@ -647,7 +686,7 @@ func _show_settings() -> void:
 		)
 	)
 	column.add_child(
-		_menu_button(
+		UISkin.settings_button(
 			"SPEED UNITS   ·   %s" % ("MPH" if use_mph else "KM/H"),
 			"Choose dashboard units",
 			func(): _toggle_units(),
@@ -655,7 +694,24 @@ func _show_settings() -> void:
 		)
 	)
 	column.add_child(
-		_menu_button(
+		UISkin.settings_button(
+			"WEATHER   ·   %s" % world.weather_names[world.weather_index],
+			"Cycle clear / rain / heavy rain / fog; wet weather reduces grip",
+			func(): _cycle_weather()
+		)
+	)
+	column.add_child(
+		UISkin.settings_button(
+			(
+				"TIME OF DAY   ·   %02d:%02d"
+				% [int(world.time_phase * 24.0), int(fmod(world.time_phase * 1440.0, 60.0))]
+			),
+			"Advance the coastal sun by six hours; time also cycles automatically",
+			func(): _advance_time()
+		)
+	)
+	column.add_child(
+		UISkin.settings_button(
 			"CAMERA   ·   C KEY",
 			"Chase · close chase · hood · cockpit",
 			func(): _show_notice("CAMERA MODES", "Press C while driving to cycle four cameras."),
@@ -663,7 +719,7 @@ func _show_settings() -> void:
 		)
 	)
 	column.add_child(
-		_menu_button(
+		UISkin.settings_button(
 			"DRIVING CONTROLS",
 			(
 				"W / A / S / D · steering and pedals\n"
@@ -678,7 +734,7 @@ func _show_settings() -> void:
 			false
 		)
 	)
-	column.add_child(_menu_button("BACK", "Return to festival", _show_menu, false))
+	column.add_child(UISkin.settings_button("BACK", "Return to festival", _show_menu, false))
 
 
 func _toggle_shadows() -> void:
@@ -704,6 +760,18 @@ func _toggle_units() -> void:
 	_show_settings()
 
 
+func _cycle_weather() -> void:
+	world.set_weather(world.weather_index + 1)
+	_save_game()
+	_show_settings()
+
+
+func _advance_time() -> void:
+	world.set_time_phase(world.time_phase + 0.25)
+	_save_game()
+	_show_settings()
+
+
 func _show_map_overlay() -> void:
 	player.controls_locked = true
 	for rival in opponents:
@@ -723,7 +791,9 @@ func _show_map_overlay() -> void:
 	map.route = world.routes[EVENT_DATA[event_index].route] if race_active else world.routes[0]
 	map.player_position = player.global_position
 	ui_root.add_child(map)
-	var footer := _label("AZURE RUN   /   GREENVALE RALLY   /   SILVER PASS", 14, Color("e9b66b"))
+	var footer := UISkin.label(
+		"AZURE RUN   /   GREENVALE RALLY   /   SILVER PASS", 14, Color("e9b66b")
+	)
 	footer.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	footer.position = Vector2(58, -62)
 	ui_root.add_child(footer)
@@ -742,9 +812,9 @@ func _show_notice(title: String, message: String) -> void:
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 16)
 	panel.add_child(column)
-	column.add_child(_label(title, 26, Color("f4f3eb")))
-	column.add_child(_label(message, 16, Color("b7ccca")))
-	column.add_child(_menu_button("GOT IT", "Continue", return_action, false))
+	column.add_child(UISkin.label(title, 26, Color("f4f3eb")))
+	column.add_child(UISkin.label(message, 16, Color("b7ccca")))
+	column.add_child(UISkin.menu_button("GOT IT", "Continue", return_action, false))
 
 
 func _resume_game() -> void:
@@ -791,10 +861,6 @@ func _reset_player() -> void:
 	player.reset_to(point + Vector3.UP * 0.9, forward)
 
 
-func _create_checkpoint_marker_placeholder() -> void:
-	pass
-
-
 func _clear_race_props() -> void:
 	for gate in race_gate_nodes:
 		if is_instance_valid(gate):
@@ -821,11 +887,11 @@ func _add_screen_backdrop() -> void:
 
 
 func _add_screen_heading(title: String, subtitle: String) -> void:
-	var heading := _label(title, 36, Color("f3f2e9"))
+	var heading := UISkin.label(title, 36, Color("f3f2e9"))
 	heading.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	heading.position = Vector2(58, 47)
 	ui_root.add_child(heading)
-	var sub := _label(subtitle, 14, Color("7bd9cf"))
+	var sub := UISkin.label(subtitle, 14, Color("7bd9cf"))
 	sub.position = Vector2(62, 99)
 	ui_root.add_child(sub)
 
@@ -836,94 +902,10 @@ func _center_panel(panel_size: Vector2) -> PanelContainer:
 	panel.position = -panel_size * 0.5
 	panel.custom_minimum_size = panel_size
 	panel.add_theme_stylebox_override(
-		"panel", _panel_style(Color(0.035, 0.075, 0.092, 0.96), Color(0.30, 0.80, 0.76, 0.55))
+		"panel", UISkin.panel_style(Color(0.035, 0.075, 0.092, 0.96), Color(0.30, 0.80, 0.76, 0.55))
 	)
 	ui_root.add_child(panel)
 	return panel
-
-
-func _menu_button(
-	title: String, description: String, callback: Callable, _accent: bool = true
-) -> Button:
-	var button := Button.new()
-	button.custom_minimum_size = Vector2(330, 68)
-	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	button.text = "%s\n%s" % [title, description]
-	button.add_theme_font_size_override("font_size", 15)
-	button.add_theme_color_override("font_color", Color("f0f3ed"))
-	button.add_theme_color_override("font_hover_color", Color("ffffff"))
-	button.add_theme_color_override("font_pressed_color", Color("e3b974"))
-	button.add_theme_stylebox_override(
-		"normal", _button_style(Color(0.08, 0.15, 0.17, 0.92), Color(0.2, 0.39, 0.39, 0.68))
-	)
-	button.add_theme_stylebox_override(
-		"hover", _button_style(Color(0.12, 0.26, 0.26, 0.98), Color(0.39, 0.85, 0.76, 0.95))
-	)
-	button.add_theme_stylebox_override(
-		"pressed", _button_style(Color(0.07, 0.20, 0.21, 1.0), Color(0.91, 0.67, 0.35, 0.92))
-	)
-	button.add_theme_stylebox_override(
-		"focus", _button_style(Color(0.09, 0.19, 0.20, 1.0), Color(0.88, 0.68, 0.40, 1.0))
-	)
-	button.add_theme_constant_override("h_separation", 12)
-	button.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.35))
-	button.add_theme_constant_override("shadow_offset_x", 0)
-	button.add_theme_constant_override("shadow_offset_y", 1)
-	button.pressed.connect(callback)
-	return button
-
-
-func _label(text: String, size: int, color: Color) -> Label:
-	var label := Label.new()
-	label.text = text
-	label.add_theme_font_size_override("font_size", size)
-	label.add_theme_color_override("font_color", color)
-	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.36))
-	label.add_theme_constant_override("shadow_offset_x", 1)
-	label.add_theme_constant_override("shadow_offset_y", 1)
-	return label
-
-
-func _spacer(height: float) -> Control:
-	var spacer := Control.new()
-	spacer.custom_minimum_size = Vector2(0, height)
-	return spacer
-
-
-func _panel_style(background: Color, border: Color) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = background
-	style.border_color = border
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(10)
-	style.content_margin_left = 18
-	style.content_margin_right = 18
-	style.content_margin_top = 18
-	style.content_margin_bottom = 18
-	return style
-
-
-func _button_style(background: Color, border: Color) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = background
-	style.border_color = border
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(7)
-	style.content_margin_left = 15
-	style.content_margin_right = 12
-	style.content_margin_top = 8
-	style.content_margin_bottom = 8
-	return style
-
-
-func _glow_material(color: Color) -> StandardMaterial3D:
-	var material := StandardMaterial3D.new()
-	material.albedo_color = color
-	material.emission_enabled = true
-	material.emission = color * 0.66
-	material.emission_energy_multiplier = 1.2
-	material.roughness = 0.32
-	return material
 
 
 func _format_number(number: int) -> String:
@@ -949,6 +931,8 @@ func _save_game() -> void:
 	cfg.set_value("garage", "paint_index", paint_index)
 	cfg.set_value("settings", "mph", use_mph)
 	cfg.set_value("settings", "shadows", shadow_quality)
+	cfg.set_value("settings", "weather", world.weather_index)
+	cfg.set_value("settings", "time_phase", world.time_phase)
 	cfg.save(SAVE_PATH)
 
 
@@ -963,6 +947,11 @@ func _load_save() -> void:
 	paint_index = clampi(int(cfg.get_value("garage", "paint_index", 0)), 0, PAINTS.size() - 1)
 	use_mph = bool(cfg.get_value("settings", "mph", false))
 	shadow_quality = bool(cfg.get_value("settings", "shadows", true))
+	world.set_weather(int(cfg.get_value("settings", "weather", 0)))
+	world.set_time_phase(float(cfg.get_value("settings", "time_phase", world.time_phase)))
+	for child in world.get_children():
+		if child is DirectionalLight3D:
+			child.shadow_enabled = shadow_quality
 	player.power_multiplier = 1.0 + float(engine_upgrade) * 0.14
 	player.grip_multiplier = 1.0 + float(handling_upgrade) * 0.12
 	player.suspension_multiplier = 1.0 + float(handling_upgrade) * 0.08
