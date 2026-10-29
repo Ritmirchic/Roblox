@@ -1,5 +1,7 @@
 #include "render/mesh.h"
+#include "core/noise.h"
 #include <cstring>
+#include <unordered_map>
 
 namespace hv {
 

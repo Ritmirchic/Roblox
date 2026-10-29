@@ -2,11 +2,32 @@
 #include "render/mesh.h"
 #include <functional>
 #include <unordered_map>
+#include <thread>
 
 namespace hv {
 
 void sampleSDF(SdfGrid& g, const std::function<float(const Vec3&)>& f, float iso) {
     g.field.resize((size_t)g.nx * g.ny * g.nz);
+    unsigned hw = std::thread::hardware_concurrency();
+    int nthreads = (int)std::max(1u, std::min(hw == 0 ? 2u : hw, 16u));
+    if (nthreads > 1 && g.nz > 8) {
+        std::vector<std::thread> pool;
+        for (int t = 0; t < nthreads; t++) {
+            pool.emplace_back([&g, &f, iso, t, nthreads]() {
+                for (int k = t; k < g.nz; k += nthreads) {
+                    float z = g.origin.z + g.cell.z * k;
+                    for (int j = 0; j < g.ny; j++) {
+                        float y = g.origin.y + g.cell.y * j;
+                        float* row = &g.field[((size_t)k * g.ny + j) * g.nx];
+                        for (int i = 0; i < g.nx; i++)
+                            row[i] = f(Vec3(g.origin.x + g.cell.x * i, y, z)) - iso;
+                    }
+                }
+            });
+        }
+        for (auto& th : pool) th.join();
+        return;
+    }
     for (int k = 0; k < g.nz; k++) {
         float z = g.origin.z + g.cell.z * k;
         for (int j = 0; j < g.ny; j++) {
@@ -79,13 +100,14 @@ Mesh polygonizeSDF(const SdfGrid& g, const std::function<float(const Vec3&)>& f,
                 Vec3 p = sum / (float)cnt;
                 // normal from central differences of the sampled field
                 auto gradient = [&](const Vec3& q) -> Vec3 {
-                    float e = std::max(g.cell.x, std::max(g.cell.y, g.cell.z)) * 0.75f;
+                    float e = std::max(g.cell.x, std::max(g.cell.y, g.cell.z)) * 0.34f;
                     float dx = f(q + Vec3(e,0,0)) - f(q - Vec3(e,0,0));
                     float dy = f(q + Vec3(0,e,0)) - f(q - Vec3(0,e,0));
                     float dz = f(q + Vec3(0,0,e)) - f(q - Vec3(0,0,e));
                     return Vec3(dx, dy, dz).normalized();
                 };
                 Vec3 n = gradient(p);
+                if (n.lengthSq() < 1e-6f) n = Vec3(0, 1, 0);
                 Vertex vv(p, n, Vec2(p.x * 0.35f + p.z * 0.35f, p.y * 0.35f), Vec4(1,1,1,1));
                 m.verts.push_back(vv);
                 cellVert[cidx(i, j, k)] = (int)m.verts.size() - 1;

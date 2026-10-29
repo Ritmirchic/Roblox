@@ -37,6 +37,8 @@ struct Material {
     Color emissive{0, 0, 0, 1};
     Vec2 uvScale{1, 1};
     int texture = -1;    // index into renderer texture table (atlas page)
+    int texture2 = -1;   // secondary/detail layer (terrain blend, wear mask)
+    int texture3 = -1;   // tertiary layer
     float specular = 0.5f;
     float clearcoat = 0.0f;
     float opacity = 1.0f;
@@ -72,6 +74,9 @@ public:
     Mesh mesh;
     int currentMaterial = 0;
     Vec4 tint{1, 1, 1, 1};
+    uint32_t subStart = 0;
+    int subMat = -1;
+    bool started = false;
 
     void setMaterial(int m) { currentMaterial = m; }
     void setTint(const Vec4& t) { tint = t; }
