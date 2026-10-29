@@ -103,7 +103,7 @@ func _build_game() -> void:
 func _config_for(car_id: String) -> Dictionary:
 	for item in CAR_CATALOG:
 		if item.id == car_id:
-			var result := item.duplicate()
+			var result: Dictionary = item.duplicate()
 			var stage := int(SaveData.upgrades.get(car_id, 0))
 			result.power = float(result.power) * (1.0 + stage * 0.08)
 			result.mass = float(result.mass) * (1.0 - stage * 0.012)

@@ -5,15 +5,15 @@
 - The repository was an empty starter checkout (README only) on the required `arena/b3b7737d-roblox` branch.
 - The local host is Linux x86_64, 2 logical CPUs, about 3.8 GiB RAM, and about 20 GiB free disk at inspection. No GPU was exposed by `nvidia-smi`.
 - Unreal Engine/Editor, Godot, Blender, a Windows runtime/exporter, CMake, and MinGW were not installed locally. Direct downloading of the Godot editor to this host was blocked at the redirected GitHub release-asset host.
-- A Windows GitHub Actions runner downloaded Godot 4.7.2 and matching templates, imported the project, passed a 120-frame headless startup smoke test, and exported the Windows build.
+- A Windows GitHub Actions runner previously downloaded Godot 4.7.2, imported the project, and exported it. The smoke test missed a GDScript parse failure because the engine logged the error but returned a successful process exit code. The attached Windows log identified the issue: `main.gd:106` could not infer the type of a duplicated catalog entry. This is fixed by explicitly declaring `result` as a `Dictionary`; CI now fails on engine `SCRIPT ERROR` or `ERROR` log lines as well as nonzero exit codes.
 - The active Arena.ai agent was used. The execution interface exposes no model switch or delegation controls, so no model switch or delegation is claimed.
 
 ## Delivered build
 
-- Prerelease: [Horizon Velocity 0.1.1-alpha](https://github.com/Ritmirchic/Roblox/releases/tag/horizon-velocity-v0.1.1-alpha)
-- Recommended download: [HORIZON_VELOCITY_WINDOWS.zip](https://github.com/Ritmirchic/Roblox/releases/download/horizon-velocity-v0.1.1-alpha/HORIZON_VELOCITY_WINDOWS.zip). Extract both files into one folder and run the EXE.
-- Direct executable: [HORIZON_VELOCITY.exe](https://github.com/Ritmirchic/Roblox/releases/download/horizon-velocity-v0.1.1-alpha/HORIZON_VELOCITY.exe)
-- Companion data: [HORIZON_VELOCITY.pck](https://github.com/Ritmirchic/Roblox/releases/download/horizon-velocity-v0.1.1-alpha/HORIZON_VELOCITY.pck). The `.pck` must be beside the executable; launching only the EXE can leave the game with a black screen because the project scene/resources are absent.
+- Prerelease: [Horizon Velocity 0.1.2-alpha](https://github.com/Ritmirchic/Roblox/releases/tag/horizon-velocity-v0.1.2-alpha)
+- Recommended download: [HORIZON_VELOCITY_WINDOWS.zip](https://github.com/Ritmirchic/Roblox/releases/download/horizon-velocity-v0.1.2-alpha/HORIZON_VELOCITY_WINDOWS.zip). Extract both files into one folder and run the EXE.
+- Direct executable: [HORIZON_VELOCITY.exe](https://github.com/Ritmirchic/Roblox/releases/download/horizon-velocity-v0.1.2-alpha/HORIZON_VELOCITY.exe)
+- Companion data: [HORIZON_VELOCITY.pck](https://github.com/Ritmirchic/Roblox/releases/download/horizon-velocity-v0.1.2-alpha/HORIZON_VELOCITY.pck). The `.pck` must be beside the executable; launching only the EXE can leave the game with a black screen because the project scene/resources are absent.
 - Build runner reported 109,154,304 bytes for the executable and 140,884 bytes for the PCK. The release API confirmed the EXE, PCK and ZIP were uploaded.
 - This is an **experimental Windows alpha**, not the complete AAA game requested. The CI smoke test did not validate input, event completion, save/load persistence, rendered image quality, FPS or crashes during extended play.
 

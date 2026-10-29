@@ -86,10 +86,12 @@ jobs:
           $output = & $env:GODOT_EXE --headless --editor --path "$PWD/project" --import --quit 2>&1
           $code = $LASTEXITCODE
           $output | ForEach-Object { Write-Host $_ }
-          if ($code -ne 0) {
-            $details = (($output | Select-Object -Last 12) -join ' | ') -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
+          $hasEngineErrors = (($output -join "`n") -match '(?m)^(SCRIPT ERROR:|ERROR:)')
+          if ($code -ne 0 -or $hasEngineErrors) {
+            $details = (($output | Select-Object -Last 16) -join ' | ') -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
             Write-Output "::error title=Godot import diagnostic::$details"
-            exit $code
+            if ($code -ne 0) { exit $code }
+            exit 1
           }
 
       - name: Headless startup smoke test
@@ -98,10 +100,12 @@ jobs:
           $output = & $env:GODOT_EXE --headless --path "$PWD/project" --quit-after 120 2>&1
           $code = $LASTEXITCODE
           $output | ForEach-Object { Write-Host $_ }
-          if ($code -ne 0) {
-            $details = (($output | Select-Object -Last 16) -join ' | ') -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
+          $hasEngineErrors = (($output -join "`n") -match '(?m)^(SCRIPT ERROR:|ERROR:)')
+          if ($code -ne 0 -or $hasEngineErrors) {
+            $details = (($output | Select-Object -Last 20) -join ' | ') -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
             Write-Output "::error title=Godot runtime diagnostic::$details"
-            exit $code
+            if ($code -ne 0) { exit $code }
+            exit 1
           }
 
       - name: Export Windows x64 executable
@@ -141,7 +145,7 @@ jobs:
           Get-ChildItem -Path $outDir -Force | Format-Table Name,Length
           $event = Get-Content -Path $env:GITHUB_EVENT_PATH -Raw | ConvertFrom-Json
           if ($event.head_commit.message.Contains('[release-bundle]')) {
-            $tag = 'horizon-velocity-v0.1.1-alpha'
+            $tag = 'horizon-velocity-v0.1.2-alpha'
             $pck = Join-Path $outDir 'HORIZON_VELOCITY.pck'
             if (-not (Test-Path -Path $pck -PathType Leaf)) { throw "Required game data file is missing: $pck" }
             $bundle = Join-Path $outDir 'HORIZON_VELOCITY_WINDOWS.zip'
@@ -152,8 +156,8 @@ jobs:
             $body = @{
               tag_name = $tag
               target_commitish = $env:GITHUB_SHA
-              name = 'Horizon Velocity 0.1.1-alpha — Windows x64 bundle'
-              body = 'Windows alpha repack with the executable and required PCK bundled together to avoid launching the game without its data file. Download HORIZON_VELOCITY_WINDOWS.zip, extract both files into the same folder, and launch HORIZON_VELOCITY.exe. This is an experimental vertical slice, not a finished AAA release; interactive gameplay and visual QA remain outstanding.'
+              name = 'Horizon Velocity 0.1.2-alpha — Windows x64 bundle'
+              body = 'Windows alpha startup fix: a GDScript type-inference parse error in main.gd prevented the scene and menu from loading. The failing catalog copy now has an explicit Dictionary type, and CI now treats Godot script-error log output as a failure. Download HORIZON_VELOCITY_WINDOWS.zip, extract both files into the same folder, and launch HORIZON_VELOCITY.exe. This is an experimental vertical slice, not a finished AAA release; interactive gameplay and visual QA remain outstanding.'
               draft = $false
               prerelease = $true
             } | ConvertTo-Json
