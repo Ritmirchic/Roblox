@@ -150,5 +150,12 @@ jobs:
             if (-not (Test-Path -Path $asset -PathType Leaf)) { throw "Release asset not found: $asset" }
           }
           $arguments = @('release','create',$tag,'--repo','Ritmirchic/Roblox','--target',$env:GITHUB_SHA,'--title','Horizon Velocity 0.1.0-alpha — Windows x64','--notes','Experimental Windows alpha build of the Aurora Coast vertical slice. Includes one featured coupe configuration, one checkpoint sprint and the current prototype map. Not a finished AAA release; gameplay and performance still need full Windows QA.','--prerelease') + $assets
-          & gh @arguments
-          if ($LASTEXITCODE -ne 0) { throw "GitHub alpha release creation failed with exit code $LASTEXITCODE" }
+          $output = & gh @arguments 2>&1
+          $code = $LASTEXITCODE
+          $output | ForEach-Object { Write-Host $_ }
+          if ($null -ne $code -and $code -ne 0) {
+            $details = (($output | Select-Object -Last 12) -join ' | ') -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
+            Write-Output "::error title=GitHub release diagnostic::$details"
+            exit $code
+          }
+          if ($null -eq $code) { throw 'GitHub CLI did not report a process exit status.' }
