@@ -4,7 +4,9 @@
 
 Horizon Velocity is an in-progress playable vertical slice: procedural coastal roads, a festival paddock, three original car configurations, force-based wheel/suspension simulation, a checkpoint sprint with two waypoint-following rivals, a garage/economy loop, save data, changing daylight, rain, cockpit/chase cameras, and an original in-game UI/audio identity.
 
-> **Build-status honesty:** this repository contains a Godot project, not a packaged Windows executable. The execution environment used for this work is Linux and did not have Godot, Unreal, Blender, a Windows runtime, or an export toolchain installed. The official Godot release binary download was blocked by the environment's outbound-host policy. The project scripts pass the GDScript grammar/formatter check, and static project tests pass, but the game has not been launched in-engine or visually verified here. Do not treat the feature targets in the original brief (AAA photorealism, eight finished regions, 50 events, 60 licensed-quality cars, Windows installer) as completed.
+> **Build-status honesty:** a real Windows x64 **alpha executable** has now been exported on a GitHub-hosted Windows runner and uploaded to the prerelease below. Godot import, a 120-frame headless startup smoke test, and Windows export passed in CI. This is still an unpolished vertical slice: interactive desktop gameplay and rendered frames have not been inspected, and the original brief's AAA targets (photorealism, eight finished regions, 50 events, 60 licensed-quality cars, installer) are not complete. The `.pck` companion must be downloaded next to the `.exe`.
+>
+> **[Download HORIZON_VELOCITY.exe](https://github.com/Ritmirchic/Roblox/releases/download/horizon-velocity-v0.1.0-alpha/HORIZON_VELOCITY.exe)** · [Companion game data](https://github.com/Ritmirchic/Roblox/releases/download/horizon-velocity-v0.1.0-alpha/HORIZON_VELOCITY.pck) · [Prerelease notes](https://github.com/Ritmirchic/Roblox/releases/tag/horizon-velocity-v0.1.0-alpha)
 
 The engine fallback is **Godot 4.x**. Unreal Engine 5 was not present. No external AI model or delegation tool was available in this execution environment; work was performed by the currently assigned Arena.ai Agent Mode model.
 
@@ -47,6 +49,6 @@ The engine fallback is **Godot 4.x**. Unreal Engine 5 was not present. No extern
 python3 -m unittest discover -s tests -v
 ```
 
-GDScript grammar/format validation was performed using `gdtoolkit` (`gdformat --check project/scripts/*.gd`). These checks are **not** a substitute for Godot import, playtesting, rendered-frame inspection, Windows export, or performance profiling.
+GDScript grammar/format validation was performed using `gdtoolkit` (`gdformat --check project/scripts/*.gd`), and Windows CI passed Godot import, a 120-frame headless startup check and x64 export. These are **not** a substitute for interactive playtesting, rendered-frame inspection, manual Windows smoke testing, or performance profiling.
 
 See [`docs/STATUS.md`](docs/STATUS.md) for verified scope, limitations and next engineering steps. Original source is MIT-licensed; third-party engine/runtime notices remain applicable to exported builds.
