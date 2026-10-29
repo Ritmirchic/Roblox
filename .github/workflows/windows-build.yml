@@ -170,7 +170,9 @@ jobs:
             }
             Write-Host "Published prerelease tag $tag"
           } catch {
-            $diagnostic = $_.Exception.ToString() -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
-            Write-Output "::error title=GitHub release API diagnostic::$diagnostic"
+            $diagnostic = $_.Exception.ToString()
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "Windows release publish error: $diagnostic"
+            $annotation = $diagnostic -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A'
+            Write-Output "::error title=GitHub release API diagnostic::$annotation"
             throw
           }
