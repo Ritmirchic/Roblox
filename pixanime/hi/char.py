@@ -253,12 +253,14 @@ def render(look: Look, pose: Pose, ground_y: float = FEET_Y) -> Bitmap:
         back.ellipse(cx, cy + length * 0.55, hw * 1.20, 6.5 * hs)
     if style == "twin":
         for side in (-1, 1):
-            for i in range(9):
-                t = i / 8
-                x = cx + side * (hw * 1.1 + 4 + 6 * math.sin(t * 2.2)) + sw * t
-                y = cy + 2 + t * 46 * hs
-                r = 6.0 * (1 - 0.42 * t)
-                back.ellipse(x, y, r, r * 1.2)
+            for i in range(10):
+                t = i / 9
+                x = cx + side * (hw * 1.30 + 3 + 5 * math.sin(t * 2.0)) + sw * t
+                y = cy - hh * 0.45 + t * 40 * hs
+                r = 5.4 * (1 - 0.46 * t)
+                back.ellipse(x, y, r * 1.05, r * 1.35)
+            # заколка у основания хвоста
+            back.ellipse(cx + side * hw * 1.24, cy - hh * 0.42, 2.6, 2.2)
 
     bit.paint(back, mix(hair, hair_d, 0.45))
     if back.any():
@@ -420,7 +422,7 @@ def render(look: Look, pose: Pose, ground_y: float = FEET_Y) -> Bitmap:
             bit.paint(Mask(SPR_W, SPR_H).ellipse(wr[0], wr[1] + 1.6, 2.9 * hs, 3.5 * hs).edge(1, 2), skin_d)
 
     # ------------------------------------------------------------ шея и голова
-    neck_m = Mask(SPR_W, SPR_H).capsule((j.chest[0], j.chest[1] + 1), (j.head[0], j.head[1] + hh * 0.5), 4.6 * hs)
+    neck_m = Mask(SPR_W, SPR_H).capsule((j.chest[0], j.chest[1] + 1), (j.head[0], j.head[1] + hh * 0.5), 4.0 * hs)
     bit.paint(neck_m, skin)
     bit.paint(neck_m & _band(j.neck[1] - 5, j.neck[1] - 1), mix(skin_d, look.outline, 0.18))
     bit.paint(neck_m.edge(1, 0), skin_d)
@@ -435,8 +437,8 @@ def render(look: Look, pose: Pose, ground_y: float = FEET_Y) -> Bitmap:
 
     # ------------------------------------------------------------ лицо
     eye_y = cy - hh * 0.02
-    eye_dx = hw * 0.44
-    ew, eh = 3.5 * hs, 3.6 * hs
+    eye_dx = hw * 0.45
+    ew, eh = 3.7 * hs, 3.8 * hs
     for side in (-1, 1):
         _eye(bit, cx + side * eye_dx, eye_y, ew, eh, pose, look, side)
         by = eye_y - eh - 2.8 * hs - pose.brow_raise * 1.4
@@ -446,11 +448,13 @@ def render(look: Look, pose: Pose, ground_y: float = FEET_Y) -> Bitmap:
             (bx - ew * 0.7, by + ang * 0.55), (bx + ew * 0.7, by - ang * 0.55),
             (bx + ew * 0.7, by - ang * 0.55 + 1.2), (bx - ew * 0.7, by + ang * 0.55 + 1.2)]),
             mix(hair, look.outline, 0.10))
-    bit.paint(Mask(SPR_W, SPR_H).rect(int(cx) - 1, int(cy + hh * 0.22), int(cx) + 1, int(cy + hh * 0.22) + 1),
-              mix(skin_d, skin, 0.45))
+    bit.paint(Mask(SPR_W, SPR_H).rect(int(cx) - 1, int(cy + hh * 0.20), int(cx) + 1, int(cy + hh * 0.20) + 1),
+              mix(skin_d, skin, 0.30))
+    bit.paint(Mask(SPR_W, SPR_H).rect(int(cx) - 1, int(cy + hh * 0.20) + 1, int(cx), int(cy + hh * 0.20) + 2),
+              mix(skin_d, skin, 0.60))
     _mouth(bit, cx, cy + hh * 0.38, pose, look)
-    if pose.blush > 0.02:
-        pick = bayer_pick(SPR_H, SPR_W, 0.6 * pose.blush)
+    if pose.blush > -0.5:
+        pick = bayer_pick(SPR_H, SPR_W, 0.6 * max(0.18, pose.blush))
         for side in (-1, 1):
             bm = Mask(SPR_W, SPR_H).ellipse(cx + side * (eye_dx + 0.8), eye_y + eh + 1.6, 3.0, 1.7)
             bit.paint(bm & pick, mix(skin, (240, 132, 142), 0.6))
@@ -528,57 +532,87 @@ def render(look: Look, pose: Pose, ground_y: float = FEET_Y) -> Bitmap:
     rim = sil.edge(-1, 0) & ~sil.edge(-1, 3)
     bit.paint(rim, mix(look.rim, hair_l, 0.3))
     # тень под подбородком — только на шее, без «бороды»
-    bit.paint(neck_m & _band(cy + hh * 0.46, cy + hh * 0.60), mix(skin_d, look.outline, 0.20))
+    bit.paint(neck_m & Mask(SPR_W, SPR_H).ellipse(cx, cy + hh * 0.56, hw * 0.52, hh * 0.16),
+              mix(skin_d, look.outline, 0.22))
     return bit
 
 
 # ---------------------------------------------------------------------------
 def _eye(bit: Bitmap, cx, cy, w, h, pose: Pose, look: Look, side: int) -> None:
+    """Аниме-глаз: дуга века, радужка с градиентом, два блика.
+
+    Веко рисуется дугой из трёх отрезков (толще к внешнему углу), поэтому
+    глаз не выглядит прямоугольником под чёрной планкой.
+    """
     closed = pose.blink > 0.55
     if closed:
-        bit.paint(Mask(SPR_W, SPR_H).capsule((cx - w - 0.4, cy), (cx + w + 0.4, cy), 1.8), look.outline)
-        bit.paint(Mask(SPR_W, SPR_H).capsule((cx + side * w * 0.2, cy - 1.6),
-                                             (cx + side * (w + 1.2), cy - 0.4), 1.1),
-                  mix(look.outline, look.hair_color, 0.4))
+        # закрытый глаз: дуга ресниц с «галочкой» на внешнем углу
+        pts = [(cx - side * w, cy - h * 0.05), (cx - side * w * 0.4, cy + h * 0.42),
+               (cx + side * w * 0.45, cy + h * 0.40), (cx + side * w * 1.05, cy - h * 0.12)]
+        for a, b in zip(pts, pts[1:]):
+            bit.paint(Mask(SPR_W, SPR_H).capsule(a, b, 1.6), look.outline)
+        bit.paint(Mask(SPR_W, SPR_H).capsule((cx + side * w * 0.9, cy - h * 0.1),
+                                             (cx + side * w * 1.3, cy - h * 0.45), 1.2), look.outline)
         return
-    hh = h * max(0.25, min(1.3, pose.eye_open * (1 - pose.blink * 1.4)))
+
+    hh = h * max(0.3, min(1.25, pose.eye_open * (1 - pose.blink * 1.35)))
     sclera = Mask(SPR_W, SPR_H).ellipse(cx, cy, w, hh)
-    bit.paint(sclera, (253, 251, 255))
-    lx, ly = pose.look_x * 1.2, pose.look_y * 0.9
-    ir = w * 0.74
-    iris = Mask(SPR_W, SPR_H).ellipse(cx + lx, cy + ly, ir, hh * 1.02) & sclera.dilate(1)
+    bit.paint(sclera, (252, 250, 254))
+
+    lx, ly = pose.look_x * 1.1, pose.look_y * 0.8
+    ir = w * 0.80
+    icx, icy = cx + lx, cy + ly + hh * 0.06
+    iris = Mask(SPR_W, SPR_H).ellipse(icx, icy, ir, hh * 0.95) & sclera.dilate(1)
     bit.paint(iris, look.eye)
-    bit.paint(iris & _band(cy + hh * 0.15, cy + hh * 2), mix(look.eye, look.eye_dark, 0.45))
-    bit.paint(Mask(SPR_W, SPR_H).ellipse(cx + lx, cy + ly + hh * 0.1, ir * 0.5, hh * 0.55) & sclera.dilate(1),
+    # верх радужки темнее, низ — светлее (стеклянный глаз)
+    bit.paint(iris & _band(icy - hh, icy - hh * 0.15), mix(look.eye, look.eye_dark, 0.62))
+    bit.paint(iris & _band(icy + hh * 0.25, icy + hh), mix(look.eye, (255, 255, 255), 0.22))
+    bit.paint(Mask(SPR_W, SPR_H).ellipse(icx, icy + hh * 0.10, ir * 0.44, hh * 0.50) & sclera.dilate(1),
               look.eye_dark)
-    bit.paint(Mask(SPR_W, SPR_H).ellipse(cx + lx - ir * 0.42, cy - hh * 0.34, 1.3, 1.4) & sclera, (255, 255, 255))
-    bit.paint(Mask(SPR_W, SPR_H).ellipse(cx + lx + ir * 0.45, cy + hh * 0.22, 0.9, 1.0) & sclera,
-              mix(look.eye, (255, 255, 255), 0.75))
-    bit.paint(Mask(SPR_W, SPR_H).capsule((cx - w - 0.4, cy - hh * 0.76), (cx + w + 0.4, cy - hh * 0.66), 1.2)
-              & sclera.dilate(2), look.outline)
-    bit.paint(Mask(SPR_W, SPR_H).capsule((cx - w * 0.8, cy - hh * 0.52), (cx + w * 0.8, cy - hh * 0.52), 1.0)
-              & sclera, mix(look.eye_dark, look.outline, 0.4))
-    bit.paint(Mask(SPR_W, SPR_H).capsule((cx + side * (w + 0.2), cy - hh * 0.62),
-                                         (cx + side * (w + 2.0), cy - hh * 0.98), 1.2), look.outline)
-    bit.paint(Mask(SPR_W, SPR_H).capsule((cx - w * 0.65, cy + hh * 0.94), (cx + w * 0.65, cy + hh * 0.94), 0.9)
-              & sclera.dilate(2), mix(look.skin_shade, look.outline, 0.5))
+    # блики
+    bit.paint(Mask(SPR_W, SPR_H).ellipse(icx - ir * 0.40, icy - hh * 0.36, 1.25, 1.35) & sclera, (255, 255, 255))
+    bit.paint(Mask(SPR_W, SPR_H).ellipse(icx + ir * 0.42, icy + hh * 0.30, 0.8, 0.9) & sclera,
+              mix(look.eye, (255, 255, 255), 0.8))
+    # тень от верхнего века на белке
+    bit.paint(sclera & _band(cy - hh, cy - hh * 0.45) & ~iris, mix((252, 250, 254), look.eye_dark, 0.18))
+
+    # верхнее веко дугой: три отрезка, толще снаружи
+    arc = [(cx - side * w * 0.95, cy - hh * 0.30),
+           (cx - side * w * 0.35, cy - hh * 0.86),
+           (cx + side * w * 0.45, cy - hh * 0.92),
+           (cx + side * w * 1.02, cy - hh * 0.42)]
+    widths = (1.2, 1.5, 1.7)
+    for (a, b), wd in zip(zip(arc, arc[1:]), widths):
+        bit.paint(Mask(SPR_W, SPR_H).capsule(a, b, wd) & sclera.dilate(2), look.outline)
+    # внешний уголок ресниц
+    bit.paint(Mask(SPR_W, SPR_H).capsule((cx + side * w * 0.95, cy - hh * 0.55),
+                                         (cx + side * w * 1.45, cy - hh * 1.05), 1.1), look.outline)
+    # нижнее веко: тонкая тёплая линия только снаружи
+    bit.paint(Mask(SPR_W, SPR_H).capsule((cx + side * w * 0.15, cy + hh * 0.95),
+                                         (cx + side * w * 0.95, cy + hh * 0.72), 0.9)
+              & sclera.dilate(1), mix(look.skin_shade, look.outline, 0.55))
 
 
 def _mouth(bit: Bitmap, cx, cy, pose: Pose, look: Look) -> None:
-    col = mix(look.outline, (172, 68, 78), 0.45)
-    if pose.mouth < 0.12:
-        cur = pose.mouth_curve * 1.4
-        m = Mask(SPR_W, SPR_H).capsule((cx - 2.0, cy - cur * 0.5), (cx, cy + 0.5), 1.0)
-        m = m | Mask(SPR_W, SPR_H).capsule((cx, cy + 0.5), (cx + 2.0, cy - cur * 0.5), 1.0)
-        bit.paint(m, col)
+    """Рот: линия-дуга (грусть/улыбка) или мягкий овал при речи."""
+    col = mix(look.outline, (176, 76, 84), 0.42)
+    cur = pose.mouth_curve
+    if pose.mouth < 0.14:
+        # линия рта: 3-4 пикселя, изгиб зависит от эмоции
+        dip = 0.9 - cur * 0.8
+        pts = [(cx - 1.6, cy - cur * 0.7), (cx, cy + dip), (cx + 1.6, cy - cur * 0.7)]
+        for a, b in zip(pts, pts[1:]):
+            bit.paint(Mask(SPR_W, SPR_H).capsule(a, b, 0.8), col)
         return
-    w = 1.3 + pose.mouth * 1.5
-    h = 0.9 + pose.mouth * 1.8
-    if pose.mouth_curve > 0.2:
-        mouth = Mask(SPR_W, SPR_H).poly([(cx - w, cy - h * 0.4), (cx + w, cy - h * 0.4),
-                                         (cx + w * 0.55, cy + h), (cx - w * 0.55, cy + h)])
-    else:
-        mouth = Mask(SPR_W, SPR_H).ellipse(cx, cy + h * 0.2, w, h)
-    bit.paint(mouth, mix(look.outline, (118, 40, 50), 0.5))
-    if pose.mouth > 0.35:
-        bit.paint(Mask(SPR_W, SPR_H).ellipse(cx, cy + h * 0.7, w * 0.5, h * 0.4) & mouth, (216, 126, 136))
+    w = 1.2 + pose.mouth * 1.6
+    hh = 0.8 + pose.mouth * 1.9
+    if cur > 0.25:                       # открытая улыбка
+        mouth = Mask(SPR_W, SPR_H).poly([
+            (cx - w, cy - hh * 0.35), (cx + w, cy - hh * 0.35),
+            (cx + w * 0.62, cy + hh), (cx - w * 0.62, cy + hh)])
+    else:                                # речь
+        mouth = Mask(SPR_W, SPR_H).ellipse(cx, cy + hh * 0.15, w, hh)
+    bit.paint(mouth, mix(look.outline, (112, 38, 48), 0.55))
+    bit.paint(Mask(SPR_W, SPR_H).ellipse(cx, cy + hh * 0.55, w * 0.55, hh * 0.4) & mouth, (206, 118, 128))
+    if pose.mouth > 0.3:
+        bit.paint(mouth & _band(cy - hh, cy - hh * 0.45), (248, 246, 250))

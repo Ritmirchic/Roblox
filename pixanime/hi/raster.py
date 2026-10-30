@@ -209,7 +209,8 @@ def lighten(c, k: float):
 BAYER4 = (np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]], np.float32) + 0.5) / 16.0
 
 
-def bayer_pick(h: int, w: int, amount: float) -> np.ndarray:
+def bayer_pick(h: int, w: int, amount) -> np.ndarray:
+    """Упорядоченный дизеринг: amount — число или карта вероятностей (h,w)."""
     pat = np.tile(BAYER4, (h // 4 + 2, w // 4 + 2))[:h, :w]
     return pat < amount
 

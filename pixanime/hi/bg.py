@@ -112,8 +112,11 @@ def sky(light: Light, w: int = W, h: int = H, horizon: float = 0.62, seed: int =
     if light.sun_size > 0:
         cx, cy = int(w * light.sun_at[0]), int(hz * light.sun_at[1] * 1.2)
         r = light.sun_size
-        m = Mask(w, h).ellipse(cx, cy, r * 1.9, r * 1.9)
-        bit.paint(m & _fade(w, h, 0.35), mix(light.haze, light.sun, 0.55))
+        yy, xx = np.mgrid[0:h, 0:w]
+        rad = np.sqrt(((xx - cx) / (r * 3.4)) ** 2 + ((yy - cy) / (r * 3.0)) ** 2)
+        halo = np.clip(1.0 - rad, 0.0, 1.0) ** 1.6 * 0.75
+        m = bayer_pick(h, w, halo)
+        bit.rgb[m] = np.array(mix(light.haze, light.sun, 0.5), dtype=np.uint8)
         m2 = Mask(w, h).ellipse(cx, cy, r * 1.25, r * 1.25)
         bit.paint(m2, mix(light.sun, light.haze, 0.25))
         bit.paint(Mask(w, h).ellipse(cx, cy, r, r), light.sun)
