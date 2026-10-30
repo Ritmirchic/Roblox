@@ -153,7 +153,17 @@ def episode_one(fps: int = 12) -> list[Shot]:
         cam_from=(6, 0), cam_to=(0, 0), seed=6, fx=("sparkles",), trans_in=0.6, trans_out=1.2, letterbox=True,
     ))
 
-    # 8. конец
+    # 8. превью следующего эпизода
+    shots.append(Shot(
+        scene=Street(seed=21), pal=RAIN, dur=5.0,
+        actors=[Actor(aoi, x=64, ground_y=106, seed=8, anim="sad")],
+        lines=_seq([
+            ("СЛЕДУЮЩИЙ ЭПИЗОД", "Дождь идёт третий день.", 3.0, None, "narration"),
+        ]),
+        cam_from=(10, 0), cam_to=(0, 0), seed=8, fx=("rain",), trans_in=0.6, trans_out=0.6, letterbox=True,
+    ))
+
+    # 9. конец
     shots.append(Shot(scene=Card("ПРОДОЛЖЕНИЕ", "СЛЕДУЕТ", "PIXANIME • ЭПИЗОД 1"),
                       pal=NIGHT, dur=4.5, trans_in=0.8, trans_out=0.0, letterbox=True))
     return shots
@@ -211,6 +221,12 @@ def episode_two(fps: int = 12) -> list[Shot]:
         cam_from=(4, 0), cam_to=(0, 0), seed=15, fx=("petals",), trans_in=0.5, trans_out=0.8,
     ))
 
+    shots.append(Shot(
+        scene=Rooftop(seed=7), pal=NIGHT, dur=5.0,
+        actors=[Actor(mika, x=64, ground_y=102, seed=16)],
+        lines=_seq([("СЛЕДУЮЩИЙ ЭПИЗОД", "Три года спустя.", 3.0, None, "narration")]),
+        cam_from=(0, 0), cam_to=(8, 0), seed=16, fx=("sparkles",), trans_in=0.6, trans_out=0.6, letterbox=True,
+    ))
     shots.append(Shot(scene=Card("КОНЕЦ ЭПИЗОДА 2", "", "PIXANIME • 2026"),
                       pal=NIGHT, dur=4.0, trans_in=0.8, trans_out=0.0, letterbox=True))
     return shots
