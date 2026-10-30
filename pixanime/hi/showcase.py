@@ -62,7 +62,7 @@ def cast_sheet(path: str = f"{SHOW}/s_cast.png", scale: int = 3) -> str:
     pose = Pose(hip_l=0.06, hip_r=-0.05, sh_l=0.12, sh_r=0.12, el_l=0.2, el_r=0.2,
                 mouth_curve=0.35, blush=0.25)
     n = len(CAST)
-    sp_w, sp_h = 150, 160
+    sp_w, sp_h = 58, 132
     pad_top, pad_bot = 26, 30
     W = sp_w * n
     H = sp_h + pad_top + pad_bot
@@ -72,12 +72,14 @@ def cast_sheet(path: str = f"{SHOW}/s_cast.png", scale: int = 3) -> str:
         t = y / (H - 1)
         canvas[y, :] = (int(44 + 26 * t), int(38 + 22 * t), int(58 + 24 * t))
     names = ["АОЙ", "МИКА", "ЮКИ", "РЕН"]
-    roles = ["long / sailor", "twin / hoodie", "short / coat", "bob / sailor"]
+    roles = ["КАШТАН", "ХВОСТЫ", "КАРЕ", "БОБ"]
     for i, (key, look) in enumerate(CAST.items()):
         b = render(look, pose)
         x0 = i * sp_w
+        bx, by = 53, 24
         sub = canvas[pad_top:pad_top + sp_h, x0:x0 + sp_w]
-        sub[b.mask.m] = b.rgb[b.mask.m]
+        crop_m = b.mask.m[by:by + sp_h, bx:bx + sp_w]
+        sub[crop_m] = b.rgb[by:by + sp_h, bx:bx + sp_w][crop_m]
         # подпись
         tw, _ = text_size(names[i])
         _put_text(canvas, x0 + (sp_w - tw) // 2, 8, names[i], (250, 244, 232))
