@@ -19,6 +19,10 @@
   video, img { width:100%; display:block; image-rendering:pixelated; background:#000; }
   .note { font-size:13px; color:#b9b3d0; border-left:3px solid var(--accent); padding-left:14px; margin:26px 0; }
   code { background:#241f3d; padding:1px 5px; border-radius:3px; font-size:12px; }
+  .dl { display:inline-block; margin-top:10px; font-size:12px; color:#ffd08a; text-decoration:none;
+        border:1px solid #4a3f6b; padding:4px 10px; }
+  .dl:hover { background:#2a2348; }
+  .dlall { text-align:center; margin:18px 0 0; }
   footer { text-align:center; color:#6d6688; font-size:12px; padding:24px; }
 </style>
 </head>
@@ -34,12 +38,12 @@
     обучена 20 минут на CPU на кадрах этого же движка).
   </div>
   <div class="grid">
-<div class="card"><h2>ЭПИЗОД 1 — Город, где кончается лето</h2><p>крыша на закате · 63 с</p><video src="ep01.mp4" controls loop muted playsinline></video></div>
-<div class="card"><h2>ЭПИЗОД 2 — Дождь идёт третий день</h2><p>улица под дождём · 44 с</p><video src="ep02.mp4" controls loop muted playsinline></video></div>
-<div class="card"><h2>ЭПИЗОД 3 — Три года спустя</h2><p>ночная крыша · 36 с</p><video src="ep03.mp4" controls loop muted playsinline></video></div>
-<div class="card"><h2>НЕЙРОСЕТЬ — клип 8×32×32</h2><p>flow matching · temporal attention · 24 шага Эйлера</p><img src="ai_clip.gif" alt="AI clip"></div>
-<div class="card"><h2>КРИВАЯ ОБУЧЕНИЯ</h2><p>MSE по полю скоростей</p><img src="training_loss.png" alt="loss"></div>
-<div class="card" style="grid-column:1/-1"><h2>КАДРЫ</h2><p>контактный лист из трёх эпизодов</p><img src="poster.png" alt="poster"></div>
+<div class="card"><h2>ЭПИЗОД 1 — Город, где кончается лето</h2><p>крыша на закате · 63 с</p><video src="ep01.mp4" controls loop muted playsinline></video><a class="dl" href="ep01.mp4" download>скачать ep01.mp4</a></div>
+<div class="card"><h2>ЭПИЗОД 2 — Дождь идёт третий день</h2><p>улица под дождём · 44 с</p><video src="ep02.mp4" controls loop muted playsinline></video><a class="dl" href="ep02.mp4" download>скачать ep02.mp4</a></div>
+<div class="card"><h2>ЭПИЗОД 3 — Три года спустя</h2><p>ночная крыша · 36 с</p><video src="ep03.mp4" controls loop muted playsinline></video><a class="dl" href="ep03.mp4" download>скачать ep03.mp4</a></div>
+<div class="card"><h2>НЕЙРОСЕТЬ — клип 8×32×32</h2><p>flow matching · temporal attention · 24 шага Эйлера</p><img src="ai_clip.gif" alt="AI clip"><a class="dl" href="ai_clip.gif" download>скачать ai_clip.gif</a></div>
+<div class="card"><h2>КРИВАЯ ОБУЧЕНИЯ</h2><p>MSE по полю скоростей</p><img src="training_loss.png" alt="loss"><a class="dl" href="training_loss.png" download>скачать training_loss.png</a></div>
+<div class="card" style="grid-column:1/-1"><h2>КАДРЫ</h2><p>контактный лист из трёх эпизодов</p><img src="poster.png" alt="poster"><a class="dl" href="poster.png" download>скачать poster.png</a></div>
   </div>
   <div class="note">
     Разрешение каждого кадра — 128×128, апскейл целым множителем ×2 → 256×256:

@@ -28,6 +28,25 @@
 
 Всё разрешение — **256×256**, 12 fps, звук — процедурный чиптюн.
 
+## Скачать напрямую
+
+Постоянные ссылки (ветка `arena/ea6487a8-roblox`):
+
+- **Эпизоды:** [ep01.mp4](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/ep01.mp4) ·
+  [ep02.mp4](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/ep02.mp4) ·
+  [ep03.mp4](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/ep03.mp4)
+- **GIF:** [ep01_excerpt.gif](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/ep01_excerpt.gif) ·
+  [ai_clip.gif](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/ai_clip.gif) ·
+  [ai_park.gif](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/ai_park.gif)
+- **Кадры нейросети:** [ai_trace.png](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/ai_trace.png) ·
+  [ai_samples.png](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/ai_samples.png) ·
+  [training_loss.png](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/training_loss.png)
+- **Постер и галерея:** [poster.png](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/poster.png) ·
+  [index.html](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/index.html) ·
+  [downloads.md](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/downloads.md)
+
+Актуальный список генерируется командой `python -m pixanime.cli links --write`.
+
 ---
 
 ## 1. Как устроен современный видеогенератор (и что из этого есть здесь)

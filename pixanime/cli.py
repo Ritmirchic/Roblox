@@ -77,6 +77,16 @@ def cmd_still(args) -> None:
         print(path)
 
 
+def cmd_links(args) -> None:
+    from .showcase import DEFAULT_BRANCH, DEFAULT_REPO, direct_links, write_downloads
+
+    links = direct_links(repo=args.repo, branch=args.branch, sandbox=args.sandbox, port=args.port)
+    for ln in links:
+        print(ln)
+    if args.write:
+        print("\nзаписано:", write_downloads(repo=args.repo, branch=args.branch, sandbox=args.sandbox, port=args.port))
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="pixanime", description="Процедурный пиксель-арт аниме-сериал")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -99,6 +109,14 @@ def main(argv=None) -> int:
     s.add_argument("--size", type=int, default=256)
     s.add_argument("--out-dir", default="out/stills")
     s.set_defaults(func=cmd_still)
+
+    lk = sub.add_parser("links", help="прямые ссылки на скачивание всех артефактов")
+    lk.add_argument("--repo", default="Ritmirchic/Roblox")
+    lk.add_argument("--branch", default="arena/ea6487a8-roblox")
+    lk.add_argument("--sandbox", default=None, help="id песочницы E2B для ссылок превью")
+    lk.add_argument("--port", type=int, default=8000)
+    lk.add_argument("--write", action="store_true", help="записать showcase/downloads.md")
+    lk.set_defaults(func=cmd_links)
 
     a = p.parse_args(argv)
     a.func(a)

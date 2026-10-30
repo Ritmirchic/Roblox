@@ -61,6 +61,10 @@ HTML = """<!doctype html>
   video, img {{ width:100%; display:block; image-rendering:pixelated; background:#000; }}
   .note {{ font-size:13px; color:#b9b3d0; border-left:3px solid var(--accent); padding-left:14px; margin:26px 0; }}
   code {{ background:#241f3d; padding:1px 5px; border-radius:3px; font-size:12px; }}
+  .dl {{ display:inline-block; margin-top:10px; font-size:12px; color:#ffd08a; text-decoration:none;
+        border:1px solid #4a3f6b; padding:4px 10px; }}
+  .dl:hover {{ background:#2a2348; }}
+  .dlall {{ text-align:center; margin:18px 0 0; }}
   footer {{ text-align:center; color:#6d6688; font-size:12px; padding:24px; }}
 </style>
 </head>
@@ -100,18 +104,22 @@ def build_index(out: str = "showcase/index.html") -> str:
         if os.path.exists(os.path.join(os.path.dirname(out), f)):
             cards.append(
                 f'<div class="card"><h2>{title}</h2><p>{sub}</p>'
-                f'<video src="{f}" controls loop muted playsinline></video></div>'
+                f'<video src="{f}" controls loop muted playsinline></video>'
+                f'<a class="dl" href="{f}" download>скачать {f}</a></div>'
             )
     if os.path.exists(os.path.join(os.path.dirname(out), "ai_clip.gif")):
         cards.append('<div class="card"><h2>НЕЙРОСЕТЬ — клип 8×32×32</h2>'
                      '<p>flow matching · temporal attention · 24 шага Эйлера</p>'
-                     '<img src="ai_clip.gif" alt="AI clip"></div>')
+                     '<img src="ai_clip.gif" alt="AI clip">'
+                     '<a class="dl" href="ai_clip.gif" download>скачать ai_clip.gif</a></div>')
     if os.path.exists(os.path.join(os.path.dirname(out), "training_loss.png")):
         cards.append('<div class="card"><h2>КРИВАЯ ОБУЧЕНИЯ</h2><p>MSE по полю скоростей</p>'
-                     '<img src="training_loss.png" alt="loss"></div>')
+                     '<img src="training_loss.png" alt="loss">'
+                     '<a class="dl" href="training_loss.png" download>скачать training_loss.png</a></div>')
     if os.path.exists(os.path.join(os.path.dirname(out), "poster.png")):
         cards.append('<div class="card" style="grid-column:1/-1"><h2>КАДРЫ</h2>'
-                     '<p>контактный лист из трёх эпизодов</p><img src="poster.png" alt="poster"></div>')
+                     '<p>контактный лист из трёх эпизодов</p><img src="poster.png" alt="poster">'
+                     '<a class="dl" href="poster.png" download>скачать poster.png</a></div>')
     html = HTML.format(cards="\n".join(cards))
     os.makedirs(os.path.dirname(os.path.abspath(out)) or ".", exist_ok=True)
     with open(out, "w", encoding="utf-8") as f:
@@ -131,3 +139,77 @@ def build_all() -> None:
     if os.path.exists("ckpt/pixvd_loss.png"):
         shutil.copyfile("ckpt/pixvd_loss.png", "showcase/training_loss.png")
     print(build_index())
+
+
+# ---------------------------------------------------------------------------
+# прямые ссылки на скачивание
+# ---------------------------------------------------------------------------
+DEFAULT_REPO = "Ritmirchic/Roblox"
+DEFAULT_BRANCH = "arena/ea6487a8-roblox"
+
+
+def direct_links(
+    folder: str = "showcase",
+    repo: str = DEFAULT_REPO,
+    branch: str = DEFAULT_BRANCH,
+    sandbox: str | None = None,
+    port: int = 8000,
+    as_markdown: bool = True,
+) -> list[str]:
+    """Список прямых ссылок на все артефакты витрины.
+
+    Два вида:
+      * GitHub raw — постоянная ссылка (работает, пока живёт репозиторий);
+      * E2B-превью — временная, но отдаёт файл напрямую из текущей песочницы.
+    """
+    import os
+
+    if not os.path.isdir(folder):
+        return []
+    out = []
+    for name in sorted(os.listdir(folder)):
+        if name.startswith(".") or name == "downloads.md":
+            continue
+        gh = f"https://github.com/{repo}/raw/{branch}/{folder}/{name}"
+        pb = f"https://{port}-{sandbox}.e2b.app/{name}" if sandbox else None
+        if as_markdown:
+            extra = f" · [превью]({pb})" if pb else ""
+            out.append(f"- [{name}]({gh}){extra}")
+        else:
+            out.append(gh)
+            if pb:
+                out.append(pb)
+    return out
+
+
+def write_downloads(
+    out: str = "showcase/downloads.md",
+    repo: str = DEFAULT_REPO,
+    branch: str = DEFAULT_BRANCH,
+    sandbox: str | None = None,
+    port: int = 8000,
+) -> str:
+    """Сгенерировать страницу со ссылками на скачивание."""
+    lines = ["# Скачать", "",
+             "Эпизоды, GIF, кадры нейросети и постеры. Ссылки GitHub — постоянные,",
+             "ссылки «превью» живут, пока запущена песочница.", ""]
+    sections = {
+        "Эпизоды (MP4 + звук)": ["ep01.mp4", "ep02.mp4", "ep03.mp4"],
+        "GIF (собственный LZW-энкодер)": ["ep01_excerpt.gif", "ai_clip.gif", "ai_park.gif"],
+        "Нейросеть и графика": ["ai_trace.png", "ai_samples.png", "training_loss.png", "poster.png"],
+        "Прочее": ["index.html"],
+    }
+    for title, files in sections.items():
+        lines.append(f"## {title}")
+        lines.append("")
+        for name in files:
+            gh = f"https://github.com/{repo}/raw/{branch}/showcase/{name}"
+            pb = f"https://{port}-{sandbox}.e2b.app/{name}" if sandbox else None
+            lines.append(f"- **{name}** — [скачать]({gh})" + (f" · [превью]({pb})" if pb else ""))
+        lines.append("")
+    lines.append("---")
+    lines.append("Пересобрать всё: `make episodes && make showcase` (или `make train sample` для нейросети).")
+    os.makedirs(os.path.dirname(os.path.abspath(out)) or ".", exist_ok=True)
+    with open(out, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    return out
