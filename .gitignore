@@ -1,0 +1,8 @@
+out/
+.scratch/
+__pycache__/
+*.pyc
+.venv/
+ckpt/
+*.wav
+tests/__pycache__/
