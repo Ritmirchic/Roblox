@@ -31,10 +31,16 @@ def cmd_render(args) -> None:
         track.write(audio_path)
         print(f"саундтрек: {audio_path} ({time.time()-t0:.1f} c)")
 
+    i0 = int(round(args.start * args.fps))
+    i1 = int(round(args.end * args.fps)) if args.end else tl.n_frames
+    indices = range(max(0, i0), min(tl.n_frames, i1))
+    if args.start or args.end:
+        print(f"фрагмент: кадры {indices.start}..{indices.stop - 1}")
+
     if args.gif:
         gw = GIFWriter(base + ".gif", args.size, args.size, fps=args.fps)
-        for img in tl.frames():
-            gw.write(img)
+        for i in indices:
+            gw.write(tl.frame(i))
         gw.close()
         print(f"GIF: {base}.gif")
         return
@@ -43,8 +49,8 @@ def cmd_render(args) -> None:
     writer = MP4Writer(mp4, args.size, args.size, fps=args.fps, audio=audio_path)
     t0 = time.time()
     n = 0
-    for img in tl.frames():
-        writer.write(img)
+    for i in indices:
+        writer.write(tl.frame(i))
         n += 1
         if n % 120 == 0:
             print(f"  {n}/{tl.n_frames} кадров")
@@ -82,6 +88,8 @@ def main(argv=None) -> int:
     r.add_argument("--size", type=int, default=256)
     r.add_argument("--gif", action="store_true")
     r.add_argument("--no-audio", action="store_true")
+    r.add_argument("--start", type=float, default=0.0, help="начало фрагмента, сек")
+    r.add_argument("--end", type=float, default=0.0, help="конец фрагмента, сек (0 — до конца)")
     r.set_defaults(func=cmd_render)
 
     s = sub.add_parser("still", help="сохранить отдельные кадры в PNG")

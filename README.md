@@ -18,9 +18,11 @@
 | `showcase/ep01.mp4` | эпизод 1 «Город, где кончается лето» — 63 с, со звуком |
 | `showcase/ep02.mp4` | эпизод 2 «Дождь идёт третий день» — 44 с |
 | `showcase/ep03.mp4` | эпизод 3 «Три года спустя» — 36 с |
+| `showcase/ep01_excerpt.gif` | 8 секунд эпизода в GIF — собственный LZW-энкодер, без ffmpeg |
 | `showcase/ai_clip.gif` | клип, сгенерированный нейросетью (не движком) |
 | `showcase/ai_samples.png` | кадры из нейросети: 8 кадров × несколько сэмплов |
 | `showcase/training_loss.png` | кривая обучения видео-диффузии |
+| `showcase/ai_trace.png` | траектория «шум → кадр» на 8 шагов сэмплинга |
 | `showcase/poster.png` | контактный лист кадров из сериала |
 
 Всё разрешение — **256×256**, 12 fps, звук — процедурный чиптюн.
@@ -102,9 +104,11 @@ x_t = (1 - t)·шум + t·данные        # прямая между шум�
   `room_night`, `park_day`, `rooftop_night`), подаётся в каждый ResBlock.
 * Обучение — `rectified flow`: `x_t = (1-t)·x0 + t·x1`, лосс MSE по `(x1-x0)`.
 * Данные — 600 клипов `8×32×32`, сгенерированных движком (он же и «датасет»).
+* EMA весов (decay 0.996) — без неё при коротком обучении сэмплы «шумят».
 * Сэмплинг — 24 шага Эйлера; результат апскейлится ×8 nearest для показа.
 
-Всё считается на CPU (2 ядра): ~0.8 с/шаг, 1500 шагов ≈ 20 минут.
+Всё считается на CPU (2 ядра): ~0.7-0.8 с на шаг, ~4000 шагов суммарно ≈ 45 минут.
+Лосс (MSE по полю скоростей) опускается с 1.6 до ~0.09.
 
 Честно про масштаб: 32×32×8 — это игрушка. Чтобы получить «настоящее» аниме-видео
 нужны (а) датасет из миллионов клипов, (б) 3D-VAE, чтобы диффузия работала в латенте,
@@ -124,8 +128,8 @@ python -m pixanime.cli render --episode 1
 python -m pixanime.cli render --episode 2
 python -m pixanime.cli render --episode 3
 
-# GIF (собственный энкодер, без ffmpeg)
-python -m pixanime.cli render --episode 1 --gif --fps 10
+# GIF (собственный энкодер, без ffmpeg), в том числе фрагмент
+python -m pixanime.cli render --episode 1 --gif --fps 10 --start 6 --end 14 --no-audio
 
 # отдельные кадры
 python -m pixanime.cli still --episode 1 --times 3,16,40 --out-dir out/stills
@@ -133,6 +137,11 @@ python -m pixanime.cli still --episode 1 --times 3,16,40 --out-dir out/stills
 # нейросеть: обучение (~20 минут на CPU) и сэмплирование
 python -m pixanime.ml.train --steps 1500 --batch 4 --base 32 --out ckpt/pixvd.pt
 python -m pixanime.ml.sample --cls 0 --n 3 --out out/ai_clip.gif
+python -c "from pixanime.ml.sample import denoise_trace; denoise_trace(cls=0)"
+
+# всё сразу
+make episodes && make train && make sample && make showcase
+python tests/test_smoke.py      # 11 быстрых тестов движка
 ```
 
 ---

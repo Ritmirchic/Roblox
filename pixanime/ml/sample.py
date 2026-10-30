@@ -79,3 +79,43 @@ if __name__ == "__main__":
     p.add_argument("--scale", type=int, default=8)
     a = p.parse_args()
     generate(a.ckpt, a.cls, a.n, a.steps, a.seed, a.out, scale=a.scale)
+
+
+@torch.no_grad()
+def denoise_trace(
+    ckpt: str = "ckpt/pixvd.pt",
+    cls: int = 0,
+    seed: int = 0,
+    steps: int = 32,
+    snaps: int = 8,
+    out: str = "showcase/ai_trace.png",
+    scale: int = 6,
+    device: str = "cpu",
+):
+    """Полоса «шум -> кадр»: промежуточные состояния потока.
+
+    Лучше любого текста объясняет, что делает диффузия: на каждом шаге
+    модель не «рисует», а сдвигает изображение вдоль поля скоростей.
+    """
+    from PIL import Image
+
+    model, cfg = load(ckpt, device)
+    T, S = cfg["frames"], cfg["size"]
+    labels = torch.full((1,), cls, dtype=torch.long, device=device)
+    g = torch.Generator(device=device).manual_seed(seed)
+    x = torch.randn((1, T, 3, S, S), generator=g, device=device)
+    dt = 1.0 / steps
+    every = max(1, steps // snaps)
+    frames = []
+    for i in range(steps):
+        if i % every == 0:
+            frames.append(from_model_space(x)[0, T // 2].permute(1, 2, 0).cpu().numpy())
+        t = torch.full((1,), i * dt, device=device)
+        x = x + model(x, t, labels) * dt
+    frames.append(from_model_space(x)[0, T // 2].permute(1, 2, 0).cpu().numpy())
+
+    strip = np.concatenate([np.repeat(np.repeat(f, scale, 0), scale, 1) for f in frames[:snaps]], axis=1)
+    os.makedirs(os.path.dirname(os.path.abspath(out)) or ".", exist_ok=True)
+    Image.fromarray(strip).save(out)
+    print(f"траектория денойзинга: {out}")
+    return strip
