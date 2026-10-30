@@ -556,7 +556,7 @@ def _eye(bit: Bitmap, cx, cy, w, h, pose: Pose, look: Look, side: int) -> None:
     bit.paint(sclera, (252, 250, 254))
 
     lx, ly = pose.look_x * 1.1, pose.look_y * 0.8
-    ir = w * 0.74
+    ir = w * 0.80
     icx, icy = cx + lx, cy + ly + hh * 0.06
     iris = Mask(SPR_W, SPR_H).ellipse(icx, icy, ir, hh * 0.95) & sclera.dilate(1)
     bit.paint(iris, look.eye)
@@ -566,9 +566,9 @@ def _eye(bit: Bitmap, cx, cy, w, h, pose: Pose, look: Look, side: int) -> None:
     bit.paint(Mask(SPR_W, SPR_H).ellipse(icx, icy + hh * 0.10, ir * 0.44, hh * 0.50) & sclera.dilate(1),
               look.eye_dark)
     # блики
-    bit.paint(Mask(SPR_W, SPR_H).ellipse(icx - ir * 0.40, icy - hh * 0.36, 1.25, 1.35) & sclera, (255, 255, 255))
-    bit.paint(Mask(SPR_W, SPR_H).ellipse(icx + ir * 0.42, icy + hh * 0.30, 0.8, 0.9) & sclera,
-              mix(look.eye, (255, 255, 255), 0.8))
+    bit.paint(Mask(SPR_W, SPR_H).ellipse(icx - ir * 0.45, icy - hh * 0.42, 1.0, 1.05) & sclera, (255, 255, 255))
+    bit.paint(Mask(SPR_W, SPR_H).ellipse(icx + ir * 0.45, icy + hh * 0.34, 0.7, 0.75) & sclera,
+              mix(look.eye, (255, 255, 255), 0.85))
     # тень от верхнего века на белке
     bit.paint(sclera & _band(cy - hh, cy - hh * 0.45) & ~iris, mix((252, 250, 254), look.eye_dark, 0.18))
 
