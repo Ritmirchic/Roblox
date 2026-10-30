@@ -131,7 +131,7 @@ def skeleton(pose: Pose, ground_y: float = FEET_Y, height: float = 1.0) -> Joint
     neck = along(chest, pose.spine + pose.neck, -NECK * hs)
     head_angle = pose.spine + pose.neck + pose.head
     # подбородок должен висеть над ключицами на длину шеи — иначе голова отрывается
-    head = along(chest, head_angle, -(NECK + HEAD_HH * 0.54 + 1.0) * hs)
+    head = along(chest, head_angle, -(NECK + HEAD_HH * 0.50 + 1.0) * hs)
 
     def shoulder(side):
         return (chest[0] + side * SHOULDER_W * hs * math.cos(pose.spine),
@@ -166,18 +166,15 @@ def _band(y0, y1, x0=0, x1=SPR_W) -> Mask:
 
 
 def _head_mask(cx, cy, hw, hh) -> Mask:
+    """Голова = череп + челюсть двумя эллипсами: широкие щёки, мягкий подбородок.
+
+    Полигональная челюсть на 26 px давала «клюв», из-за которого лицо
+    выглядело узкой полосой между прядями.
+    """
     m = Mask(SPR_W, SPR_H)
-    m.ellipse(cx, cy - hh * 0.20, hw, hh * 0.60)
-    m.poly([
-        (cx - hw * 0.96, cy - hh * 0.06),
-        (cx - hw * 0.90, cy + hh * 0.20),
-        (cx - hw * 0.66, cy + hh * 0.42),
-        (cx - hw * 0.30, cy + hh * 0.54),
-        (cx + hw * 0.30, cy + hh * 0.54),
-        (cx + hw * 0.66, cy + hh * 0.42),
-        (cx + hw * 0.90, cy + hh * 0.20),
-        (cx + hw * 0.96, cy - hh * 0.06),
-    ])
+    m.ellipse(cx, cy - hh * 0.22, hw, hh * 0.60)          # череп
+    m.ellipse(cx, cy + hh * 0.14, hw * 0.94, hh * 0.42)   # челюсть
+    m.ellipse(cx, cy + hh * 0.30, hw * 0.62, hh * 0.26)   # подбородок
     return m
 
 
@@ -422,10 +419,11 @@ def render(look: Look, pose: Pose, ground_y: float = FEET_Y) -> Bitmap:
             bit.paint(Mask(SPR_W, SPR_H).ellipse(wr[0], wr[1] + 1.6, 2.9 * hs, 3.5 * hs).edge(1, 2), skin_d)
 
     # ------------------------------------------------------------ шея и голова
-    neck_m = Mask(SPR_W, SPR_H).capsule((j.chest[0], j.chest[1] + 1), (j.head[0], j.head[1] + hh * 0.5), 4.0 * hs)
-    bit.paint(neck_m, skin)
-    bit.paint(neck_m & _band(j.neck[1] - 5, j.neck[1] - 1), mix(skin_d, look.outline, 0.18))
-    bit.paint(neck_m.edge(1, 0), skin_d)
+    neck_m = Mask(SPR_W, SPR_H).capsule((j.chest[0], j.chest[1] + 1), (j.head[0], j.head[1] + hh * 0.52), 4.8 * hs)
+    # шея в тени подбородка — всегда темнее лица, иначе голова «приклеена»
+    bit.paint(neck_m, mix(skin, skin_d, 0.55))
+    bit.paint(neck_m & _band(j.neck[1] - 6, j.neck[1] + 1), mix(skin_d, look.outline, 0.28))
+    bit.paint(neck_m.edge(1, 0), mix(skin_d, look.outline, 0.25))
     head_m = _head_mask(cx, cy, hw, hh)
     bit.paint(head_m, skin)
     bit.paint(head_m.edge(3, 2), skin_d)
@@ -448,11 +446,9 @@ def render(look: Look, pose: Pose, ground_y: float = FEET_Y) -> Bitmap:
             (bx - ew * 0.7, by + ang * 0.55), (bx + ew * 0.7, by - ang * 0.55),
             (bx + ew * 0.7, by - ang * 0.55 + 1.2), (bx - ew * 0.7, by + ang * 0.55 + 1.2)]),
             mix(hair, look.outline, 0.10))
-    bit.paint(Mask(SPR_W, SPR_H).rect(int(cx) - 1, int(cy + hh * 0.20), int(cx) + 1, int(cy + hh * 0.20) + 1),
-              mix(skin_d, skin, 0.30))
-    bit.paint(Mask(SPR_W, SPR_H).rect(int(cx) - 1, int(cy + hh * 0.20) + 1, int(cx), int(cy + hh * 0.20) + 2),
-              mix(skin_d, skin, 0.60))
-    _mouth(bit, cx, cy + hh * 0.38, pose, look)
+    bit.paint(Mask(SPR_W, SPR_H).rect(int(cx) - 1, int(cy + hh * 0.15), int(cx), int(cy + hh * 0.15) + 1),
+              mix(skin_d, skin, 0.35))
+    _mouth(bit, cx, cy + hh * 0.30, pose, look)
     if pose.blush > -0.5:
         pick = bayer_pick(SPR_H, SPR_W, 0.6 * max(0.18, pose.blush))
         for side in (-1, 1):
@@ -532,8 +528,8 @@ def render(look: Look, pose: Pose, ground_y: float = FEET_Y) -> Bitmap:
     rim = sil.edge(-1, 0) & ~sil.edge(-1, 3)
     bit.paint(rim, mix(look.rim, hair_l, 0.3))
     # тень под подбородком — только на шее, без «бороды»
-    bit.paint(neck_m & Mask(SPR_W, SPR_H).ellipse(cx, cy + hh * 0.56, hw * 0.52, hh * 0.16),
-              mix(skin_d, look.outline, 0.22))
+    bit.paint(neck_m & Mask(SPR_W, SPR_H).ellipse(cx, cy + hh * 0.58, hw * 0.46, hh * 0.09),
+              mix(skin_d, look.outline, 0.16))
     return bit
 
 
