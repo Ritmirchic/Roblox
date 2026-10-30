@@ -78,6 +78,10 @@ class Pose:
     knee_r: float = 0.0
     foot_l: float = 0.0
     foot_r: float = 0.0
+    leg_l: float = 1.0
+    leg_r: float = 1.0
+    arm_l: float = 1.0
+    arm_r: float = 1.0
     blink: float = 0.0
     eye_open: float = 1.0
     brow: float = 0.0
@@ -134,17 +138,19 @@ def skeleton(pose: Pose, ground_y: float = FEET_Y, height: float = 1.0) -> Joint
                 chest[1] + 2.0 * hs - side * SHOULDER_W * hs * math.sin(pose.spine) * 0.2)
 
     sh_l, sh_r = shoulder(-1), shoulder(1)
-    a_l, a_r = pose.spine + pose.sh_l, pose.spine + pose.sh_r
+    # левая рука зеркальна: положительный угол уводит её от корпуса влево
+    a_l = pose.spine - pose.sh_l
+    a_r = pose.spine + pose.sh_r
     el_l = along(sh_l, a_l, ARM_UP * hs)
     el_r = along(sh_r, a_r, ARM_UP * hs)
-    wr_l = along(el_l, a_l + pose.el_l, ARM_LOW * hs)
-    wr_r = along(el_r, a_r + pose.el_r, ARM_LOW * hs)
+    wr_l = along(el_l, a_l - pose.el_l, ARM_LOW * hs * pose.arm_l)
+    wr_r = along(el_r, a_r + pose.el_r, ARM_LOW * hs * pose.arm_r)
     hip_l = (pelvis[0] - HIP_W * hs * 0.55, pelvis[1] + 1.5)
     hip_r = (pelvis[0] + HIP_W * hs * 0.55, pelvis[1] + 1.5)
-    kn_l = along(hip_l, pose.hip_l, THIGH * hs)
-    kn_r = along(hip_r, pose.hip_r, THIGH * hs)
-    an_l = along(kn_l, pose.hip_l + pose.knee_l, SHIN * hs)
-    an_r = along(kn_r, pose.hip_r + pose.knee_r, SHIN * hs)
+    kn_l = along(hip_l, pose.hip_l, THIGH * hs * pose.leg_l)
+    kn_r = along(hip_r, pose.hip_r, THIGH * hs * pose.leg_r)
+    an_l = along(kn_l, pose.hip_l + pose.knee_l, SHIN * hs * pose.leg_l)
+    an_r = along(kn_r, pose.hip_r + pose.knee_r, SHIN * hs * pose.leg_r)
     return Joints(pelvis, chest, neck, head, sh_l, sh_r, el_l, el_r, wr_l, wr_r,
                   hip_l, hip_r, kn_l, kn_r, an_l, an_r, head_angle)
 
