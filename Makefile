@@ -1,5 +1,5 @@
 # PIXANIME — короткие команды для рутинных операций
-.PHONY: help episodes ep1 ep2 ep3 gif stills train sample showcase test clean preview
+.PHONY: help episodes ep1 ep2 ep3 gif stills train sample showcase preview test clean s2 s2show s2net
 
 help:
 	@echo "make episodes   - отрендерить три эпизода в out/ (MP4 + WAV)"
@@ -47,3 +47,15 @@ test:
 
 clean:
 	rm -rf out ckpt
+
+# --- второй сезон: 512x288, новый растр -------------------------------------
+s2:            ## отрендерить 4 эпизода второго сезона (512x288, со звуком)
+	python3 -c "import sys;sys.path.insert(0,'.');from pixanime.hi import series;series.render(['ep1','ep2','ep3','ep4'],'out/hi',scale=2)"
+
+s2show: s2     ## витрина сезона: постер, лист персонажей, index.html, ссылки
+	python3 -m pixanime.hi.showcase
+	python3 -m pixanime.hi.neural_show || true
+	python3 -m pixanime.cli links --sandbox "$$E2B_SANDBOX_ID" --write || true
+
+s2net:         ## обучить сеть «поза -> спрайт» (CPU, ~15 минут)
+	python3 -m pixanime.hi.neural --train

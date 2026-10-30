@@ -201,7 +201,7 @@ def _columns_bang_mask(cx, cy, hw, hh, style, swing, top_extra=2.0) -> Mask:
     ctrl_y = np.array([c[1] for c in ctrl])
     head_top = cy - hh * 0.80
     depth = np.interp(np.clip(rel, -1.15, 1.15), ctrl_x, ctrl_y)
-    bottom = head_top + (0.10 + depth * 0.56) * hh
+    bottom = head_top + (0.02 + depth * 0.50) * hh
     inside = (np.abs(rel + swing / max(hw, 1e-3) * 0.6) <= 1.08)
     m = Mask(SPR_W, SPR_H)
     m.m = (yy >= head_top - top_extra) & (yy <= bottom) & inside
@@ -436,16 +436,16 @@ def render(look: Look, pose: Pose, ground_y: float = FEET_Y) -> Bitmap:
     # ------------------------------------------------------------ лицо
     eye_y = cy - hh * 0.02
     eye_dx = hw * 0.45
-    ew, eh = 3.7 * hs, 3.8 * hs
+    ew, eh = 3.2 * hs, 3.9 * hs
     for side in (-1, 1):
         _eye(bit, cx + side * eye_dx, eye_y, ew, eh, pose, look, side)
         by = eye_y - eh - 2.8 * hs - pose.brow_raise * 1.4
         ang = -side * pose.brow * 2.2
         bx = cx + side * eye_dx
         bit.paint(Mask(SPR_W, SPR_H).poly([
-            (bx - ew * 0.7, by + ang * 0.55), (bx + ew * 0.7, by - ang * 0.55),
-            (bx + ew * 0.7, by - ang * 0.55 + 1.2), (bx - ew * 0.7, by + ang * 0.55 + 1.2)]),
-            mix(hair, look.outline, 0.10))
+            (bx - ew * 0.62, by + ang * 0.55), (bx + ew * 0.62, by - ang * 0.55),
+            (bx + ew * 0.62, by - ang * 0.55 + 1.0), (bx - ew * 0.62, by + ang * 0.55 + 1.0)]),
+            mix(hair, look.skin_shade, 0.35))
     bit.paint(Mask(SPR_W, SPR_H).rect(int(cx) - 1, int(cy + hh * 0.15), int(cx), int(cy + hh * 0.15) + 1),
               mix(skin_d, skin, 0.35))
     _mouth(bit, cx, cy + hh * 0.30, pose, look)
@@ -556,7 +556,7 @@ def _eye(bit: Bitmap, cx, cy, w, h, pose: Pose, look: Look, side: int) -> None:
     bit.paint(sclera, (252, 250, 254))
 
     lx, ly = pose.look_x * 1.1, pose.look_y * 0.8
-    ir = w * 0.80
+    ir = w * 0.74
     icx, icy = cx + lx, cy + ly + hh * 0.06
     iris = Mask(SPR_W, SPR_H).ellipse(icx, icy, ir, hh * 0.95) & sclera.dilate(1)
     bit.paint(iris, look.eye)
@@ -577,7 +577,7 @@ def _eye(bit: Bitmap, cx, cy, w, h, pose: Pose, look: Look, side: int) -> None:
            (cx - side * w * 0.35, cy - hh * 0.86),
            (cx + side * w * 0.45, cy - hh * 0.92),
            (cx + side * w * 1.02, cy - hh * 0.42)]
-    widths = (1.2, 1.5, 1.7)
+    widths = (1.0, 1.2, 1.4)
     for (a, b), wd in zip(zip(arc, arc[1:]), widths):
         bit.paint(Mask(SPR_W, SPR_H).capsule(a, b, wd) & sclera.dilate(2), look.outline)
     # внешний уголок ресниц

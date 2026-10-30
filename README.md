@@ -1,5 +1,48 @@
 # PIXANIME — пиксель-арт аниме, который генерирует себя сам
 
+## Второй сезон: 512×288, новый растр и риг
+
+Сезон 2 (`pixanime/hi/`) — это переписанный с нуля движок художника: персонаж
+собирается из настоящего скелета (суставы, IK, форшорченинг), лицо рисуется
+из мимических слоёв, фоны — из слоёв с параллаксом и световыми схемами, а камера
+умеет наезды, панорамы и тряску. Кадр считается в 256×144 и выводится **×2 = 512×288**.
+
+| файл | что это |
+|---|---|
+| `showcase/s_ep01.mp4` | эпизод 1 «Утро» — 15 с, 512×288, со звуком |
+| `showcase/s_ep02.mp4` | эпизод 2 «Крыша» — 16 с |
+| `showcase/s_ep03.mp4` | эпизод 3 «Дождь» — 16 с |
+| `showcase/s_ep04.mp4` | эпизод 4 «Звёзды» — 17 с |
+| `showcase/s_ep0*_excerpt.gif` | выдержки эпизодов в GIF |
+| `showcase/s_poster.png` | постер сезона 768×768 |
+| `showcase/s_cast.png` | лист персонажей: пропорции, палитры, причёски |
+| `showcase/s_neural.png` | сравнение «движок против нейросети» на одинаковых позах |
+| `showcase/s_neural_tween.gif` | твин позы, нарисованный сетью |
+| `showcase/s_neural_loss.png` | кривая обучения сети (поза → спрайт, CPU) |
+
+Что появилось в коде:
+
+* **`hi/raster.py`** — маски, полигоны, капсулы, морфология, дизеринг Байера.
+* **`hi/char.py`** — персонаж: скелет прямой кинематики, голова из двух эллипсов,
+  мимика (веки, брови, рот, румянец, слёзы), волосы прядями, 4 формы одежды.
+* **`hi/rig.py`** — циклы шага/бега на IK с форшорченингом, прыжок с
+  anticipation/squash, пружины вторичного движения, моргание, липсинк.
+* **`hi/bg.py`** — 6 типов локаций × 6 световых схем, параллакс, дымка, дождь.
+* **`hi/film.py`** — камера (зум/панорама/тряска), глубина, контактные тени,
+  виньетка, зерно, субтитры своим шрифтом 5×7.
+* **`hi/direct.py`**, **`hi/series.py`** — монтаж, диалоги, звук, 4 эпизода.
+* **`hi/neural.py`** — сеть «поза + персонаж → спрайт 40×120», обученная на кадрах движка.
+
+Запуск:
+
+```bash
+make s2          # отрендерить все 4 эпизода в out/hi
+make s2show      # витрина: постер, каст, index.html
+make s2net       # обучение сети (CPU, ~15 минут)
+```
+
+## Первый сезон
+
 Проект отвечает на вопрос «можно ли понять принцип видеогенеративных ИИ и написать
 такой с нуля» двумя способами сразу:
 
@@ -32,7 +75,16 @@
 
 Постоянные ссылки (ветка `arena/ea6487a8-roblox`):
 
-- **Эпизоды:** [ep01.mp4](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/ep01.mp4) ·
+- **Второй сезон (512×288):** [s_ep01.mp4](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/s_ep01.mp4) ·
+  [s_ep02.mp4](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/s_ep02.mp4) ·
+  [s_ep03.mp4](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/s_ep03.mp4) ·
+  [s_ep04.mp4](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/s_ep04.mp4)
+- **Постер, каст, нейросеть:** [s_poster.png](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/s_poster.png) ·
+  [s_cast.png](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/s_cast.png) ·
+  [s_neural.png](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/s_neural.png) ·
+  [s_neural_tween.gif](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/s_neural_tween.gif) ·
+  [s_neural_loss.png](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/s_neural_loss.png)
+- **Эпизоды (первый сезон):** [ep01.mp4](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/ep01.mp4) ·
   [ep02.mp4](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/ep02.mp4) ·
   [ep03.mp4](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/ep03.mp4)
 - **GIF:** [ep01_excerpt.gif](https://github.com/Ritmirchic/Roblox/raw/arena/ea6487a8-roblox/showcase/ep01_excerpt.gif) ·

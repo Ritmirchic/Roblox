@@ -16,7 +16,7 @@ from ..audio import Track, make_soundtrack, make_stinger
 from ..encode import GIFWriter, MP4Writer, mux_audio
 from . import bg as BG
 from .char import Look, Pose
-from .film import Actor, Cam, Shot, render_shot
+from .film import Actor, Cam, Shot, annotate, render_shot
 from .rig import Clip, blinks, idle, lipsync
 from .rig import run as run_cycle
 from .rig import walk as walk_cycle
@@ -132,8 +132,9 @@ def render_episode(ep, cast: dict, out_dir: str, scale: int = 2, gif_seconds: fl
     done = 0
     for bi, beat in enumerate(ep.beats):
         shot = build_shot(beat, cast, ep.poses)
-        for frame in render_shot(shot):
+        for frame in render_shot(shot, text=False):
             big = np.repeat(np.repeat(frame.rgb, scale, axis=0), scale, axis=1)
+            big = annotate(big, beat.say, beat.title, scale=max(2, scale // 2 + 1))
             writer.write(big)
             if gif and gif_left > 0 and bi == ep.gif_beat:
                 gif.write(big)

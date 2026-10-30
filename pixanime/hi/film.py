@@ -252,7 +252,19 @@ class Shot:
                    shake=self.cam_from.shake + (self.cam_to.shake - self.cam_from.shake) * t)
 
 
-def render_shot(shot: Shot) -> list[Bitmap]:
+def annotate(rgb: np.ndarray, say: str = "", title: str = "", scale: int = 2) -> np.ndarray:
+    """Текст поверх готового кадра (после апскейла) — так он остаётся резким."""
+    bit = Bitmap(rgb.shape[1], rgb.shape[0])
+    bit.rgb = rgb.copy()
+    bit.mask.m[:] = True
+    if say:
+        subtitle(bit, say, scale=scale, max_w=bit.w - 24 * scale)
+    if title:
+        caption(bit, title, y=10 * scale, scale=scale)
+    return bit.rgb
+
+
+def render_shot(shot: Shot, text: bool = True) -> list[Bitmap]:
     light = BG.LIGHTS[shot.light]
     base = shot.bg_obj if shot.bg_obj is not None else BG.build(shot.kind, light, seed=shot.seed)
     frames = []
@@ -280,10 +292,11 @@ def render_shot(shot: Shot) -> list[Bitmap]:
         if shot.grain:
             grain(frame, i, shot.seed, shot.grain)
         vignette(frame, 0.4 if shot.kind != "room" else 0.55)
-        if shot.say:
-            subtitle(frame, shot.say)
-        if shot.title:
-            caption(frame, shot.title, 12, 1)
+        if text:
+            if shot.say:
+                subtitle(frame, shot.say)
+            if shot.title:
+                caption(frame, shot.title, 12, 1)
         t = i / max(1, shot.frames - 1)
         if shot.overlay == "fade_in":
             fade(frame, 1 - t)
