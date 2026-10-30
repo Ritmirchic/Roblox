@@ -165,6 +165,56 @@ def build_model():
     return Gen()
 
 
+_PAL_CACHE: dict[int, np.ndarray] = {}
+
+
+def palette_for(char: int, n_colors: int = 22, seed: int = 0) -> np.ndarray:
+    """Палитра персонажа: самые частые цвета его же спрайтов из движка.
+
+    Квантование выхода сети в эту палитру — то, что превращает «мыло»
+    в пиксель-арт: сеть отвечает за форму, палитра — за стиль.
+    """
+    if char in _PAL_CACHE:
+        return _PAL_CACHE[char]
+    rng = np.random.default_rng(seed + char * 17)
+    counts: dict[tuple, int] = {}
+    for _ in range(14):
+        img = sprite_array(CAST[char], random_pose(rng))
+        m = img[..., 3] > 100
+        cols, cnt = np.unique(img[m][:, :3].reshape(-1, 3), axis=0, return_counts=True)
+        for c, k in zip(cols, cnt):
+            key = (int(c[0]), int(c[1]), int(c[2]))
+            counts[key] = counts.get(key, 0) + int(k)
+    top = sorted(counts.items(), key=lambda kv: -kv[1])[:n_colors]
+    pal = np.array([k for k, _ in top], dtype=np.int16)
+    _PAL_CACHE[char] = pal
+    return pal
+
+
+def _unsharp(rgb: np.ndarray, k: float = 0.9) -> np.ndarray:
+    """Лёгкий high-pass: поднять локальный контраст, чтобы квантование не «плыло»."""
+    a = rgb.astype(np.float32)
+    blur = (a + np.roll(a, 1, 0) + np.roll(a, -1, 0) + np.roll(a, 1, 1) + np.roll(a, -1, 1)) / 5.0
+    return np.clip(a + (a - blur) * k, 0, 255).astype(np.uint8)
+
+
+def quantize(rgba: np.ndarray, pal: np.ndarray, alpha_cut: int = 45) -> np.ndarray:
+    """RGBA -> палитра персонажа + жёсткая альфа (никакого полупрозрачного мыла)."""
+    out = rgba.copy()
+    out[..., :3] = _unsharp(out[..., :3])
+    rgb = rgba[..., :3].astype(np.int32)
+    d = ((rgb[:, :, None, :] - pal[None, None, :, :].astype(np.int32)) ** 2).sum(-1)
+    idx = d.argmin(-1)
+    out[..., :3] = pal[idx].astype(np.uint8)
+    out[..., 3] = np.where(rgba[..., 3] > alpha_cut, 255, 0)
+    return out
+
+
+def sample_styled(net, pose: Pose, char: int, device: str = "cpu") -> np.ndarray:
+    """Спрайт от сети, приведённый к палитре и жёсткой альфе."""
+    return quantize(sample(net, pose, char, device), palette_for(char))
+
+
 def load(path: str = "ckpt/hi_neural.pt", device: str = "cpu"):
     import torch
     net = build_model().to(device)

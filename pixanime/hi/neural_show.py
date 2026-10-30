@@ -10,7 +10,7 @@ from ..font import draw_text, text_size
 from . import neural
 from .char import Pose, render
 from .rig import walk, run
-from .neural import CAST, TH, TW, sample, sprite_array
+from .neural import CAST, TH, TW, sample, sample_styled, sprite_array
 
 
 class _R:
@@ -44,14 +44,14 @@ def comparison(path: str = "showcase/s_neural.png", scale: int = 3) -> str:
     H = (cell_h * 2) + 26
     canvas = np.zeros((H, W, 3), np.uint8)
     canvas[:] = (26, 22, 38)
-    _text(canvas, 8, 6, "ДВИЖОК (правила)", (250, 226, 190), scale=2)
-    _text(canvas, 8, cell_h + 18, "НЕЙРОСЕТЬ (поза -> спрайт)", (190, 226, 250), scale=2)
+    _text(canvas, 8, 6, "ДВИЖОК (ПРАВИЛА)", (250, 226, 190), scale=2)
+    _text(canvas, 8, cell_h + 16, "СЕТЬ + ПАЛИТРА", (190, 226, 250), scale=2)
     for i, (p, ci) in enumerate(zip(poses, chars)):
         x = pad + i * cell_w
         eng = sprite_array(CAST[ci], p)
-        _blit_rgba(canvas, eng, x, 22)
-        out = sample(net, p, ci)
-        _blit_rgba(canvas, out, x, cell_h + 34)
+        _blit_rgba(canvas, eng, x, 22 + (TH - TH))
+        out = sample_styled(net, p, ci)
+        _blit_rgba(canvas, out, x, cell_h + 32)
     img = np.repeat(np.repeat(canvas, scale, axis=0), scale, axis=1)
     Image.fromarray(img).save(path)
     return path
@@ -82,7 +82,7 @@ def tween_gif(path: str = "showcase/s_neural_tween.gif", n: int = 20, scale: int
         t = k / (n - 1)
         v = a * (1 - t) + b * t
         pose = neural.vec_to_pose(v)
-        rgba = sample(net, pose, 0)
+        rgba = sample_styled(net, pose, 0)
         cell = np.zeros((TH + 8, TW + 8, 3), np.uint8)
         cell[:] = (26, 22, 38)
         _blit_rgba(cell, rgba, 4, 4)
