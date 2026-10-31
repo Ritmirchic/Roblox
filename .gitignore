@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+*.o
+*.tmp
+bin/*.so
+.pytest_cache/
+outputs/jobs/
+outputs/tmp/

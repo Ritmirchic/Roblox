@@ -1,0 +1,209 @@
+{
+  "title": "EP.01 КЛЯТВА САКУРЫ",
+  "synopsis": "Алая мечница Аканэ встречает теневого ронина Куро у Храма Сакуры на закате и наносит решающий удар полумесяцем",
+  "num_shots": 6,
+  "total_frames": 96,
+  "fps": 10,
+  "duration_sec": 9.6,
+  "generation_time_sec": 14.8,
+  "ode_steps": 16,
+  "cfg_scale": 1.45,
+  "solver": "heun",
+  "storyboard": [
+    {
+      "shot_index": 1,
+      "role": "establish",
+      "spec": {
+        "hero_id": 0,
+        "scene_id": 0,
+        "time_id": 0,
+        "framing_id": 0,
+        "action_id": 0,
+        "camera_id": 1,
+        "fx_id": 0,
+        "part_idx": 0,
+        "variant_seed": 2026
+      },
+      "tokens": [
+        1,
+        10,
+        20,
+        40,
+        30
+      ],
+      "use_z_prev": false,
+      "subtitle": "[Храм Сакуры] Ветер перемен уже близко...",
+      "hero_label": "Аканэ (Алая мечница)",
+      "scene_label": "Храм Сакуры у Фудзи",
+      "framing_label": "Общий план (сцена целиком)",
+      "action_label": "Спокойный взгляд и ветер в волосах",
+      "gen_ms": 2815.3,
+      "keyframe_file": "shot_01.png"
+    },
+    {
+      "shot_index": 2,
+      "role": "hero_talk",
+      "spec": {
+        "hero_id": 0,
+        "scene_id": 0,
+        "time_id": 0,
+        "framing_id": 2,
+        "action_id": 1,
+        "camera_id": 0,
+        "fx_id": 0,
+        "part_idx": 0,
+        "variant_seed": 2043
+      },
+      "tokens": [
+        1,
+        10,
+        20,
+        41,
+        32
+      ],
+      "use_z_prev": false,
+      "subtitle": "Аканэ: «Я не отступлю ни на шаг!»",
+      "hero_label": "Аканэ (Алая мечница)",
+      "scene_label": "Храм Сакуры у Фудзи",
+      "framing_label": "Крупный план (глаза и мимика)",
+      "action_label": "Диалог / Монолог (анимация речи)",
+      "gen_ms": 2234.5,
+      "keyframe_file": "shot_02.png"
+    },
+    {
+      "shot_index": 3,
+      "role": "dash",
+      "spec": {
+        "hero_id": 0,
+        "scene_id": 0,
+        "time_id": 0,
+        "framing_id": 0,
+        "action_id": 2,
+        "camera_id": 1,
+        "fx_id": 0,
+        "part_idx": 0,
+        "variant_seed": 2060
+      },
+      "tokens": [
+        1,
+        10,
+        20,
+        42,
+        30
+      ],
+      "use_z_prev": false,
+      "subtitle": "Аканэ устремляется вперёд сквозь горизонт!",
+      "hero_label": "Аканэ (Алая мечница)",
+      "scene_label": "Храм Сакуры у Фудзи",
+      "framing_label": "Общий план (сцена целиком)",
+      "action_label": "Стремительный рывок / бег",
+      "gen_ms": 2292.9,
+      "keyframe_file": "shot_03.png"
+    },
+    {
+      "shot_index": 4,
+      "role": "aura_cont",
+      "spec": {
+        "hero_id": 0,
+        "scene_id": 0,
+        "time_id": 0,
+        "framing_id": 1,
+        "action_id": 5,
+        "camera_id": 3,
+        "fx_id": 2,
+        "part_idx": 1,
+        "variant_seed": 2077
+      },
+      "tokens": [
+        1,
+        10,
+        20,
+        45,
+        31
+      ],
+      "use_z_prev": true,
+      "subtitle": "Аура Аканэ разгорается на полную мощь!",
+      "hero_label": "Аканэ (Алая мечница)",
+      "scene_label": "Храм Сакуры у Фудзи",
+      "framing_label": "Средний план героя",
+      "action_label": "Пробуждение боевой ауры",
+      "gen_ms": 2543.4,
+      "keyframe_file": "shot_04.png"
+    },
+    {
+      "shot_index": 5,
+      "role": "climax",
+      "spec": {
+        "hero_id": 0,
+        "scene_id": 0,
+        "time_id": 0,
+        "framing_id": 1,
+        "action_id": 3,
+        "camera_id": 3,
+        "fx_id": 4,
+        "part_idx": 2,
+        "variant_seed": 2094
+      },
+      "tokens": [
+        1,
+        10,
+        20,
+        43,
+        31
+      ],
+      "use_z_prev": true,
+      "subtitle": "Аканэ: «Рассекающий полумесяц — САКУГА!»",
+      "hero_label": "Аканэ (Алая мечница)",
+      "scene_label": "Храм Сакуры у Фудзи",
+      "framing_label": "Средний план героя",
+      "action_label": "Сакуга: Удар катаной полумесяцем",
+      "gen_ms": 2231.8,
+      "keyframe_file": "shot_05.png"
+    },
+    {
+      "shot_index": 6,
+      "role": "epilogue",
+      "spec": {
+        "hero_id": 0,
+        "scene_id": 0,
+        "time_id": 0,
+        "framing_id": 0,
+        "action_id": 0,
+        "camera_id": 2,
+        "fx_id": 0,
+        "part_idx": 0,
+        "variant_seed": 2111
+      },
+      "tokens": [
+        1,
+        10,
+        20,
+        40,
+        30
+      ],
+      "use_z_prev": false,
+      "subtitle": "Тишина возвращается в Храм Сакуры...",
+      "hero_label": "Аканэ (Алая мечница)",
+      "scene_label": "Храм Сакуры у Фудзи",
+      "framing_label": "Общий план (сцена целиком)",
+      "action_label": "Спокойный взгляд и ветер в волосах",
+      "gen_ms": 2041.7,
+      "keyframe_file": "shot_06.png"
+    }
+  ],
+  "denoise_snapshots": [
+    "denoise_step_0.png",
+    "denoise_step_1.png",
+    "denoise_step_2.png",
+    "denoise_step_3.png",
+    "denoise_step_4.png",
+    "denoise_step_5.png"
+  ],
+  "files": {
+    "mp4": "episode.mp4",
+    "gif": "episode.gif",
+    "apng": "episode.apng",
+    "wav": "soundtrack.wav",
+    "storyboard": "storyboard_strip.png"
+  }
+}

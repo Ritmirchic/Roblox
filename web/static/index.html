@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SAKUGA-256 — ИИ-Генератор Пиксель-Арт Аниме с нуля</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-logo">S256</div>
+      <div>
+        <h1>SAKUGA-256 // Neural Pixel-Art Anime AI</h1>
+        <div class="brand-sub">Собственный C++17 AVX-512 Autograd + PixelAnimeVAE + 3D-RoPE Flow-Matching DiT (с нуля без PyTorch и FFmpeg)</div>
+      </div>
+    </div>
+    <div class="engine-badges">
+      <span class="badge crimson" id="badge-params">Загрузка весов...</span>
+      <span class="badge" id="badge-steps">VAE / DiT шаги...</span>
+      <span class="badge gold">256×256 Lossless Pixel-Art</span>
+    </div>
+  </header>
+
+  <nav class="tabs-bar">
+    <button class="tab-btn active" data-tab="tab-episode">🎬 Генератор длинных серий</button>
+    <button class="tab-btn" data-tab="tab-lab">🧪 Нейро-лаборатория (Из шума + Продолжение)</button>
+    <button class="tab-btn" data-tab="tab-anatomy">🧠 Анатомия ИИ, Инструменты и Дообучение</button>
+  </nav>
+
+  <main class="container">
+    <!-- TAB 1: EPISODE GENERATOR -->
+    <section id="tab-episode" class="tab-pane active">
+      <div class="studio-grid">
+        <div class="panel">
+          <div class="panel-title">
+            <span>Сценарий новой аниме-серии</span>
+          </div>
+
+          <div class="preset-chips">
+            <span class="chip" data-preset="sakura">🌸 Эп.1: Клятва Сакуры</span>
+            <span class="chip" data-preset="cyber">⚡ Эп.2: Неоновый Токио</span>
+            <span class="chip" data-preset="astral">✨ Эп.3: Звёздная станция</span>
+            <span class="chip" data-preset="bamboo">🌙 Эп.4: Лунный ронин</span>
+          </div>
+
+          <div class="field">
+            <label>Название эпизода</label>
+            <input type="text" id="ep-title" value="EP.01 КЛЯТВА САКУРЫ" />
+          </div>
+
+          <div class="field">
+            <label>Сюжет серии (RU или EN — ИИ сам разобьёт на планы и склеит через z_prev)</label>
+            <textarea id="ep-synopsis">Алая мечница Аканэ встречает теневого ронина Куро у Храма Сакуры на закате и наносит решающий сакуга-удар полумесяцем</textarea>
+          </div>
+
+          <div class="row-2">
+            <div class="field">
+              <label>Длина серии (сцен по 16 кадров): <strong id="lbl-ep-shots">6 (96 кадр.)</strong></label>
+              <input type="range" id="ep-shots" min="2" max="12" value="6" />
+            </div>
+            <div class="field">
+              <label>Частота кадров (FPS): <strong id="lbl-ep-fps">10</strong></label>
+              <input type="range" id="ep-fps" min="8" max="14" value="10" />
+            </div>
+          </div>
+
+          <div class="row-3">
+            <div class="field">
+              <label>ODE шаги: <strong id="lbl-ep-ode">16</strong></label>
+              <input type="range" id="ep-ode" min="6" max="30" value="16" />
+            </div>
+            <div class="field">
+              <label>CFG шкала: <strong id="lbl-ep-cfg">1.45</strong></label>
+              <input type="range" id="ep-cfg" min="1.0" max="2.4" step="0.05" value="1.45" />
+            </div>
+            <div class="field">
+              <label>Решатель ODE</label>
+              <select id="ep-solver">
+                <option value="heun" selected>Heun (2-й пор.)</option>
+                <option value="euler">Euler (быстрый)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row-3">
+            <div class="field">
+              <label>Главный герой</label>
+              <select id="ep-hero"><option value="-1">Авто из текста</option></select>
+            </div>
+            <div class="field">
+              <label>Локация</label>
+              <select id="ep-scene"><option value="-1">Авто из текста</option></select>
+            </div>
+            <div class="field">
+              <label>Seed</label>
+              <input type="number" id="ep-seed" value="2026" />
+            </div>
+          </div>
+
+          <div class="check-row">
+            <label><input type="checkbox" id="ep-scale2x" checked /> EPX/Scale2x пиксель-апскейл</label>
+            <label><input type="checkbox" id="ep-subs" checked /> Пиксельные субтитры</label>
+          </div>
+
+          <button class="btn-primary" id="btn-gen-episode">⚡ Сгенерировать полную серию с нуля</button>
+          <div class="status-banner" id="ep-status">Готов к генерации. Справа уже загружена демо-серия!</div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">
+            <span id="ep-now-playing">Кинозал 256×256</span>
+            <div id="showcase-switcher" class="preset-chips" style="margin:0;"></div>
+          </div>
+
+          <div class="cinema-stage">
+            <div class="viewport-frame">
+              <img id="ep-viewport-img" class="pixel-img" alt="256x256 Anime Viewport" />
+              <span class="res-tag" id="ep-res-tag">256×256 • 96 frames</span>
+            </div>
+
+            <audio id="ep-audio" controls style="width:100%; margin-top:12px; height:34px;"></audio>
+
+            <div class="player-controls">
+              <div style="font-size:12px; color:var(--text-muted);" id="ep-meta-line">
+                Синтезированный японский Hirajoshi OST + SFX синхронизирован с кадрами
+              </div>
+              <div class="dl-links" id="ep-downloads"></div>
+            </div>
+          </div>
+
+          <div style="margin-top:16px;">
+            <div class="panel-title" style="font-size:13px;">
+              <span>Как нейросеть кристаллизовала 1-й кадр серии из белого гауссова шума z₀ ~ N(0, I)</span>
+            </div>
+            <div class="denoise-strip" id="ep-denoise-strip"></div>
+          </div>
+
+          <div style="margin-top:18px;">
+            <div class="panel-title" style="font-size:13px;">
+              <span>Раскадровка эпизода и авторегрессионные склейки (z_prev)</span>
+            </div>
+            <div class="storyboard-grid" id="ep-storyboard"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: NEURAL SHOT LAB -->
+    <section id="tab-lab" class="tab-pane">
+      <div class="studio-grid">
+        <div class="panel">
+          <div class="panel-title">
+            <span>Пошаговая нейро-генерация и бесконечное продолжение</span>
+          </div>
+
+          <div class="field">
+            <label>Текстовый запрос (RU или EN)</label>
+            <textarea id="lab-prompt">Кибер-синоби Рэн мчится по крыше Нео-Токио под ливнем в неоновый шторм</textarea>
+          </div>
+
+          <div class="row-2">
+            <div class="field">
+              <label>Персонаж</label>
+              <select id="lab-hero"><option value="-1">Авто из запроса</option></select>
+            </div>
+            <div class="field">
+              <label>Локация</label>
+              <select id="lab-scene"><option value="-1">Авто из запроса</option></select>
+            </div>
+          </div>
+
+          <div class="row-2">
+            <div class="field">
+              <label>Время суток</label>
+              <select id="lab-time"><option value="-1">Авто из запроса</option></select>
+            </div>
+            <div class="field">
+              <label>Ракурс камеры</label>
+              <select id="lab-framing"><option value="-1">Авто из запроса</option></select>
+            </div>
+          </div>
+
+          <div class="row-3">
+            <div class="field">
+              <label>Действие (Sakuga)</label>
+              <select id="lab-action"><option value="-1">Авто</option></select>
+            </div>
+            <div class="field">
+              <label>Движение камеры</label>
+              <select id="lab-camera"><option value="-1">Авто</option></select>
+            </div>
+            <div class="field">
+              <label>Погода / FX</label>
+              <select id="lab-fx"><option value="-1">Авто</option></select>
+            </div>
+          </div>
+
+          <div class="row-3">
+            <div class="field">
+              <label>ODE шаги: <strong id="lbl-lab-ode">16</strong></label>
+              <input type="range" id="lab-ode" min="4" max="32" value="16" />
+            </div>
+            <div class="field">
+              <label>CFG: <strong id="lbl-lab-cfg">1.45</strong></label>
+              <input type="range" id="lab-cfg" min="1.0" max="2.5" step="0.05" value="1.45" />
+            </div>
+            <div class="field">
+              <label>Seed</label>
+              <input type="number" id="lab-seed" value="777" />
+            </div>
+          </div>
+
+          <div style="display:flex; gap:10px; margin-top:8px;">
+            <button class="btn-primary" id="btn-lab-new" style="flex:1;">🎲 Новый клип из шума (16 кадр.)</button>
+            <button class="btn-secondary" id="btn-lab-cont" disabled>➕ Продолжить (+16 кадр. z_prev)</button>
+          </div>
+
+          <div class="status-banner" id="lab-status">Нажмите «Новый клип из шума», чтобы увидеть весь процесс расшумления ODE и карту 3D-внимания.</div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">
+            <span>Результат генерации и внутренняя телеметрия SakugaDiT</span>
+            <span class="badge" id="lab-len-badge">16 кадров @ 256×256</span>
+          </div>
+
+          <div class="row-2" style="align-items:center;">
+            <div class="cinema-stage">
+              <div class="viewport-frame" style="width:280px; height:280px;">
+                <img id="lab-viewport-img" class="pixel-img" alt="Lab Output" />
+              </div>
+              <audio id="lab-audio" controls style="width:100%; margin-top:10px; height:32px;"></audio>
+              <div class="dl-links" id="lab-downloads" style="margin-top:8px;"></div>
+            </div>
+
+            <div class="arch-card">
+              <h3>Матрица 3D Spacetime Self-Attention [128 × 144]</h3>
+              <p style="margin-bottom:8px;">Последний блок SakugaDiT: левые 16 столбцов (до голубой линии) — внимание к прошлому кадру <code>z_prev (t=0)</code>, правые 128 — 3D RoPE связность патчей внутри клипа.</p>
+              <img id="lab-attn-img" class="pixel-img" style="width:100%; height:190px; object-fit:fill; border-radius:6px; border:1px solid var(--border); background:#090a14;" alt="3D Attention Heatmap" />
+            </div>
+          </div>
+
+          <div style="margin-top:16px;">
+            <div class="panel-title" style="font-size:13px;">
+              <span>Траектория Rectified Flow ODE: τ = 0.0 (чистый шум) → 0.2 → 0.4 → 0.6 → 0.8 → 1.0 (финал)</span>
+            </div>
+            <div class="denoise-strip" id="lab-denoise-strip"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: AI ANATOMY & LIVE FINETUNE -->
+    <section id="tab-anatomy" class="tab-pane">
+      <div class="arch-cards">
+        <div class="arch-card">
+          <h3>1. Собственный C++17 AVX-512 Autograd Движок</h3>
+          <p>Написан с нуля (<code>csrc/tensor_ops.cpp</code>) без PyTorch/TensorFlow: обратное распространение ошибки на ленте (Tape), OpenMP + SIMD матричные ядра, LayerNorm, AdaLN-Zero, 3D Axial RoPE Multi-Head Attention, AdamW + EMA с проверкой конечными разностями.</p>
+        </div>
+        <div class="arch-card">
+          <h3>2. PixelAnimeVAE [8 × 32 × 32 × 8] + Scale2x</h3>
+          <p>Вместо размывающего RGB MSE автоэнкодер предсказывает логиты над курируемой 48-цветной аниме-палитрой с повышенными весами для контуров, бликов глаз и катан, а умный пиксель-фильтр <code>EPX/Scale2x</code> даёт бритвенно чёткие <code>256×256</code> кадры.</p>
+        </div>
+        <div class="arch-card">
+          <h3>3. SakugaDiT: x₁-Rectified Flow + z_prev</h3>
+          <p>5 блоков Sora-подобного диффузионного трансформера (128 пространственно-временных патчей, 3D RoPE по осям <code>(t, y, x)</code>, Cross-Attention к промпту и условный токен <code>z_prev</code> для склейки длинных серий).</p>
+        </div>
+        <div class="arch-card">
+          <h3>4. Свои медиа-кодеки с нуля (без FFmpeg!)</h3>
+          <p>Поскольку внешних видеокодеков нет, в <code>csrc/media_codecs.cpp</code> с нуля реализованы битовый энкодер <strong>H.264 Baseline + ISO-BMFF (.mp4)</strong>, LZW-энкодер <strong>GIF89a</strong>, 24-битный lossless <strong>APNG</strong> и синтезатор японского саундтрека <strong>WAV</strong>.</p>
+        </div>
+      </div>
+
+      <div class="row-2">
+        <div class="panel">
+          <div class="panel-title">
+            <span>Реальная кривая обучения Stage 1: PixelAnimeVAE (Точность пикселей %)</span>
+          </div>
+          <canvas id="chart-vae" class="chart-canvas" width="580" height="190"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panel-title">
+            <span>Реальная кривая обучения Stage 2: SakugaDiT (Flow-Matching Loss)</span>
+          </div>
+          <canvas id="chart-dit" class="chart-canvas" width="580" height="190"></canvas>
+        </div>
+      </div>
+
+      <div class="row-2" style="margin-top:18px;">
+        <div class="panel">
+          <div class="panel-title">
+            <span>48-цветная Мастер-палитра PixelAnimeVAE</span>
+          </div>
+          <p style="font-size:12px; color:var(--text-muted);">Каждый пиксель декодируется классификатором ровно в один из этих 48 аниме-цветов — поэтому в кадрах никогда нет «мыла» обычных диффузионок:</p>
+          <div class="palette-swatches" id="palette-grid"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">
+            <span>Живое дообучение нейросети прямо из браузера</span>
+          </div>
+          <p style="font-size:12.5px; color:var(--text-muted); margin-bottom:12px;">
+            Хотите убедиться, что за этим стоит настоящая живая нейросеть? Запустите дополнительные шаги градиентного спуска <code>SakugaDiT</code> прямо сейчас на CPU и посмотрите на обновление весов и лосса:
+          </p>
+          <div class="row-2">
+            <div class="field">
+              <label>Шагов градиентного спуска DiT</label>
+              <input type="number" id="ft-steps" min="10" max="200" value="40" />
+            </div>
+            <div class="field">
+              <label>Learning Rate (AdamW)</label>
+              <input type="number" id="ft-lr" step="0.0001" value="0.0003" />
+            </div>
+          </div>
+          <button class="btn-primary" id="btn-finetune">🔥 Запустить живое дообучение на C++ движке</button>
+          <div class="status-banner" id="ft-status">Чекпоинт активен и готов к дообучению или генерации.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,209 @@
+{
+  "title": "EP.02 НЕОНОВЫЙ КЛИНОК",
+  "synopsis": "Синеволосый кибер-синоби Рэн мчится по крыше Нео-Токио сквозь ливень в неоновый шторм и вступает в дуэль на катанах",
+  "num_shots": 6,
+  "total_frames": 96,
+  "fps": 10,
+  "duration_sec": 9.6,
+  "generation_time_sec": 12.18,
+  "ode_steps": 16,
+  "cfg_scale": 1.45,
+  "solver": "heun",
+  "storyboard": [
+    {
+      "shot_index": 1,
+      "role": "establish",
+      "spec": {
+        "hero_id": 1,
+        "scene_id": 1,
+        "time_id": 3,
+        "framing_id": 0,
+        "action_id": 0,
+        "camera_id": 1,
+        "fx_id": 1,
+        "part_idx": 0,
+        "variant_seed": 3077
+      },
+      "tokens": [
+        2,
+        11,
+        23,
+        40,
+        30
+      ],
+      "use_z_prev": false,
+      "subtitle": "[Крыша Нео-Токио] Ветер перемен уже близко...",
+      "hero_label": "Рэн (Кибер-синоби)",
+      "scene_label": "Крыша Нео-Токио",
+      "framing_label": "Общий план (сцена целиком)",
+      "action_label": "Спокойный взгляд и ветер в волосах",
+      "gen_ms": 2276.9,
+      "keyframe_file": "shot_01.png"
+    },
+    {
+      "shot_index": 2,
+      "role": "hero_talk",
+      "spec": {
+        "hero_id": 1,
+        "scene_id": 1,
+        "time_id": 3,
+        "framing_id": 2,
+        "action_id": 1,
+        "camera_id": 0,
+        "fx_id": 1,
+        "part_idx": 0,
+        "variant_seed": 3094
+      },
+      "tokens": [
+        2,
+        11,
+        23,
+        41,
+        32
+      ],
+      "use_z_prev": false,
+      "subtitle": "Рэн: «Я не отступлю ни на шаг!»",
+      "hero_label": "Рэн (Кибер-синоби)",
+      "scene_label": "Крыша Нео-Токио",
+      "framing_label": "Крупный план (глаза и мимика)",
+      "action_label": "Диалог / Монолог (анимация речи)",
+      "gen_ms": 2091.0,
+      "keyframe_file": "shot_02.png"
+    },
+    {
+      "shot_index": 3,
+      "role": "dash",
+      "spec": {
+        "hero_id": 1,
+        "scene_id": 1,
+        "time_id": 3,
+        "framing_id": 0,
+        "action_id": 2,
+        "camera_id": 1,
+        "fx_id": 1,
+        "part_idx": 0,
+        "variant_seed": 3111
+      },
+      "tokens": [
+        2,
+        11,
+        23,
+        42,
+        30
+      ],
+      "use_z_prev": false,
+      "subtitle": "Рэн устремляется вперёд сквозь горизонт!",
+      "hero_label": "Рэн (Кибер-синоби)",
+      "scene_label": "Крыша Нео-Токио",
+      "framing_label": "Общий план (сцена целиком)",
+      "action_label": "Стремительный рывок / бег",
+      "gen_ms": 1751.3,
+      "keyframe_file": "shot_03.png"
+    },
+    {
+      "shot_index": 4,
+      "role": "aura_cont",
+      "spec": {
+        "hero_id": 1,
+        "scene_id": 1,
+        "time_id": 3,
+        "framing_id": 1,
+        "action_id": 5,
+        "camera_id": 3,
+        "fx_id": 2,
+        "part_idx": 1,
+        "variant_seed": 3128
+      },
+      "tokens": [
+        2,
+        11,
+        23,
+        45,
+        31
+      ],
+      "use_z_prev": true,
+      "subtitle": "Аура Рэн разгорается на полную мощь!",
+      "hero_label": "Рэн (Кибер-синоби)",
+      "scene_label": "Крыша Нео-Токио",
+      "framing_label": "Средний план героя",
+      "action_label": "Пробуждение боевой ауры",
+      "gen_ms": 1810.7,
+      "keyframe_file": "shot_04.png"
+    },
+    {
+      "shot_index": 5,
+      "role": "climax",
+      "spec": {
+        "hero_id": 1,
+        "scene_id": 1,
+        "time_id": 3,
+        "framing_id": 1,
+        "action_id": 3,
+        "camera_id": 3,
+        "fx_id": 4,
+        "part_idx": 2,
+        "variant_seed": 3145
+      },
+      "tokens": [
+        2,
+        11,
+        23,
+        43,
+        31
+      ],
+      "use_z_prev": true,
+      "subtitle": "Рэн: «Рассекающий полумесяц — САКУГА!»",
+      "hero_label": "Рэн (Кибер-синоби)",
+      "scene_label": "Крыша Нео-Токио",
+      "framing_label": "Средний план героя",
+      "action_label": "Сакуга: Удар катаной полумесяцем",
+      "gen_ms": 1711.9,
+      "keyframe_file": "shot_05.png"
+    },
+    {
+      "shot_index": 6,
+      "role": "epilogue",
+      "spec": {
+        "hero_id": 1,
+        "scene_id": 1,
+        "time_id": 3,
+        "framing_id": 0,
+        "action_id": 0,
+        "camera_id": 2,
+        "fx_id": 1,
+        "part_idx": 0,
+        "variant_seed": 3162
+      },
+      "tokens": [
+        2,
+        11,
+        23,
+        40,
+        30
+      ],
+      "use_z_prev": false,
+      "subtitle": "Тишина возвращается в Крыша Нео-Токио...",
+      "hero_label": "Рэн (Кибер-синоби)",
+      "scene_label": "Крыша Нео-Токио",
+      "framing_label": "Общий план (сцена целиком)",
+      "action_label": "Спокойный взгляд и ветер в волосах",
+      "gen_ms": 1962.0,
+      "keyframe_file": "shot_06.png"
+    }
+  ],
+  "denoise_snapshots": [
+    "denoise_step_0.png",
+    "denoise_step_1.png",
+    "denoise_step_2.png",
+    "denoise_step_3.png",
+    "denoise_step_4.png",
+    "denoise_step_5.png"
+  ],
+  "files": {
+    "mp4": "episode.mp4",
+    "gif": "episode.gif",
+    "apng": "episode.apng",
+    "wav": "soundtrack.wav",
+    "storyboard": "storyboard_strip.png"
+  }
+}
