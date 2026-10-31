@@ -29,6 +29,7 @@ from sakuga_ai.prompt_parser import (
     WEATHER_FX,
     parse_prompt_to_spec_and_tokens,
 )
+from sakuga_ai.reference_importer import fetch_github_bytes, train_on_concrete_reference
 from sakuga_ai.train_pipeline import (
     DEFAULT_CKPT,
     DEFAULT_METRICS,
@@ -69,8 +70,8 @@ class EpisodeRequest(BaseModel):
     )
     num_shots: int = Field(default=6, ge=2, le=12)
     fps: int = Field(default=10, ge=6, le=16)
-    ode_steps: int = Field(default=16, ge=6, le=40)
-    cfg_scale: float = Field(default=1.45, ge=1.0, le=3.0)
+    ode_steps: int = Field(default=20, ge=6, le=40)
+    cfg_scale: float = Field(default=1.28, ge=1.0, le=3.0)
     solver: str = Field(default="heun")
     use_scale2x: bool = Field(default=True)
     subtitles: bool = Field(default=True)
@@ -91,8 +92,8 @@ class LabShotRequest(BaseModel):
     action_id: Optional[int] = Field(default=None)
     camera_id: Optional[int] = Field(default=None)
     fx_id: Optional[int] = Field(default=None)
-    ode_steps: int = Field(default=16, ge=4, le=40)
-    cfg_scale: float = Field(default=1.45, ge=1.0, le=3.0)
+    ode_steps: int = Field(default=20, ge=4, le=40)
+    cfg_scale: float = Field(default=1.28, ge=1.0, le=3.0)
     solver: str = Field(default="heun")
     use_scale2x: bool = Field(default=True)
     fps: int = Field(default=10, ge=6, le=16)
@@ -100,8 +101,17 @@ class LabShotRequest(BaseModel):
 
 
 class FineTuneRequest(BaseModel):
-    dit_steps: int = Field(default=80, ge=10, le=300)
-    lr: float = Field(default=4e-4, ge=5e-5, le=2e-3)
+    dit_steps: int = Field(default=60, ge=10, le=300)
+    lr: float = Field(default=2.5e-4, ge=2e-5, le=2e-3)
+
+
+class ReferenceTrainRequest(BaseModel):
+    prompt: str = Field(default="Алая мечница Аканэ крупный план у Храма Сакуры на закате")
+    file_base64: Optional[str] = Field(default=None)
+    reference_url: Optional[str] = Field(default=None)
+    vae_steps: int = Field(default=35, ge=0, le=200)
+    dit_steps: int = Field(default=90, ge=10, le=400)
+    lr_dit: float = Field(default=3.5e-4, ge=2e-5, le=1.5e-3)
 
 
 def _img_to_data_url(rgb: np.ndarray) -> str:
@@ -111,7 +121,7 @@ def _img_to_data_url(rgb: np.ndarray) -> str:
 
 
 def _render_attention_heatmap(attn: np.ndarray) -> str:
-    # attn is [128, 144]; downsample/visualize cleanly as vibrant magma-like RGB image
+    # attn is [256, 320]; visualize cleanly as vibrant magma-like RGB image
     a = attn.copy()
     a = (a - a.min()) / (a.max() - a.min() + 1e-8)
     a = np.power(a, 0.45)  # boost subtle off-diagonal spacetime correlations
@@ -120,9 +130,9 @@ def _render_attention_heatmap(attn: np.ndarray) -> str:
     rgb[..., 0] = np.clip(a * 255.0 * 1.25, 18, 255).astype(np.uint8)
     rgb[..., 1] = np.clip(np.power(a, 1.5) * 230.0, 16, 255).astype(np.uint8)
     rgb[..., 2] = np.clip((0.35 + 0.65 * np.sin(a * 3.14)) * 210.0 * (0.25 + 0.75 * a), 28, 255).astype(np.uint8)
-    # Highlight vertical boundary at column 16 separating z_prev(t=0) from current clip(t=1..8)
-    if w > 16:
-        rgb[:, 16, :] = [62, 212, 255]
+    # Highlight vertical boundary at column 64 separating z_prev(t=0, 8x8=64) from current clip(256)
+    if w > 64:
+        rgb[:, 64, :] = [62, 212, 255]
     return _img_to_data_url(rgb)
 
 
@@ -322,10 +332,10 @@ def api_finetune(req: FineTuneRequest) -> Dict[str, Any]:
         _engine.encode_dataset_latents()
         dls = _engine.train_dit(
             num_steps=req.dit_steps,
-            batch_size=4,
+            batch_size=2,
             lr_max=req.lr,
             lr_min=req.lr * 0.25,
-            cfg_drop_prob=0.14,
+            cfg_drop_prob=0.10,
         )
         _engine.save_checkpoint(DEFAULT_CKPT)
         st = _engine.stats()
@@ -333,19 +343,57 @@ def api_finetune(req: FineTuneRequest) -> Dict[str, Any]:
     elapsed = round(time.perf_counter() - t0, 2)
     if DEFAULT_METRICS.exists():
         m = json.loads(DEFAULT_METRICS.read_text(encoding="utf-8"))
-        m["training_summary"]["dit_steps"] = st["dit_trained_steps"]
-        m["training_summary"]["dit_final_loss"] = round(float(dls[-10:].mean()), 5)
-        m["curves"]["dit_loss"] += downsample_curve(dls, 15)
+        if "training_summary" in m:
+            m["training_summary"]["dit_steps"] = st["dit_trained_steps"]
+            m["training_summary"]["dit_final_loss"] = round(float(dls[-min(10, len(dls)):].mean()), 5)
+        if "curves" in m and "dit_loss" in m["curves"]:
+            m["curves"]["dit_loss"] += downsample_curve(dls, 15)
         DEFAULT_METRICS.write_text(json.dumps(m, ensure_ascii=False, indent=2), encoding="utf-8")
 
     return {
         "status": "ok",
         "elapsed_sec": elapsed,
         "stats": st,
-        "loss_start": round(float(dls[:5].mean()), 5),
-        "loss_end": round(float(dls[-5:].mean()), 5),
+        "loss_start": round(float(dls[:min(5, len(dls))].mean()), 5),
+        "loss_end": round(float(dls[-min(5, len(dls)):].mean()), 5),
         "step_losses": downsample_curve(dls, 20),
     }
+
+
+@app.post("/api/train_reference")
+def api_train_reference(req: ReferenceTrainRequest) -> Dict[str, Any]:
+    raw_bytes: Optional[bytes] = None
+    if req.file_base64:
+        b64 = req.file_base64.split(",", 1)[-1]
+        raw_bytes = base64.b64decode(b64)
+    elif req.reference_url and req.reference_url.strip():
+        try:
+            raw_bytes = fetch_github_bytes(req.reference_url)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Загрузите файл примера (GIF / APNG / PNG / JPG / WebP) или укажите ссылку на GitHub!",
+        )
+
+    try:
+        with _engine_lock:
+            specs, words, prev, _ = build_balanced_anime_dataset(num_pairs=140)
+            _engine.build_dataset(specs, words, prev)
+            out = train_on_concrete_reference(
+                engine=_engine,
+                raw_bytes=raw_bytes,
+                prompt=req.prompt,
+                vae_steps=req.vae_steps,
+                dit_steps=req.dit_steps,
+                lr_dit=req.lr_dit,
+                ckpt_path=DEFAULT_CKPT,
+            )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Ошибка импорта/обучения на примере: {exc}") from exc
+
+    return out
 
 
 @app.get("/media/{subpath:path}")

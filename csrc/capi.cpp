@@ -191,6 +191,20 @@ void sakuga_train_vae(
     std::normal_distribution<float> ndist(0.0f, 1.0f);
     std::vector<uint8_t> batch_idx(static_cast<size_t>(batch_size) * clip_pix);
 
+    const bool freeze_encoder = (latent_noise_std < 0.0f);
+    const float sigma = std::fabs(latent_noise_std);
+    std::vector<Tensor*> enc_params;
+    if (freeze_encoder) {
+        enc_params = {
+            &ctx->vae.palette_emb,
+            &ctx->vae.enc_s1_w, &ctx->vae.enc_s1_b,
+            &ctx->vae.enc_in_w, &ctx->vae.enc_in_b,
+            &ctx->vae.to_lat_w, &ctx->vae.to_lat_b
+        };
+        ctx->vae.enc_block.collect_params(enc_params);
+        for (Tensor* ep : enc_params) ep->requires_grad = false;
+    }
+
     for (int s = 0; s < num_steps; ++s) {
         float prog = static_cast<float>(s) / static_cast<float>(std::max(1, num_steps - 1));
         float lr = lr_min + 0.5f * (lr_max - lr_min) * (1.0f + std::cos(prog * 3.14159265f));
@@ -206,13 +220,23 @@ void sakuga_train_vae(
 
         ctx->vae_opt.zero_grad();
         Tape tape(true);
-        Tensor* z = ctx->vae.encode(tape, batch_idx.data(), batch_size);
 
-        // Denoising bottleneck regularization so decoder handles continuous DiT latents smoothly!
+        Tensor* z = nullptr;
+        if (freeze_encoder) {
+            // Frozen-encoder decoder refinement: keeps latent manifold z 100% locked to trained SakugaDiT!
+            Tape enc_tape(false);
+            Tensor* z_ng = ctx->vae.encode(enc_tape, batch_idx.data(), batch_size);
+            z = tape.alloc(z_ng->shape, false);
+            z->data = z_ng->data;
+        } else {
+            z = ctx->vae.encode(tape, batch_idx.data(), batch_size);
+        }
+
+        // Denoising bottleneck regularization so decoder handles continuous DiT latents smoothly without speckles!
         Tensor* z_in = z;
-        if (latent_noise_std > 0.0f) {
+        if (sigma > 0.0f) {
             Tensor* eps = tape.alloc(z->shape, false);
-            for (float& v : eps->data) v = ndist(ctx->rng.gen) * latent_noise_std;
+            for (float& v : eps->data) v = ndist(ctx->rng.gen) * sigma;
             z_in = ops::add(tape, z, eps);
         }
 
@@ -227,6 +251,10 @@ void sakuga_train_vae(
 
         if (out_losses) out_losses[s] = loss->data[0];
         if (out_accs)   out_accs[s] = static_cast<float>(correct) / static_cast<float>(batch_size * clip_pix);
+    }
+
+    if (freeze_encoder) {
+        for (Tensor* ep : enc_params) ep->requires_grad = true;
     }
 
     ctx->vae_opt.swap_to_ema();
@@ -460,6 +488,99 @@ float sakuga_eval_vae_reconstruction(
     if (out_gt_rgb256)  upscale_indices_to_rgb256(gt_idx.data(), CLIP_FRAMES, out_gt_rgb256, true);
     if (out_rec_rgb256) upscale_indices_to_rgb256(rec_idx.data(), CLIP_FRAMES, out_rec_rgb256, true);
     return static_cast<float>(match) / static_cast<float>(total);
+}
+
+// Quantize [num_frames * 128 * 128 * 3] RGB888 frames into 48-color master anime palette indices
+void sakuga_quantize_rgb128_to_indices(
+    const uint8_t* rgb128,
+    int num_frames,
+    uint8_t* out_indices128
+) {
+    const uint8_t* pal = get_master_palette_rgb();
+    size_t total_px = static_cast<size_t>(num_frames) * BASE_H * BASE_W;
+
+    #pragma omp parallel for schedule(static)
+    for (size_t i = 0; i < total_px; ++i) {
+        int r = static_cast<int>(rgb128[i * 3 + 0]);
+        int g = static_cast<int>(rgb128[i * 3 + 1]);
+        int b = static_cast<int>(rgb128[i * 3 + 2]);
+
+        int best_k = 0;
+        int best_d = 0x7fffffff;
+        for (int k = 0; k < PALETTE_SIZE; ++k) {
+            int dr = r - static_cast<int>(pal[k * 3 + 0]);
+            int dg = g - static_cast<int>(pal[k * 3 + 1]);
+            int db = b - static_cast<int>(pal[k * 3 + 2]);
+            // Redmean perceptual color distance for vivid anime skin, hair & sky matching
+            int rmean = (r + static_cast<int>(pal[k * 3 + 0])) >> 1;
+            int d = (((512 + rmean) * dr * dr) >> 8) + 4 * dg * dg + (((767 - rmean) * db * db) >> 8);
+            if (d < best_d) {
+                best_d = d;
+                best_k = k;
+            }
+        }
+        out_indices128[i] = static_cast<uint8_t>(best_k);
+    }
+}
+
+// Append (or replace) concrete 16x128x128 palette-indexed anime clips into the training dataset!
+// Allows fine-tuning PixelAnimeVAE + SakugaDiT directly on real uploaded anime GIFs / videos / sprite strips!
+int sakuga_append_custom_clips(
+    SakugaContext* ctx,
+    int M,
+    const uint8_t* custom_indices, // [M * 16 * 128 * 128]
+    const int* specs_flat,         // [M * 9]
+    const int* words_flat,         // [M * 5]
+    const int* prev_rel_idx,       // [M]: -1 or relative index in [0..M-1]
+    int clear_existing,            // 1 = train exclusively on these examples, 0 = append to dataset
+    int repeat_weight              // e.g. 4 = repeat 4x so optimizer focuses heavily on concrete examples
+) {
+    if (!ctx || M <= 0 || !custom_indices) return 0;
+    if (clear_existing != 0) {
+        ctx->dataset_meta.clear();
+        ctx->dataset_indices.clear();
+    }
+    repeat_weight = std::clamp(repeat_weight, 1, 32);
+    size_t clip_pix = CLIP_FRAMES * BASE_H * BASE_W;
+
+    for (int rep = 0; rep < repeat_weight; ++rep) {
+        int base_offset = static_cast<int>(ctx->dataset_meta.size());
+        ctx->dataset_meta.resize(base_offset + M);
+        ctx->dataset_indices.resize(static_cast<size_t>(base_offset + M) * clip_pix);
+
+        for (int i = 0; i < M; ++i) {
+            AnimeSpec sp;
+            sp.hero_id      = specs_flat[i * 9 + 0];
+            sp.scene_id     = specs_flat[i * 9 + 1];
+            sp.time_id      = specs_flat[i * 9 + 2];
+            sp.framing_id   = specs_flat[i * 9 + 3];
+            sp.action_id    = specs_flat[i * 9 + 4];
+            sp.camera_id    = specs_flat[i * 9 + 5];
+            sp.fx_id        = specs_flat[i * 9 + 6];
+            sp.part_idx     = specs_flat[i * 9 + 7];
+            sp.variant_seed = specs_flat[i * 9 + 8];
+
+            DatasetEntry entry;
+            entry.spec = sp;
+            build_cond_tokens(sp, words_flat + i * 5, entry.cond12);
+            int rel = prev_rel_idx ? prev_rel_idx[i] : -1;
+            if (rel >= 0 && rel < M) {
+                entry.prev_clip_idx = base_offset + rel;
+                entry.has_prev = 1;
+            } else {
+                entry.prev_clip_idx = -1;
+                entry.has_prev = 0;
+            }
+            ctx->dataset_meta[base_offset + i] = entry;
+            std::memcpy(
+                ctx->dataset_indices.data() + static_cast<size_t>(base_offset + i) * clip_pix,
+                custom_indices + static_cast<size_t>(i) * clip_pix,
+                clip_pix
+            );
+        }
+    }
+    ctx->latents_ready = false;
+    return static_cast<int>(ctx->dataset_meta.size());
 }
 
 int sakuga_save_checkpoint(SakugaContext* ctx, const char* path) {

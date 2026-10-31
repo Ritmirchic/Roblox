@@ -62,7 +62,6 @@ Tensor* mean_pool_axis1(Tape& tape, Tensor* X) {
     return Y;
 }
 
-// Fold adjacent temporal frame pairs: X[B, T, H, W, C] -> Y[B, T/2, H, W, 2*C]
 Tensor* fold_t2(Tape& tape, Tensor* X) {
     int B = X->shape[0], T = X->shape[1], H = X->shape[2], W = X->shape[3], C = X->shape[4];
     int T2 = T / 2, S = H * W, C2 = 2 * C;
@@ -100,7 +99,6 @@ Tensor* fold_t2(Tape& tape, Tensor* X) {
     return Y;
 }
 
-// Unfold temporal frame pairs: X[B, T2, H, W, 2*C] -> Y[B, 2*T2, H, W, C]
 Tensor* unfold_t2(Tape& tape, Tensor* X) {
     int B = X->shape[0], T2 = X->shape[1], H = X->shape[2], W = X->shape[3], C2 = X->shape[4];
     int T = T2 * 2, S = H * W, C = C2 / 2;
@@ -207,7 +205,7 @@ Tensor* ResBlock3D::forward(Tape& tape, Tensor* X) {
     return ops::add(tape, X_mid, tm_5d);
 }
 
-// ================= PixelAnimeVAE =================
+// ================= PixelAnimeVAE (128x128 <-> [B, 8, 32, 32, 8]) =================
 
 void PixelAnimeVAE::init(uint32_t seed) {
     RNG rng(seed);
@@ -220,44 +218,64 @@ void PixelAnimeVAE::init(uint32_t seed) {
         palette_emb.data[k * 8 + 2] = (static_cast<float>(rgb[k * 3 + 2]) / 127.5f) - 1.0f;
     }
 
-    enc_in_w = Tensor({8 * 4 * 2, 36}, true); rng.xavier(enc_in_w);
-    enc_in_b = Tensor({36}, true);
-    enc_block.init(36, rng);
+    enc_s1_w = Tensor({32, 24}, true); rng.xavier(enc_s1_w);
+    enc_s1_b = Tensor({24}, true);
 
-    to_lat_w = Tensor({36, LATENT_C}, true); rng.xavier(to_lat_w, 0.8f);
+    enc_in_w = Tensor({192, 48}, true); rng.xavier(enc_in_w);
+    enc_in_b = Tensor({48}, true);
+    enc_block.init(48, rng);
+
+    to_lat_w = Tensor({48, LATENT_C}, true); rng.xavier(to_lat_w, 0.8f);
     to_lat_b = Tensor({LATENT_C}, true);
 
-    from_lat_w = Tensor({LATENT_C, 36}, true); rng.xavier(from_lat_w);
-    from_lat_b = Tensor({36}, true);
-    dec_block.init(36, rng);
+    from_lat_w = Tensor({LATENT_C, 48}, true); rng.xavier(from_lat_w);
+    from_lat_b = Tensor({48}, true);
+    dec_block.init(48, rng);
 
-    dec_t_w = Tensor({36, 2 * 36}, true); rng.xavier(dec_t_w);
-    dec_t_b = Tensor({2 * 36}, true);
+    dec_t_w = Tensor({48, 80}, true); rng.xavier(dec_t_w);
+    dec_t_b = Tensor({80}, true);
 
-    dec_sub_w = Tensor({36, 4 * 20}, true); rng.xavier(dec_sub_w);
-    dec_sub_b = Tensor({4 * 20}, true);
+    dec_up64_w = Tensor({40, 96}, true); rng.xavier(dec_up64_w);
+    dec_up64_b = Tensor({96}, true);
+
+    dec_ln64_g = Tensor({24}, true); std::fill(dec_ln64_g.data.begin(), dec_ln64_g.data.end(), 1.0f);
+    dec_ln64_b = Tensor({24}, true);
+    dec_conv64_w = Tensor({9 * 24, 24}, true); rng.xavier(dec_conv64_w, 0.5f);
+    dec_conv64_b = Tensor({24}, true);
+
+    dec_up128_w = Tensor({24, 80}, true); rng.xavier(dec_up128_w);
+    dec_up128_b = Tensor({80}, true);
 
     dec_head_w = Tensor({20, PALETTE_SIZE}, true); rng.xavier(dec_head_w);
     dec_head_b = Tensor({PALETTE_SIZE}, true);
 
+    // Balanced anime cel-shading weights: clean 1px outlines (never bloated!) + sharp interior eyes!
     class_weights.assign(PALETTE_SIZE, 1.0f);
-    class_weights[0] = 3.8f; // Ink outlines
-    class_weights[1] = 2.4f;
-    class_weights[3] = 3.2f; // Specular eye & blade highlights
-    for (int k = 4; k <= 19; ++k) class_weights[k] = 4.2f; // Anime skin, blush, hero hair & irises
-    class_weights[30] = 3.0f; // Torii vermilion
-    class_weights[31] = 2.5f;
-    for (int k = 36; k <= 43; ++k) class_weights[k] = 3.5f; // Outfits, katanas, neon, plasma/aura FX
+    class_weights[0] = 2.2f; // Clean 1px anime ink outlines (interior pupils get 2.4x boost via face_surr!)
+    class_weights[1] = 2.0f;
+    class_weights[3] = 3.8f; // Eye sclera, specular catchlights & blade gleam!
+    class_weights[4] = 2.8f; // Clean cel-shaded face skin
+    class_weights[5] = 2.8f; // Skin cel-shadow
+    class_weights[6] = 4.2f; // Cheek blush
+    class_weights[7] = 4.4f; // Anime lips / mouth
+    for (int k = 8; k <= 19; ++k) class_weights[k] = 3.0f; // Hero hair & jewelled irises
+    class_weights[30] = 2.4f; // Torii vermilion
+    class_weights[31] = 2.0f;
+    for (int k = 36; k <= 43; ++k) class_weights[k] = 2.8f; // Outfits, katana steel, neon, Ki aura
 }
 
 std::vector<Tensor*> PixelAnimeVAE::parameters() {
     std::vector<Tensor*> ps = {
         &palette_emb,
+        &enc_s1_w, &enc_s1_b,
         &enc_in_w, &enc_in_b,
         &to_lat_w, &to_lat_b,
         &from_lat_w, &from_lat_b,
         &dec_t_w, &dec_t_b,
-        &dec_sub_w, &dec_sub_b,
+        &dec_up64_w, &dec_up64_b,
+        &dec_ln64_g, &dec_ln64_b,
+        &dec_conv64_w, &dec_conv64_b,
+        &dec_up128_w, &dec_up128_b,
         &dec_head_w, &dec_head_b
     };
     enc_block.collect_params(ps);
@@ -271,10 +289,13 @@ Tensor* PixelAnimeVAE::encode(Tape& tape, const uint8_t* indices, int B) {
     for (size_t i = 0; i < total; ++i) idx_int[i] = static_cast<int>(indices[i]);
 
     Tensor* emb = ops::embedding(tape, idx_int.data(), {B * CLIP_FRAMES, BASE_H, BASE_W}, &palette_emb);
-    Tensor* s2d = ops::space_to_depth(tape, emb, 2); // [B*16, 32, 32, 32]
-    s2d = ops::reshape(tape, s2d, {B, 16, 32, 32, 32});
-    Tensor* ft = fold_t2(tape, s2d); // [B, 8, 32, 32, 64]
-    Tensor* h = ops::linear(tape, ft, &enc_in_w, &enc_in_b); // [B, 8, 32, 32, 36]
+    Tensor* s64 = ops::space_to_depth(tape, emb, 2); // [B*16, 64, 64, 32]
+    s64 = ops::linear(tape, s64, &enc_s1_w, &enc_s1_b); // [B*16, 64, 64, 24]
+    s64 = ops::silu(tape, s64);
+    Tensor* s32 = ops::space_to_depth(tape, s64, 2); // [B*16, 32, 32, 96]
+    s32 = ops::reshape(tape, s32, {B, CLIP_FRAMES, LATENT_H, LATENT_W, 96});
+    Tensor* ft = fold_t2(tape, s32); // [B, 8, 32, 32, 192]
+    Tensor* h = ops::linear(tape, ft, &enc_in_w, &enc_in_b); // [B, 8, 32, 32, 48]
     h = enc_block.forward(tape, h);
     h = ops::layernorm(tape, h);
     Tensor* raw_z = ops::linear(tape, h, &to_lat_w, &to_lat_b); // [B, 8, 32, 32, 8]
@@ -283,18 +304,29 @@ Tensor* PixelAnimeVAE::encode(Tape& tape, const uint8_t* indices, int B) {
 
 Tensor* PixelAnimeVAE::decode_logits(Tape& tape, Tensor* z) {
     int B = z->shape[0];
-    Tensor* h = ops::linear(tape, z, &from_lat_w, &from_lat_b); // [B, 8, 32, 32, 36]
+    Tensor* h = ops::linear(tape, z, &from_lat_w, &from_lat_b); // [B, 8, 32, 32, 48]
     h = dec_block.forward(tape, h);
     h = ops::silu(tape, h);
-    Tensor* ht = ops::linear(tape, h, &dec_t_w, &dec_t_b); // [B, 8, 32, 32, 72]
-    Tensor* u = unfold_t2(tape, ht); // [B, 16, 32, 32, 36]
+    Tensor* ht = ops::linear(tape, h, &dec_t_w, &dec_t_b); // [B, 8, 32, 32, 80]
+    Tensor* u = unfold_t2(tape, ht); // [B, 16, 32, 32, 40]
     u = ops::silu(tape, u);
-    Tensor* sub = ops::linear(tape, u, &dec_sub_w, &dec_sub_b); // [B, 16, 32, 32, 4*20=80]
-    sub = ops::reshape(tape, sub, {B * 16, 32, 32, 4 * 20});
-    Tensor* pix = ops::depth_to_space(tape, sub, 2); // [B*16, 64, 64, 20]
+
+    Tensor* sub64 = ops::linear(tape, u, &dec_up64_w, &dec_up64_b); // [B, 16, 32, 32, 96]
+    sub64 = ops::reshape(tape, sub64, {B * CLIP_FRAMES, LATENT_H, LATENT_W, 96});
+    Tensor* h64 = ops::depth_to_space(tape, sub64, 2); // [B*16, 64, 64, 24]
+
+    // 64x64 spatial 3x3 residual refinement eliminates any 4x4 patch boundaries!
+    Tensor* r64 = ops::layernorm(tape, h64, &dec_ln64_g, &dec_ln64_b);
+    r64 = ops::silu(tape, r64);
+    r64 = ops::conv2d_3x3(tape, r64, &dec_conv64_w, &dec_conv64_b);
+    h64 = ops::add(tape, h64, r64);
+    h64 = ops::silu(tape, h64);
+
+    Tensor* sub128 = ops::linear(tape, h64, &dec_up128_w, &dec_up128_b); // [B*16, 64, 64, 80]
+    Tensor* pix = ops::depth_to_space(tape, sub128, 2); // [B*16, 128, 128, 20]
     pix = ops::silu(tape, pix);
-    Tensor* logits = ops::linear(tape, pix, &dec_head_w, &dec_head_b); // [B*16, 64, 64, 48]
-    return ops::reshape(tape, logits, {B * 16 * 64 * 64, PALETTE_SIZE});
+    Tensor* logits = ops::linear(tape, pix, &dec_head_w, &dec_head_b); // [B*16, 128, 128, 48]
+    return ops::reshape(tape, logits, {B * CLIP_FRAMES * BASE_H * BASE_W, PALETTE_SIZE});
 }
 
 void PixelAnimeVAE::decode_to_indices(const float* z_data, int B, uint8_t* out_indices) {
@@ -395,7 +427,7 @@ Tensor* DiTBlock::forward(
     h1 = ops::add_mod(tape, h1, shift_sa);
 
     Tensor* prev_norm = ops::layernorm(tape, Zprev_tok);
-    Tensor* kv_in = ops::concat_axis1(tape, prev_norm, h1);
+    Tensor* kv_in = ops::concat_axis1(tape, prev_norm, h1); // [B, 320, D]
 
     Tensor* Q = ops::linear(tape, h1, &q_w, &q_b);
     Tensor* K = ops::linear(tape, kv_in, &k_w, &k_b);
@@ -424,16 +456,16 @@ Tensor* DiTBlock::forward(
     return ops::add(tape, X2, m);
 }
 
-// ================= SakugaDiT =================
+// ================= SakugaDiT v2 (Full-Rank D=288 > PATCH_C=256) =================
 
 void SakugaDiT::init(uint32_t seed) {
     RNG rng(seed);
     x_embed_w = Tensor({PATCH_C, D}, true); rng.xavier(x_embed_w);
     x_embed_b = Tensor({D}, true);
 
-    prev_embed_w = Tensor({PATCH_C, D}, true); rng.xavier(prev_embed_w);
+    prev_embed_w = Tensor({PREV_C, D}, true); rng.xavier(prev_embed_w);
     prev_embed_b = Tensor({D}, true);
-    bos_prev_tok = Tensor({16, D}, true); rng.normal(bos_prev_tok.data, 0.0f, 0.02f);
+    bos_prev_tok = Tensor({N_PREV, D}, true); rng.normal(bos_prev_tok.data, 0.0f, 0.02f);
 
     attr_emb = Tensor({64, D}, true); rng.normal(attr_emb.data, 0.0f, 0.04f);
     text_emb = Tensor({TEXT_VOCAB_SIZE, D}, true); rng.normal(text_emb.data, 0.0f, 0.04f);
@@ -455,29 +487,38 @@ void SakugaDiT::init(uint32_t seed) {
     final_out_w = Tensor({D, PATCH_C}, true); rng.xavier(final_out_w, 0.1f);
     final_out_b = Tensor({PATCH_C}, true);
 
-    rope_q_cos.resize(128 * 18);
-    rope_q_sin.resize(128 * 18);
+    // 3D Spatial-Temporal Conv Refiner (starts near identity via small ref_out_w init)
+    ref_in_w = Tensor({LATENT_C, 20}, true); rng.xavier(ref_in_w);
+    ref_in_b = Tensor({20}, true);
+    ref_block.init(20, rng);
+    ref_out_w = Tensor({20, LATENT_C}, true); rng.xavier(ref_out_w, 0.05f);
+    ref_out_b = Tensor({LATENT_C}, true);
+
+    // Precompute 3D Axial RoPE for N_TOK = 4 * 8 * 8 = 256 query tokens
+    rope_q_cos.resize(N_TOK * 18);
+    rope_q_sin.resize(N_TOK * 18);
     int idx = 0;
-    for (int t = 1; t <= 8; ++t) {
-        for (int y = 0; y < 4; ++y) {
-            for (int x = 0; x < 4; ++x) {
+    for (int t = 1; t <= 4; ++t) {
+        for (int y = 0; y < 8; ++y) {
+            for (int x = 0; x < 8; ++x) {
                 fill_3d_rope_entry(t, y, x, &rope_q_cos[idx * 18], &rope_q_sin[idx * 18]);
                 ++idx;
             }
         }
     }
 
-    rope_k_cos.resize(144 * 18);
-    rope_k_sin.resize(144 * 18);
+    // Key RoPE: 64 z_prev tokens at t=0 + 256 query tokens = 320
+    rope_k_cos.resize((N_PREV + N_TOK) * 18);
+    rope_k_sin.resize((N_PREV + N_TOK) * 18);
     int kidx = 0;
-    for (int y = 0; y < 4; ++y) {
-        for (int x = 0; x < 4; ++x) {
+    for (int y = 0; y < 8; ++y) {
+        for (int x = 0; x < 8; ++x) {
             fill_3d_rope_entry(0, y, x, &rope_k_cos[kidx * 18], &rope_k_sin[kidx * 18]);
             ++kidx;
         }
     }
-    std::memcpy(&rope_k_cos[16 * 18], rope_q_cos.data(), 128 * 18 * sizeof(float));
-    std::memcpy(&rope_k_sin[16 * 18], rope_q_sin.data(), 128 * 18 * sizeof(float));
+    std::memcpy(&rope_k_cos[N_PREV * 18], rope_q_cos.data(), N_TOK * 18 * sizeof(float));
+    std::memcpy(&rope_k_sin[N_PREV * 18], rope_q_sin.data(), N_TOK * 18 * sizeof(float));
 }
 
 std::vector<Tensor*> SakugaDiT::parameters() {
@@ -486,8 +527,10 @@ std::vector<Tensor*> SakugaDiT::parameters() {
         &prev_embed_w, &prev_embed_b, &bos_prev_tok,
         &attr_emb, &text_emb, &cond_pos_emb, &prev_flag_emb,
         &t_mlp_w1, &t_mlp_b1, &t_mlp_w2, &t_mlp_b2,
-        &final_adaln_w, &final_adaln_b, &final_out_w, &final_out_b
+        &final_adaln_w, &final_adaln_b, &final_out_w, &final_out_b,
+        &ref_in_w, &ref_in_b, &ref_out_w, &ref_out_b
     };
+    ref_block.collect_params(ps);
     for (auto& blk : blocks) blk.collect_params(ps);
     return ps;
 }
@@ -503,15 +546,16 @@ Tensor* SakugaDiT::forward(
     bool capture_attn
 ) {
     int B = z_t->shape[0];
-    size_t fsz = LATENT_H * LATENT_W * LATENT_C; // 16*16*12 = 3072
+    size_t fsz = LATENT_H * LATENT_W * LATENT_C; // 32*32*8 = 8192
 
-    // 1. Patchify z_t: [B, 8, 32, 32, 8] -> space_to_depth(8) -> [B, 128, 512]
-    Tensor* z_flat2d = ops::reshape(tape, z_t, {B * LATENT_T, LATENT_H, LATENT_W, LATENT_C});
-    Tensor* z_patched = ops::space_to_depth(tape, z_flat2d, 8); // [B*8, 4, 4, 512]
-    z_patched = ops::reshape(tape, z_patched, {B, 128, PATCH_C});
-    Tensor* X = ops::linear(tape, z_patched, &x_embed_w, &x_embed_b); // [B, 128, D]
+    // 1. Fold temporal pairs + 4x4 spatial patchify: [B, 8, 32, 32, 8] -> [B, 256, 256]
+    Tensor* z_f2 = fold_t2(tape, z_t); // [B, 4, 32, 32, 16]
+    Tensor* z_flat2d = ops::reshape(tape, z_f2, {B * 4, LATENT_H, LATENT_W, 2 * LATENT_C});
+    Tensor* z_patched = ops::space_to_depth(tape, z_flat2d, 4); // [B*4, 8, 8, 256]
+    z_patched = ops::reshape(tape, z_patched, {B, N_TOK, PATCH_C});
+    Tensor* X = ops::linear(tape, z_patched, &x_embed_w, &x_embed_b); // [B, 256, 288]
 
-    // 2. Build previous-frame context tokens Zprev_tok: [B, 16, D]
+    // 2. Build previous-frame context tokens Zprev_tok: [B, 64, 288]
     Tensor* Zprev_in = tape.alloc({B, LATENT_H, LATENT_W, LATENT_C}, false);
     for (int b = 0; b < B; ++b) {
         if (z_prev_frame && has_prev && has_prev[b] == 1) {
@@ -522,18 +566,18 @@ Tensor* SakugaDiT::forward(
             );
         }
     }
-    Tensor* zp_patch = ops::space_to_depth(tape, Zprev_in, 8); // [B, 4, 4, 512]
-    zp_patch = ops::reshape(tape, zp_patch, {B, 16, PATCH_C});
-    Tensor* zp_proj = ops::linear(tape, zp_patch, &prev_embed_w, &prev_embed_b); // [B, 16, D]
+    Tensor* zp_patch = ops::space_to_depth(tape, Zprev_in, 4); // [B, 8, 8, 128]
+    zp_patch = ops::reshape(tape, zp_patch, {B, N_PREV, PREV_C});
+    Tensor* zp_proj = ops::linear(tape, zp_patch, &prev_embed_w, &prev_embed_b); // [B, 64, 288]
 
-    Tensor* Zprev_tok = tape.alloc({B, 16, D}, zp_proj->requires_grad || bos_prev_tok.requires_grad);
+    Tensor* Zprev_tok = tape.alloc({B, N_PREV, D}, zp_proj->requires_grad || bos_prev_tok.requires_grad);
     for (int b = 0; b < B; ++b) {
         bool hp = (z_prev_frame && has_prev && has_prev[b] == 1);
-        float* dst = Zprev_tok->data.data() + static_cast<size_t>(b) * 16 * D;
+        float* dst = Zprev_tok->data.data() + static_cast<size_t>(b) * N_PREV * D;
         const float* src = hp
-            ? (zp_proj->data.data() + static_cast<size_t>(b) * 16 * D)
+            ? (zp_proj->data.data() + static_cast<size_t>(b) * N_PREV * D)
             : bos_prev_tok.data.data();
-        std::memcpy(dst, src, static_cast<size_t>(16 * D) * sizeof(float));
+        std::memcpy(dst, src, static_cast<size_t>(N_PREV * D) * sizeof(float));
     }
     if (tape.record && Zprev_tok->requires_grad) {
         std::vector<int> hp_vec(B, 0);
@@ -541,12 +585,12 @@ Tensor* SakugaDiT::forward(
         Tensor* bos_ptr = &bos_prev_tok;
         tape.add_op([Zprev_tok, zp_proj, bos_ptr, B, hp_vec]() {
             for (int b = 0; b < B; ++b) {
-                const float* dy = Zprev_tok->grad.data() + static_cast<size_t>(b) * 16 * D;
+                const float* dy = Zprev_tok->grad.data() + static_cast<size_t>(b) * N_PREV * D;
                 float* dst = (hp_vec[b] == 1)
-                    ? (zp_proj->grad.data() + static_cast<size_t>(b) * 16 * D)
+                    ? (zp_proj->grad.data() + static_cast<size_t>(b) * N_PREV * D)
                     : bos_ptr->grad.data();
                 #pragma omp simd
-                for (int i = 0; i < 16 * D; ++i) dst[i] += dy[i];
+                for (int i = 0; i < N_PREV * D; ++i) dst[i] += dy[i];
             }
         });
     }
@@ -605,10 +649,19 @@ Tensor* SakugaDiT::forward(
     h = ops::scale_mod(tape, h, fin_scale);
     h = ops::add_mod(tape, h, fin_shift);
 
-    Tensor* v_patch = ops::linear(tape, h, &final_out_w, &final_out_b); // [B, 128, 512]
-    v_patch = ops::reshape(tape, v_patch, {B * LATENT_T, 4, 4, PATCH_C});
-    Tensor* v_sp = ops::depth_to_space(tape, v_patch, 8); // [B*8, 32, 32, 8]
-    Tensor* z1_hat = ops::reshape(tape, v_sp, {B, LATENT_T, LATENT_H, LATENT_W, LATENT_C});
+    // Full-rank projection D=288 -> PATCH_C=256 + unpatchify -> [B, 8, 32, 32, 8]
+    Tensor* v_patch = ops::linear(tape, h, &final_out_w, &final_out_b); // [B, 256, 256]
+    v_patch = ops::reshape(tape, v_patch, {B * 4, 8, 8, PATCH_C});
+    Tensor* v_sp = ops::depth_to_space(tape, v_patch, 4); // [B*4, 32, 32, 16]
+    v_sp = ops::reshape(tape, v_sp, {B, 4, LATENT_H, LATENT_W, 2 * LATENT_C});
+    Tensor* z_base = unfold_t2(tape, v_sp); // [B, 8, 32, 32, 8]
+
+    // 3D Spatial-Temporal Conv Post-Refiner across 4x4 patch boundaries
+    Tensor* r = ops::linear(tape, z_base, &ref_in_w, &ref_in_b); // [B, 8, 32, 32, 20]
+    r = ref_block.forward(tape, r);
+    r = ops::silu(tape, r);
+    r = ops::linear(tape, r, &ref_out_w, &ref_out_b); // [B, 8, 32, 32, 8]
+    Tensor* z1_hat = ops::add(tape, z_base, r);
     return ops::tanh_scaled(tape, z1_hat, 1.02f);
 }
 
@@ -654,7 +707,6 @@ void SakugaDiT::sample_ode(
 
     float dt = 1.0f / static_cast<float>(steps);
 
-    // x1-parameterized Rectified Flow velocity: v(z, tau) = (z1_hat_CFG(z, tau) - z) / max(1 - tau, dt)
     auto eval_velocity = [&](const std::vector<float>& z_cur, float t_val, std::vector<float>& v_out, bool cap) {
         Tape tape(false);
         Tensor* z_in = tape.alloc({B_eval, LATENT_T, LATENT_H, LATENT_W, LATENT_C}, false);
@@ -673,7 +725,7 @@ void SakugaDiT::sample_ode(
             const float* zu = z1_pred->data.data() + LATENT_DIM;
             #pragma omp simd
             for (int i = 0; i < LATENT_DIM; ++i) {
-                float z1_g = std::clamp(zu[i] + cfg_scale * (zc[i] - zu[i]), -1.05f, 1.05f);
+                float z1_g = std::clamp(zu[i] + cfg_scale * (zc[i] - zu[i]), -1.04f, 1.04f);
                 v_out[i] = (z1_g - z_cur[i]) * inv_rem;
             }
         } else {
@@ -714,7 +766,7 @@ void SakugaDiT::sample_ode(
     }
 
     for (int i = 0; i < LATENT_DIM; ++i) {
-        z[i] = std::clamp(z[i], -1.15f, 1.15f);
+        z[i] = std::clamp(z[i], -1.10f, 1.10f);
     }
     std::memcpy(out_z, z.data(), LATENT_DIM * sizeof(float));
     if (out_trajectory && num_snaps > 1) {
@@ -738,7 +790,7 @@ void build_cond_tokens(const AnimeSpec& spec, const int* word_ids5, int* out_con
 bool save_checkpoint(const std::string& path, PixelAnimeVAE& vae, SakugaDiT& dit, int vae_steps, int dit_steps) {
     std::ofstream f(path, std::ios::binary);
     if (!f) return false;
-    const char magic[8] = {'S', 'A', 'K', 'U', 'G', 'A', '0', '2'};
+    const char magic[8] = {'S', 'A', 'K', 'U', 'G', 'A', '0', '3'};
     f.write(magic, 8);
     f.write(reinterpret_cast<const char*>(&vae_steps), sizeof(int));
     f.write(reinterpret_cast<const char*>(&dit_steps), sizeof(int));
@@ -763,7 +815,7 @@ bool load_checkpoint(const std::string& path, PixelAnimeVAE& vae, SakugaDiT& dit
     if (!f) return false;
     char magic[8] = {};
     f.read(magic, 8);
-    if (std::memcmp(magic, "SAKUGA02", 8) != 0) return false;
+    if (std::memcmp(magic, "SAKUGA03", 8) != 0) return false;
     int vs = 0, ds = 0;
     f.read(reinterpret_cast<char*>(&vs), sizeof(int));
     f.read(reinterpret_cast<char*>(&ds), sizeof(int));

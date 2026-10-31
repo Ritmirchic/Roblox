@@ -73,22 +73,52 @@ Tensor* linear(Tape& tape, Tensor* X, Tensor* W, Tensor* b) {
     float* yp = Y->data.data();
 
     int64_t flops = static_cast<int64_t>(M) * In * Out;
+    int m4_end = (M / 4) * 4;
+
     #pragma omp parallel for schedule(static) if(flops > 65536)
-    for (int m = 0; m < M; ++m) {
-        float* ym = yp + static_cast<size_t>(m) * Out;
+    for (int m = 0; m < m4_end; m += 4) {
+        float* y0 = yp + static_cast<size_t>(m + 0) * Out;
+        float* y1 = yp + static_cast<size_t>(m + 1) * Out;
+        float* y2 = yp + static_cast<size_t>(m + 2) * Out;
+        float* y3 = yp + static_cast<size_t>(m + 3) * Out;
         if (bp) {
-            std::memcpy(ym, bp, static_cast<size_t>(Out) * sizeof(float));
+            std::memcpy(y0, bp, static_cast<size_t>(Out) * sizeof(float));
+            std::memcpy(y1, bp, static_cast<size_t>(Out) * sizeof(float));
+            std::memcpy(y2, bp, static_cast<size_t>(Out) * sizeof(float));
+            std::memcpy(y3, bp, static_cast<size_t>(Out) * sizeof(float));
         } else {
-            std::memset(ym, 0, static_cast<size_t>(Out) * sizeof(float));
+            std::memset(y0, 0, static_cast<size_t>(Out) * sizeof(float));
+            std::memset(y1, 0, static_cast<size_t>(Out) * sizeof(float));
+            std::memset(y2, 0, static_cast<size_t>(Out) * sizeof(float));
+            std::memset(y3, 0, static_cast<size_t>(Out) * sizeof(float));
         }
+        const float* x0 = xp + static_cast<size_t>(m + 0) * In;
+        const float* x1 = xp + static_cast<size_t>(m + 1) * In;
+        const float* x2 = xp + static_cast<size_t>(m + 2) * In;
+        const float* x3 = xp + static_cast<size_t>(m + 3) * In;
+        for (int k = 0; k < In; ++k) {
+            float v0 = x0[k], v1 = x1[k], v2 = x2[k], v3 = x3[k];
+            const float* wk = wp + static_cast<size_t>(k) * Out;
+            #pragma omp simd
+            for (int n = 0; n < Out; ++n) {
+                float wkn = wk[n];
+                y0[n] += v0 * wkn;
+                y1[n] += v1 * wkn;
+                y2[n] += v2 * wkn;
+                y3[n] += v3 * wkn;
+            }
+        }
+    }
+    for (int m = m4_end; m < M; ++m) {
+        float* ym = yp + static_cast<size_t>(m) * Out;
+        if (bp) std::memcpy(ym, bp, static_cast<size_t>(Out) * sizeof(float));
+        else std::memset(ym, 0, static_cast<size_t>(Out) * sizeof(float));
         const float* xm = xp + static_cast<size_t>(m) * In;
         for (int k = 0; k < In; ++k) {
             float xmk = xm[k];
             const float* wk = wp + static_cast<size_t>(k) * Out;
             #pragma omp simd
-            for (int n = 0; n < Out; ++n) {
-                ym[n] += xmk * wk[n];
-            }
+            for (int n = 0; n < Out; ++n) ym[n] += xmk * wk[n];
         }
     }
 
@@ -99,59 +129,63 @@ Tensor* linear(Tape& tape, Tensor* X, Tensor* W, Tensor* b) {
             if (X->requires_grad) {
                 float* dxp = X->grad.data();
                 const float* wp_b = W->data.data();
+                // Transpose W [In, Out] -> W_T [Out, In] for vertical SIMD FMA broadcast!
+                std::vector<float> wt(static_cast<size_t>(Out) * In);
+                for (int k = 0; k < In; ++k) {
+                    const float* wk = wp_b + static_cast<size_t>(k) * Out;
+                    for (int n = 0; n < Out; ++n) {
+                        wt[static_cast<size_t>(n) * In + k] = wk[n];
+                    }
+                }
+                const float* wtp = wt.data();
+                int m4 = (M / 4) * 4;
                 #pragma omp parallel for schedule(static) if(b_flops > 65536)
-                for (int m = 0; m < M; ++m) {
+                for (int m = 0; m < m4; m += 4) {
+                    const float* dy0 = dyp + static_cast<size_t>(m + 0) * Out;
+                    const float* dy1 = dyp + static_cast<size_t>(m + 1) * Out;
+                    const float* dy2 = dyp + static_cast<size_t>(m + 2) * Out;
+                    const float* dy3 = dyp + static_cast<size_t>(m + 3) * Out;
+                    float* dx0 = dxp + static_cast<size_t>(m + 0) * In;
+                    float* dx1 = dxp + static_cast<size_t>(m + 1) * In;
+                    float* dx2 = dxp + static_cast<size_t>(m + 2) * In;
+                    float* dx3 = dxp + static_cast<size_t>(m + 3) * In;
+                    for (int n = 0; n < Out; ++n) {
+                        float g0 = dy0[n], g1 = dy1[n], g2 = dy2[n], g3 = dy3[n];
+                        const float* wtn = wtp + static_cast<size_t>(n) * In;
+                        #pragma omp simd
+                        for (int k = 0; k < In; ++k) {
+                            float wv = wtn[k];
+                            dx0[k] += g0 * wv;
+                            dx1[k] += g1 * wv;
+                            dx2[k] += g2 * wv;
+                            dx3[k] += g3 * wv;
+                        }
+                    }
+                }
+                for (int m = m4; m < M; ++m) {
                     const float* dym = dyp + static_cast<size_t>(m) * Out;
                     float* dxm = dxp + static_cast<size_t>(m) * In;
-                    for (int k = 0; k < In; ++k) {
-                        const float* wk = wp_b + static_cast<size_t>(k) * Out;
-                        float acc = 0.0f;
-                        #pragma omp simd reduction(+:acc)
-                        for (int n = 0; n < Out; ++n) {
-                            acc += dym[n] * wk[n];
-                        }
-                        dxm[k] += acc;
+                    for (int n = 0; n < Out; ++n) {
+                        float gn = dym[n];
+                        const float* wtn = wtp + static_cast<size_t>(n) * In;
+                        #pragma omp simd
+                        for (int k = 0; k < In; ++k) dxm[k] += gn * wtn[k];
                     }
                 }
             }
             if (W->requires_grad) {
                 float* dwp = W->grad.data();
                 const float* xp_b = X->data.data();
-                size_t w_sz = static_cast<size_t>(In) * Out;
-                if (b_flops > 65536 && M >= 8) {
-                    #pragma omp parallel
-                    {
-                        std::vector<float> local_dw(w_sz, 0.0f);
-                        #pragma omp for schedule(static) nowait
-                        for (int m = 0; m < M; ++m) {
-                            const float* xm = xp_b + static_cast<size_t>(m) * In;
-                            const float* dym = dyp + static_cast<size_t>(m) * Out;
-                            for (int k = 0; k < In; ++k) {
-                                float xmk = xm[k];
-                                float* ldwk = local_dw.data() + static_cast<size_t>(k) * Out;
-                                #pragma omp simd
-                                for (int n = 0; n < Out; ++n) {
-                                    ldwk[n] += xmk * dym[n];
-                                }
-                            }
-                        }
-                        #pragma omp critical
-                        {
-                            #pragma omp simd
-                            for (size_t i = 0; i < w_sz; ++i) dwp[i] += local_dw[i];
-                        }
-                    }
-                } else {
+                // Lock-free parallelization over k (0 .. In-1): zero scratch alloc, zero critical section!
+                #pragma omp parallel for schedule(static) if(b_flops > 65536 && In >= 8)
+                for (int k = 0; k < In; ++k) {
+                    float* dwk = dwp + static_cast<size_t>(k) * Out;
                     for (int m = 0; m < M; ++m) {
-                        const float* xm = xp_b + static_cast<size_t>(m) * In;
+                        float xmk = xp_b[static_cast<size_t>(m) * In + k];
                         const float* dym = dyp + static_cast<size_t>(m) * Out;
-                        for (int k = 0; k < In; ++k) {
-                            float xmk = xm[k];
-                            float* dwk = dwp + static_cast<size_t>(k) * Out;
-                            #pragma omp simd
-                            for (int n = 0; n < Out; ++n) {
-                                dwk[n] += xmk * dym[n];
-                            }
+                        #pragma omp simd
+                        for (int n = 0; n < Out; ++n) {
+                            dwk[n] += xmk * dym[n];
                         }
                     }
                 }
@@ -691,6 +725,7 @@ Tensor* space_to_depth(Tape& tape, Tensor* X, int p) {
     const float* xp = X->data.data();
     float* yp = Y->data.data();
 
+    #pragma omp parallel for schedule(static) if(N >= 4)
     for (int n = 0; n < N; ++n) {
         for (int hy = 0; hy < Hp; ++hy) {
             for (int wx = 0; wx < Wp; ++wx) {
@@ -711,6 +746,7 @@ Tensor* space_to_depth(Tape& tape, Tensor* X, int p) {
         tape.add_op([X, Y, N, H, W, C, p, Hp, Wp, Cp]() {
             float* dxp = X->grad.data();
             const float* dyp = Y->grad.data();
+            #pragma omp parallel for schedule(static) if(N >= 4)
             for (int n = 0; n < N; ++n) {
                 for (int hy = 0; hy < Hp; ++hy) {
                     for (int wx = 0; wx < Wp; ++wx) {
@@ -746,6 +782,7 @@ Tensor* depth_to_space(Tape& tape, Tensor* X, int p) {
     const float* xp = X->data.data();
     float* yp = Y->data.data();
 
+    #pragma omp parallel for schedule(static) if(N >= 4)
     for (int n = 0; n < N; ++n) {
         for (int hy = 0; hy < Hp; ++hy) {
             for (int wx = 0; wx < Wp; ++wx) {
@@ -766,6 +803,7 @@ Tensor* depth_to_space(Tape& tape, Tensor* X, int p) {
         tape.add_op([X, Y, N, H, W, C, p, Hp, Wp, Cp]() {
             float* dxp = X->grad.data();
             const float* dyp = Y->grad.data();
+            #pragma omp parallel for schedule(static) if(N >= 4)
             for (int n = 0; n < N; ++n) {
                 for (int hy = 0; hy < Hp; ++hy) {
                     for (int wx = 0; wx < Wp; ++wx) {
@@ -1267,6 +1305,35 @@ Tensor* weighted_cross_entropy(
     const float* lp = logits->data.data();
     float* sp = Softmax->data.data();
 
+    const bool spatial_128 = (N >= 16384) && ((N % 16384) == 0);
+    std::vector<float> pix_w(static_cast<size_t>(N), 1.0f);
+    #pragma omp parallel for schedule(static) if(N > 512)
+    for (int i = 0; i < N; ++i) {
+        int tgt = static_cast<int>(targets[i]);
+        float w = class_weights ? class_weights[tgt] : 1.0f;
+        if (spatial_128) {
+            int frame_base = (i / 16384) * 16384;
+            int rem = i - frame_base;
+            int y = rem >> 7;
+            int x = rem & 127;
+            // Boost interior facial features (eye pupils/lashes/sclera/irises/mouths surrounded by skin or sclera)
+            // WITHOUT bloating exterior silhouette outlines!
+            if (x >= 3 && x < 125 && y >= 3 && y < 125) {
+                int l3 = static_cast<int>(targets[frame_base + y * 128 + (x - 3)]);
+                int r3 = static_cast<int>(targets[frame_base + y * 128 + (x + 3)]);
+                int u3 = static_cast<int>(targets[frame_base + (y - 3) * 128 + x]);
+                int d3 = static_cast<int>(targets[frame_base + (y + 3) * 128 + x]);
+                auto is_face = [](int c) { return c == 3 || c == 4 || c == 5 || c == 6 || c == 7; };
+                int face_surr = (is_face(l3) ? 1 : 0) + (is_face(r3) ? 1 : 0)
+                              + (is_face(u3) ? 1 : 0) + (is_face(d3) ? 1 : 0);
+                if (face_surr >= 2 && tgt != 4 && tgt != 5) {
+                    w *= 2.4f; // Crisp eyes, pupils, sclera glints, eyebrows & mouth inside face!
+                }
+            }
+        }
+        pix_w[i] = w;
+    }
+
     double total_loss = 0.0;
     double total_weight = 0.0;
     int correct = 0;
@@ -1295,7 +1362,7 @@ Tensor* weighted_cross_entropy(
         float inv = 1.0f / (sum_e + 1e-12f);
         for (int k = 0; k < K; ++k) srow[k] *= inv;
 
-        float w = class_weights ? class_weights[tgt] : 1.0f;
+        float w = pix_w[i];
         float pt = std::max(srow[tgt], 1e-12f);
         total_loss += -static_cast<double>(w) * std::log(static_cast<double>(pt));
         total_weight += static_cast<double>(w);
@@ -1307,11 +1374,9 @@ Tensor* weighted_cross_entropy(
 
     if (tape.record && req) {
         std::vector<uint8_t> tgt_copy(targets, targets + N);
-        std::vector<float> cw_copy;
-        if (class_weights) cw_copy.assign(class_weights, class_weights + K);
 
         tape.add_op([logits, Softmax, Loss, N, K, norm,
-                     tgt_copy = std::move(tgt_copy), cw_copy = std::move(cw_copy)]() {
+                     tgt_copy = std::move(tgt_copy), pw_copy = std::move(pix_w)]() {
             float upstream = Loss->grad[0] / norm;
             float* dlp = logits->grad.data();
             const float* sp_b = Softmax->data.data();
@@ -1319,7 +1384,7 @@ Tensor* weighted_cross_entropy(
             #pragma omp parallel for schedule(static) if(N > 512)
             for (int i = 0; i < N; ++i) {
                 int tgt = static_cast<int>(tgt_copy[i]);
-                float w = cw_copy.empty() ? 1.0f : cw_copy[tgt];
+                float w = pw_copy[i];
                 float scale = upstream * w;
                 float* drow = dlp + static_cast<size_t>(i) * K;
                 const float* srow = sp_b + static_cast<size_t>(i) * K;

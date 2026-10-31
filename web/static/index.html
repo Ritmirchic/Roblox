@@ -25,7 +25,7 @@
   <nav class="tabs-bar">
     <button class="tab-btn active" data-tab="tab-episode">🎬 Генератор длинных серий</button>
     <button class="tab-btn" data-tab="tab-lab">🧪 Нейро-лаборатория (Из шума + Продолжение)</button>
-    <button class="tab-btn" data-tab="tab-anatomy">🧠 Анатомия ИИ, Инструменты и Дообучение</button>
+    <button class="tab-btn" data-tab="tab-anatomy">🎯 Обучение на ваших примерах и Анатомия ИИ</button>
   </nav>
 
   <main class="container">
@@ -67,12 +67,12 @@
 
           <div class="row-3">
             <div class="field">
-              <label>ODE шаги: <strong id="lbl-ep-ode">16</strong></label>
-              <input type="range" id="ep-ode" min="6" max="30" value="16" />
+              <label>ODE шаги: <strong id="lbl-ep-ode">20</strong></label>
+              <input type="range" id="ep-ode" min="6" max="30" value="20" />
             </div>
             <div class="field">
-              <label>CFG шкала: <strong id="lbl-ep-cfg">1.45</strong></label>
-              <input type="range" id="ep-cfg" min="1.0" max="2.4" step="0.05" value="1.45" />
+              <label>CFG шкала: <strong id="lbl-ep-cfg">1.28</strong></label>
+              <input type="range" id="ep-cfg" min="1.0" max="2.4" step="0.02" value="1.28" />
             </div>
             <div class="field">
               <label>Решатель ODE</label>
@@ -198,12 +198,12 @@
 
           <div class="row-3">
             <div class="field">
-              <label>ODE шаги: <strong id="lbl-lab-ode">16</strong></label>
-              <input type="range" id="lab-ode" min="4" max="32" value="16" />
+              <label>ODE шаги: <strong id="lbl-lab-ode">20</strong></label>
+              <input type="range" id="lab-ode" min="4" max="32" value="20" />
             </div>
             <div class="field">
-              <label>CFG: <strong id="lbl-lab-cfg">1.45</strong></label>
-              <input type="range" id="lab-cfg" min="1.0" max="2.5" step="0.05" value="1.45" />
+              <label>CFG: <strong id="lbl-lab-cfg">1.28</strong></label>
+              <input type="range" id="lab-cfg" min="1.0" max="2.5" step="0.02" value="1.28" />
             </div>
             <div class="field">
               <label>Seed</label>
@@ -235,8 +235,8 @@
             </div>
 
             <div class="arch-card">
-              <h3>Матрица 3D Spacetime Self-Attention [128 × 144]</h3>
-              <p style="margin-bottom:8px;">Последний блок SakugaDiT: левые 16 столбцов (до голубой линии) — внимание к прошлому кадру <code>z_prev (t=0)</code>, правые 128 — 3D RoPE связность патчей внутри клипа.</p>
+              <h3>Матрица 3D Spacetime Self-Attention [256 × 320]</h3>
+              <p style="margin-bottom:8px;">Последний блок SakugaDiT v2: левые 64 столбца (до голубой линии) — 8×8 внимание к прошлому кадру <code>z_prev (t=0)</code>, правые 256 — 3D RoPE связность патчей внутри клипа.</p>
               <img id="lab-attn-img" class="pixel-img" style="width:100%; height:190px; object-fit:fill; border-radius:6px; border:1px solid var(--border); background:#090a14;" alt="3D Attention Heatmap" />
             </div>
           </div>
@@ -255,20 +255,63 @@
     <section id="tab-anatomy" class="tab-pane">
       <div class="arch-cards">
         <div class="arch-card">
-          <h3>1. Собственный C++17 AVX-512 Autograd Движок</h3>
-          <p>Написан с нуля (<code>csrc/tensor_ops.cpp</code>) без PyTorch/TensorFlow: обратное распространение ошибки на ленте (Tape), OpenMP + SIMD матричные ядра, LayerNorm, AdaLN-Zero, 3D Axial RoPE Multi-Head Attention, AdamW + EMA с проверкой конечными разностями.</p>
+          <h3>1. C++17 AVX-512 Autograd Engine v2 (10.38M весов)</h3>
+          <p>Написан с нуля (<code>csrc/tensor_ops.cpp</code>): 4-рядные SIMD матричные ядра, транспонированный backward, AdaLN-Zero, 3D Axial RoPE Multi-Head Attention и AdamW + EMA.</p>
         </div>
         <div class="arch-card">
-          <h3>2. PixelAnimeVAE [8 × 32 × 32 × 8] + Scale2x</h3>
-          <p>Вместо размывающего RGB MSE автоэнкодер предсказывает логиты над курируемой 48-цветной аниме-палитрой с повышенными весами для контуров, бликов глаз и катан, а умный пиксель-фильтр <code>EPX/Scale2x</code> даёт бритвенно чёткие <code>256×256</code> кадры.</p>
+          <h3>2. HD PixelAnimeVAE (128×128 → 256×256 Scale2x)</h3>
+          <p>4× выше нативная плотность пикселей (<code>128×128</code> вместо <code>64×64</code>) + бесшовная <code>64×64</code> свёртка + 48-цветный классификатор глаз/контуров + <code>1× Scale2x</code>.</p>
         </div>
         <div class="arch-card">
-          <h3>3. SakugaDiT: x₁-Rectified Flow + z_prev</h3>
-          <p>5 блоков Sora-подобного диффузионного трансформера (128 пространственно-временных патчей, 3D RoPE по осям <code>(t, y, x)</code>, Cross-Attention к промпту и условный токен <code>z_prev</code> для склейки длинных серий).</p>
+          <h3>3. Full-Rank SakugaDiT v2 (D=288 &gt; PATCH_C=256)</h3>
+          <p>6 блоков Sora-подобного трансформера без ранк-бутылочного горлышка (256 патчей <code>8×8×4</code>, 3D Conv-рефайнер на выходе и 64 токена <code>z_prev</code>).</p>
         </div>
         <div class="arch-card">
-          <h3>4. Свои медиа-кодеки с нуля (без FFmpeg!)</h3>
-          <p>Поскольку внешних видеокодеков нет, в <code>csrc/media_codecs.cpp</code> с нуля реализованы битовый энкодер <strong>H.264 Baseline + ISO-BMFF (.mp4)</strong>, LZW-энкодер <strong>GIF89a</strong>, 24-битный lossless <strong>APNG</strong> и синтезатор японского саундтрека <strong>WAV</strong>.</p>
+          <h3>4. Импортер конкретных примеров аниме + Кодеки</h3>
+          <p>Квантизатор любых GIF / APNG / PNG / JPG / GitHub-ссылок в 48-цветную <code>128×128</code> палитру с живым дообучением VAE+DiT, плюс свои кодеки <strong>H.264 MP4</strong>, <strong>GIF89a</strong>, <strong>APNG</strong> и <strong>WAV</strong>.</p>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-bottom:18px;">
+        <div class="panel-title">
+          <span>🎯 Обучение ИИ на конкретных примерах аниме (GIF / APNG / PNG / JPG / Спрайт-лист / GitHub-ссылка)</span>
+          <span class="badge gold">Live C++ Reference Importer</span>
+        </div>
+        <div class="studio-grid" style="grid-template-columns: 1.4fr 0.9fr; gap:16px;">
+          <div>
+            <div class="row-2">
+              <div class="field">
+                <label>Загрузить файл примера (.gif, .apng, .png, .jpg, .webp)</label>
+                <input type="file" id="ref-file" accept=".gif,.png,.apng,.jpg,.jpeg,.webp" />
+              </div>
+              <div class="field">
+                <label>Или прямая ссылка на GitHub (raw / blob)</label>
+                <input type="text" id="ref-url" placeholder="https://github.com/.../anime_clip.gif" />
+              </div>
+            </div>
+            <div class="field">
+              <label>Описание / тег примера (на каком запросе ИИ должен воспроизводить этот стиль/сцену)</label>
+              <input type="text" id="ref-prompt" value="Алая мечница Аканэ крупный план у Храма Сакуры на закате" />
+            </div>
+            <div class="row-2">
+              <div class="field">
+                <label>Шагов адаптации VAE (палитра/детали)</label>
+                <input type="number" id="ref-vae-steps" min="0" max="150" value="30" />
+              </div>
+              <div class="field">
+                <label>Шагов обучения SakugaDiT на примере</label>
+                <input type="number" id="ref-dit-steps" min="15" max="300" value="80" />
+              </div>
+            </div>
+            <button class="btn-primary" id="btn-train-ref">🎯 Импортировать пример и дообучить нейросеть</button>
+            <div class="status-banner" id="ref-status">Загрузите любой кадр или GIF-анимацию из аниме (или вставьте GitHub-ссылку), чтобы дообучить веса C++ модели прямо на нём!</div>
+          </div>
+          <div class="cinema-stage" style="justify-content:center;">
+            <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">Как ИИ квантизовал ваш пример в 128×128 → 256×256:</div>
+            <div class="viewport-frame" style="width:220px; height:220px;">
+              <img id="ref-preview-img" class="pixel-img" alt="Квантизованный референс появится здесь" />
+            </div>
+          </div>
         </div>
       </div>
 

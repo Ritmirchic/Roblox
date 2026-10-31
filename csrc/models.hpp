@@ -30,39 +30,43 @@ struct ResBlock3D {
     Tensor* forward(Tape& tape, Tensor* X);
 };
 
-// Stage 1: High-Precision 32x32 Spatial-Aligned Pixel-Art Anime Video Autoencoder (2x2x2 patch = 1 float/pixel)
+// Stage 1: High-Definition 128x128 -> [B, 8, 32, 32, 8] Discrete-Palette Anime Video Autoencoder
 struct PixelAnimeVAE {
-    Tensor palette_emb;           // [48, 8]
-    Tensor enc_in_w, enc_in_b;    // [8*4*2 = 64, 36]
-    ResBlock3D enc_block;         // C = 36 at [B, 8, 32, 32, 36]
-    Tensor to_lat_w, to_lat_b;    // [36, 8]
+    Tensor palette_emb;             // [48, 8]
+    Tensor enc_s1_w, enc_s1_b;      // [32, 24] at 64x64
+    Tensor enc_in_w, enc_in_b;      // [24*4*2 = 192, 48] at 32x32
+    ResBlock3D enc_block;           // C = 48 at [B, 8, 32, 32, 48]
+    Tensor to_lat_w, to_lat_b;      // [48, 8]
 
-    Tensor from_lat_w, from_lat_b;// [8, 36]
-    ResBlock3D dec_block;         // C = 36 at [B, 8, 32, 32, 36]
-    Tensor dec_t_w, dec_t_b;      // [36, 2*36=72] -> unfold temporal 2x -> [B, 16, 32, 32, 36]
-    Tensor dec_sub_w, dec_sub_b;  // [36, 4*20=80] -> depth_to_space(2) -> [B*16, 64, 64, 20]
-    Tensor dec_head_w, dec_head_b;// [20, 48] non-linear per-pixel palette classifier!
+    Tensor from_lat_w, from_lat_b;  // [8, 48]
+    ResBlock3D dec_block;           // C = 48 at [B, 8, 32, 32, 48]
+    Tensor dec_t_w, dec_t_b;        // [48, 2*40 = 80] -> unfold_t2 -> [B, 16, 32, 32, 40]
+    Tensor dec_up64_w, dec_up64_b;  // [40, 4*24 = 96] -> depth_to_space(2) -> [B*16, 64, 64, 24]
+    Tensor dec_ln64_g, dec_ln64_b;  // 64x64 cross-patch seam-eliminating 3x3 conv block
+    Tensor dec_conv64_w, dec_conv64_b; // [9*24, 24]
+    Tensor dec_up128_w, dec_up128_b;// [24, 4*20 = 80] -> depth_to_space(2) -> [B*16, 128, 128, 20]
+    Tensor dec_head_w, dec_head_b;  // [20, 48] per-pixel palette classifier!
 
-    std::vector<float> class_weights; // [48] foreground-boosted weights
+    std::vector<float> class_weights; // [48] facial/outline-boosted weights
 
     void init(uint32_t seed = 101);
     std::vector<Tensor*> parameters();
 
-    // Encode [B, 16, 64, 64] uint8 indices -> [B, 8, 16, 16, 12] float latents in [-1, 1]
+    // Encode [B, 16, 128, 128] uint8 indices -> [B, 8, 32, 32, 8] float latents in [-1, 1]
     Tensor* encode(Tape& tape, const uint8_t* indices, int B);
 
-    // Decode [B, 8, 16, 16, 12] float latents -> [B*16*64*64, 48] palette logits
+    // Decode [B, 8, 32, 32, 8] float latents -> [B*16*128*128, 48] palette logits
     Tensor* decode_logits(Tape& tape, Tensor* z);
 
-    // Inference helper: decode latent [B * 24576] -> uint8 indices [B * 16 * 64 * 64]
+    // Inference helper: decode latent [B * 65536] -> uint8 indices [B * 16 * 128 * 128]
     void decode_to_indices(const float* z_data, int B, uint8_t* out_indices);
 };
 
 // Single Sora-style DiT Block with 3D Spacetime RoPE + AdaLN-Zero + Cross-Attention
 struct DiTBlock {
-    int D = 180;
-    int H = 5;
-    int MlpD = 480;
+    int D = 288;
+    int H = 8;
+    int MlpD = 768;
 
     Tensor adaln_w, adaln_b;      // [D, 6*D]
     Tensor q_w, q_b;              // [D, D]
@@ -84,8 +88,8 @@ struct DiTBlock {
 
     Tensor* forward(
         Tape& tape,
-        Tensor* X,            // [B, 128, D]
-        Tensor* Zprev_tok,    // [B, 16, D]
+        Tensor* X,            // [B, 256, D]
+        Tensor* Zprev_tok,    // [B, 64, D]
         Tensor* Cond_tok,     // [B, NUM_COND_TOKENS, D]
         Tensor* Cond_vec,     // [B, D]
         const float* q_cos,
@@ -96,17 +100,20 @@ struct DiTBlock {
     );
 };
 
-// Stage 2: SakugaDiT — Rectified Flow Matching Video Diffusion Transformer
+// Stage 2: SakugaDiT v2 — Full-Rank (D=288 > PATCH_C=256) 8x8 Spatial Grid + 3D Conv Refiner
 struct SakugaDiT {
-    static constexpr int D = 180;
-    static constexpr int HEADS = 5;              // Dh = 36 -> 18 RoPE pairs (6_t + 6_y + 6_x)
-    static constexpr int DEPTH = 5;
-    static constexpr int MLP_D = 480;
-    static constexpr int PATCH_C = LATENT_C * 64; // 8x8 spatial patchify on 32x32x8 -> 512!
+    static constexpr int D = 288;
+    static constexpr int HEADS = 8;      // Dh = 36 -> 18 RoPE pairs (6_t + 6_y + 6_x)
+    static constexpr int DEPTH = 6;
+    static constexpr int MLP_D = 768;
+    static constexpr int N_PREV = 64;    // 8x8 spatial tokens at t=0
+    static constexpr int N_TOK = 256;    // 4 temporal x 8x8 spatial tokens
+    static constexpr int PREV_C = LATENT_C * 16;      // 128
+    static constexpr int PATCH_C = 2 * LATENT_C * 16; // 256 (< D = 288 -> ZERO linear bottleneck!)
 
-    Tensor x_embed_w, x_embed_b;       // [192, D]
-    Tensor prev_embed_w, prev_embed_b; // [192, D]
-    Tensor bos_prev_tok;               // [16, D] learned token when has_prev == 0
+    Tensor x_embed_w, x_embed_b;       // [256, D]
+    Tensor prev_embed_w, prev_embed_b; // [128, D]
+    Tensor bos_prev_tok;               // [64, D] learned token when has_prev == 0
 
     // Condition embeddings
     Tensor attr_emb;                   // [64, D]
@@ -122,11 +129,16 @@ struct SakugaDiT {
 
     // Final AdaLN + Unpatchify head
     Tensor final_adaln_w, final_adaln_b; // [D, 2*D]
-    Tensor final_out_w, final_out_b;     // [D, 192]
+    Tensor final_out_w, final_out_b;     // [D, 256]
+
+    // 3D Spatial-Temporal Conv Refiner on [B, 8, 32, 32, 8] to eliminate patch boundaries
+    Tensor ref_in_w, ref_in_b;           // [8, 20]
+    ResBlock3D ref_block;                // C = 20
+    Tensor ref_out_w, ref_out_b;         // [20, 8]
 
     // Precomputed 3D Axial RoPE tables
-    std::vector<float> rope_q_cos, rope_q_sin;
-    std::vector<float> rope_k_cos, rope_k_sin;
+    std::vector<float> rope_q_cos, rope_q_sin; // [256 * 18]
+    std::vector<float> rope_k_cos, rope_k_sin; // [320 * 18]
 
     std::vector<float> last_self_attn;
     std::vector<float> last_cross_attn;
@@ -136,11 +148,11 @@ struct SakugaDiT {
 
     Tensor* forward(
         Tape& tape,
-        Tensor* z_t,               // [B, 8, 16, 16, 12]
+        Tensor* z_t,               // [B, 8, 32, 32, 8]
         const float* tau,          // [B] in [0, 1]
         const int* cond_ids,       // [B * NUM_COND_TOKENS]
         const int* drop_cond,      // [B]
-        const float* z_prev_frame, // [B * 1 * 16 * 16 * 12] or nullptr
+        const float* z_prev_frame, // [B * 1 * 32 * 32 * 8] or nullptr
         const int* has_prev,       // [B] 0 or 1
         bool capture_attn = false
     );
@@ -159,7 +171,10 @@ struct SakugaDiT {
     );
 };
 
+// Build 12-token conditioning vector from AnimeSpec + 5 prompt word IDs
 void build_cond_tokens(const AnimeSpec& spec, const int* word_ids5, int* out_cond12);
+
+// Binary checkpoint serialization
 bool save_checkpoint(const std::string& path, PixelAnimeVAE& vae, SakugaDiT& dit, int vae_steps, int dit_steps);
 bool load_checkpoint(const std::string& path, PixelAnimeVAE& vae, SakugaDiT& dit, int* vae_steps, int* dit_steps);
 

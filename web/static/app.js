@@ -406,4 +406,59 @@ $("btn-finetune").addEventListener("click", async () => {
   }
 });
 
+// Concrete Anime Reference Import + Fine-Tuning
+$("btn-train-ref").addEventListener("click", async () => {
+  const btn = $("btn-train-ref");
+  const status = $("ref-status");
+  const fileInput = $("ref-file");
+  const urlVal = $("ref-url").value.trim();
+  const promptVal = $("ref-prompt").value.trim();
+  const vaeSteps = Number($("ref-vae-steps").value) || 0;
+  const ditSteps = Number($("ref-dit-steps").value) || 80;
+
+  let fileB64 = null;
+  if (fileInput.files && fileInput.files.length > 0) {
+    fileB64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(fileInput.files[0]);
+    });
+  }
+
+  if (!fileB64 && !urlVal) {
+    status.textContent = "Пожалуйста, выберите файл примера (.gif/.png/.jpg) или вставьте ссылку на GitHub!";
+    return;
+  }
+
+  btn.disabled = true;
+  status.textContent = `Квантизация референса в 128×128 палитру и живое обучение C++ движка (VAE: ${vaeSteps} шаг., DiT: ${ditSteps} шаг.)...`;
+
+  try {
+    const res = await fetch("/api/train_reference", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: promptVal,
+        file_base64: fileB64,
+        reference_url: urlVal || null,
+        vae_steps: vaeSteps,
+        dit_steps: ditSteps,
+        lr_dit: 0.00035
+      })
+    });
+    const out = await res.json();
+    if (!res.ok) throw new Error(out.detail || `HTTP ${res.status}`);
+    if (out.quantized_preview_DataUrl) {
+      $("ref-preview-img").src = out.quantized_preview_DataUrl;
+    }
+    status.textContent = `Успешно! Импортировано ${out.imported_frames} кадров (${out.imported_clips} клип.), обучено за ${out.elapsed_sec} с. DiT Loss: ${out.dit_loss_start} → ${out.dit_loss_end}. Теперь сгенерируйте этот запрос во вкладке 1 или 2!`;
+    await initStudio();
+  } catch (err) {
+    status.textContent = `Ошибка: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 initStudio();

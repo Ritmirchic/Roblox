@@ -62,7 +62,7 @@ def _default_subtitle(beat_role: str, hero_id: int, rival_id: int, scene_id: int
             "duel": f"{h} и {r} скрещивают клинки в искрах!",
             "climax": f"{h}: «Рассекающий полумесяц — САКУГА!»",
             "climax_beam": f"{h}: «Звёздный импульс — ПОЛНЫЙ ВЫБРОС!»",
-            "epilogue": f"Тишина возвращается в {sc}...",
+            "epilogue": f"Над локацией «{sc}» воцаряется тишина...",
         }
     else:
         table = {
@@ -180,30 +180,47 @@ class EpisodeDirector:
         climax_act = 4 if prefer_magic else 3
         climax_role = "climax_beam" if prefer_magic else "climax"
 
+        canonical_fx_for_scene = [0, 1, 3, 3, 2, 0]
+        scene_fx = canonical_fx_for_scene[scene_id % 6]
+
         arc_templates = [
             # (role, hero, framing, action, camera, fx, use_z_prev)
-            ("establish",   hero_id,  0, 0, 1, base_fx, False),
-            ("hero_talk",   hero_id,  2, 1, 0, base_fx, False),
-            ("dash",        hero_id,  0, 2, 1, base_fx, False),
-            ("aura_cont",   hero_id,  1, 5, 3, 2 if not prefer_magic else 3, True),  # Continuous z_prev shot!
-            ("rival_talk",  rival_id, 2, 1, 0, base_fx, False),
-            ("duel",        hero_id,  3, 3, 0, 4, False),
-            (climax_role,   hero_id,  1, climax_act, 3, 4, True),                    # Continuous z_prev climax!
-            ("epilogue",    hero_id,  0, 0, 2, base_fx, False),
+            ("establish",   hero_id,  0, 0, 0, scene_fx, False),
+            ("dash",        hero_id,  0, 2, 1, scene_fx, True),   # Continuous Wide -> Wide z_prev shot!
+            ("hero_talk",   hero_id,  2, 1, 0, scene_fx, False),  # Clean cut to Close-Up portrait!
+            ("aura_cont",   hero_id,  1, 5, 0, scene_fx, False),  # Clean cut to Medium Awakening Aura!
+            (climax_role,   hero_id,  1, climax_act, 0, 4, True), # Continuous Medium -> Medium z_prev climax!
+            ("duel",        hero_id,  3, 3, 0, 2 if scene_id == 4 else scene_fx, False),
+            ("rival_talk",  rival_id, 2, 1, 0, scene_fx, False),
+            ("epilogue",    hero_id,  0, 0, 0, scene_fx, False),
         ]
 
         shots: List[Dict[str, Any]] = []
+        wants_duel = (
+            base_spec["action_id"] == 3
+            or base_spec["framing_id"] == 3
+            or any(k in (synopsis or "").lower() for k in ["дуэл", "сраж", "битв", "против", "скрещ", "duel", "clash", "vs"])
+        )
         for idx in range(num_shots):
             # Map idx smoothly onto dramatic arc ensuring opening, rising action, climax, and epilogue
-            if num_shots <= len(arc_templates):
+            if num_shots == 6:
+                six_arc = [
+                    arc_templates[0], # 1. Establish (Wide)
+                    arc_templates[2], # 2. Hero Close-Up Dialogue
+                    arc_templates[1], # 3. High-Speed Dash (Wide)
+                    arc_templates[3], # 4. Awakening Ki Aura (Medium)
+                    arc_templates[4], # 5. Climax Slash/Beam (Medium, continuous z_prev from Shot 4!)
+                    arc_templates[5] if wants_duel else arc_templates[7], # 6. Duel or Epilogue
+                ]
+                tpl = six_arc[idx]
+            elif num_shots <= len(arc_templates):
                 if idx == num_shots - 1 and num_shots >= 4:
-                    tpl = arc_templates[-1] if idx > 3 else arc_templates[6]
+                    tpl = arc_templates[-1]
                 elif idx == num_shots - 2 and num_shots >= 4:
-                    tpl = arc_templates[6]
+                    tpl = arc_templates[4]
                 else:
                     tpl = arc_templates[idx]
             else:
-                # For long 9..16 shot episodes, alternate dramatic beats + continuous multi-part sequences!
                 tpl = arc_templates[idx % len(arc_templates)]
 
             role, sh_hero, sh_framing, sh_action, sh_cam, sh_fx, cont_prev = tpl
@@ -212,13 +229,18 @@ class EpisodeDirector:
             clause_text = clauses[idx] if idx < len(clauses) else ""
             if len(clauses) >= 3 and clause_text:
                 c_spec, _ = parse_prompt_to_spec_and_tokens(clause_text, default_seed=seed + idx)
-                # Preserve global scene/time unless clause explicitly names a new place
                 sh_action = c_spec["action_id"]
                 if any(w in clause_text.lower() for w in ["крупн", "лиц", "глаз", "close", "face", "дуэл", "duel"]):
                     sh_framing = c_spec["framing_id"]
 
-            # Only use z_prev continuation when camera framing matches or transitions compatibly
-            use_prev = bool(cont_prev and idx > 0 and shots[-1]["spec"]["framing_id"] in (0, 1, 3) and sh_framing != 2)
+            # Strictly chain z_prev ONLY when camera framing, hero, and scene remain continuous!
+            use_prev = bool(
+                cont_prev
+                and idx > 0
+                and shots[-1]["spec"]["framing_id"] == sh_framing
+                and shots[-1]["spec"]["hero_id"] == sh_hero
+                and shots[-1]["spec"]["scene_id"] == scene_id
+            )
 
             spec = {
                 "hero_id": sh_hero,

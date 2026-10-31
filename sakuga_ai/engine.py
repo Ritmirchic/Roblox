@@ -14,6 +14,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 LIB_PATH = REPO_ROOT / "bin" / "libsakuga.so"
 
 CLIP_FRAMES = 16
+BASE_H = 128
+BASE_W = 128
 OUT_H = 256
 OUT_W = 256
 LATENT_T = 8
@@ -96,6 +98,14 @@ def _ensure_shared_lib() -> ctypes.CDLL:
         ctypes.c_void_p, c_int_p, c_u8_p, c_u8_p
     ]
     lib.sakuga_eval_vae_reconstruction.restype = ctypes.c_float
+
+    lib.sakuga_quantize_rgb128_to_indices.argtypes = [c_u8_p, ctypes.c_int, c_u8_p]
+    lib.sakuga_quantize_rgb128_to_indices.restype = None
+
+    lib.sakuga_append_custom_clips.argtypes = [
+        ctypes.c_void_p, ctypes.c_int, c_u8_p, c_int_p, c_int_p, c_int_p, ctypes.c_int, ctypes.c_int
+    ]
+    lib.sakuga_append_custom_clips.restype = ctypes.c_int
 
     lib.sakuga_save_checkpoint.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
     lib.sakuga_save_checkpoint.restype = ctypes.c_int
@@ -341,13 +351,53 @@ class SakugaEngine:
         return res
 
     def get_last_attention(self) -> np.ndarray:
-        buf = np.zeros(128 * 144, dtype=np.float32)
+        buf = np.zeros(256 * 320, dtype=np.float32)
         n = self.lib.sakuga_get_last_attention(
             self.ctx, buf.ctypes.data_as(ctypes.POINTER(ctypes.c_float)), buf.size
         )
-        if n == 128 * 144:
-            return buf.reshape(128, 144)
-        return np.zeros((128, 144), dtype=np.float32)
+        if n == 256 * 320:
+            return buf.reshape(256, 320)
+        return np.zeros((256, 320), dtype=np.float32)
+
+    def quantize_rgb128(self, rgb128: np.ndarray) -> np.ndarray:
+        arr = np.ascontiguousarray(rgb128, dtype=np.uint8)
+        n_frames = arr.shape[0]
+        assert arr.shape == (n_frames, BASE_H, BASE_W, 3)
+        out_idx = np.zeros((n_frames, BASE_H, BASE_W), dtype=np.uint8)
+        self.lib.sakuga_quantize_rgb128_to_indices(
+            arr.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)),
+            n_frames,
+            out_idx.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)),
+        )
+        return out_idx
+
+    def append_custom_clips(
+        self,
+        clips_indices128: np.ndarray,
+        specs: np.ndarray,
+        words: np.ndarray,
+        prev_rel_idx: np.ndarray,
+        clear_existing: bool = False,
+        repeat_weight: int = 6,
+    ) -> int:
+        idx_c = np.ascontiguousarray(clips_indices128, dtype=np.uint8)
+        sp_c = np.ascontiguousarray(specs, dtype=np.int32)
+        wd_c = np.ascontiguousarray(words, dtype=np.int32)
+        pr_c = np.ascontiguousarray(prev_rel_idx, dtype=np.int32)
+        m = idx_c.shape[0]
+        assert idx_c.shape == (m, CLIP_FRAMES, BASE_H, BASE_W)
+        return int(
+            self.lib.sakuga_append_custom_clips(
+                self.ctx,
+                m,
+                idx_c.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)),
+                sp_c.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
+                wd_c.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
+                pr_c.ctypes.data_as(ctypes.POINTER(ctypes.c_int)),
+                1 if clear_existing else 0,
+                int(repeat_weight),
+            )
+        )
 
     def eval_vae_reconstruction(self, spec9: list[int]) -> Tuple[float, np.ndarray, np.ndarray]:
         sp_c = np.ascontiguousarray(spec9, dtype=np.int32)
