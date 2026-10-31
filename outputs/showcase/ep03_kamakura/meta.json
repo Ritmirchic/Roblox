@@ -1,0 +1,209 @@
+{
+  "title": "EP.03 ПОЕЗД У МОРЯ",
+  "synopsis": "Сереброволосая ведьма Лумина стоит на морской станции у океана на закате и выпускает магический звёздный луч",
+  "num_shots": 6,
+  "total_frames": 96,
+  "fps": 10,
+  "duration_sec": 9.6,
+  "generation_time_sec": 81.71,
+  "ode_steps": 20,
+  "cfg_scale": 1.28,
+  "solver": "heun",
+  "storyboard": [
+    {
+      "shot_index": 1,
+      "role": "establish",
+      "spec": {
+        "hero_id": 2,
+        "scene_id": 5,
+        "time_id": 0,
+        "framing_id": 0,
+        "action_id": 0,
+        "camera_id": 0,
+        "fx_id": 0,
+        "part_idx": 0,
+        "variant_seed": 4096
+      },
+      "tokens": [
+        3,
+        15,
+        20,
+        40,
+        30
+      ],
+      "use_z_prev": false,
+      "subtitle": "[Морская станция] Ветер перемен уже близко...",
+      "hero_label": "Лумина (Звёздная ведьма)",
+      "scene_label": "Морская станция",
+      "framing_label": "Общий план (сцена целиком)",
+      "action_label": "Спокойный взгляд и ветер в волосах",
+      "gen_ms": 14824.3,
+      "keyframe_file": "shot_01.png"
+    },
+    {
+      "shot_index": 2,
+      "role": "hero_talk",
+      "spec": {
+        "hero_id": 2,
+        "scene_id": 5,
+        "time_id": 0,
+        "framing_id": 2,
+        "action_id": 1,
+        "camera_id": 0,
+        "fx_id": 0,
+        "part_idx": 0,
+        "variant_seed": 4113
+      },
+      "tokens": [
+        3,
+        15,
+        20,
+        41,
+        32
+      ],
+      "use_z_prev": false,
+      "subtitle": "Лумина: «Я не отступлю ни на шаг!»",
+      "hero_label": "Лумина (Звёздная ведьма)",
+      "scene_label": "Морская станция",
+      "framing_label": "Крупный план (глаза и мимика)",
+      "action_label": "Диалог / Монолог (анимация речи)",
+      "gen_ms": 12148.7,
+      "keyframe_file": "shot_02.png"
+    },
+    {
+      "shot_index": 3,
+      "role": "dash",
+      "spec": {
+        "hero_id": 2,
+        "scene_id": 5,
+        "time_id": 0,
+        "framing_id": 0,
+        "action_id": 2,
+        "camera_id": 1,
+        "fx_id": 0,
+        "part_idx": 0,
+        "variant_seed": 4130
+      },
+      "tokens": [
+        3,
+        15,
+        20,
+        42,
+        30
+      ],
+      "use_z_prev": false,
+      "subtitle": "Лумина устремляется вперёд сквозь горизонт!",
+      "hero_label": "Лумина (Звёздная ведьма)",
+      "scene_label": "Морская станция",
+      "framing_label": "Общий план (сцена целиком)",
+      "action_label": "Стремительный рывок / бег",
+      "gen_ms": 12534.6,
+      "keyframe_file": "shot_03.png"
+    },
+    {
+      "shot_index": 4,
+      "role": "aura_cont",
+      "spec": {
+        "hero_id": 2,
+        "scene_id": 5,
+        "time_id": 0,
+        "framing_id": 1,
+        "action_id": 5,
+        "camera_id": 0,
+        "fx_id": 0,
+        "part_idx": 0,
+        "variant_seed": 4147
+      },
+      "tokens": [
+        3,
+        15,
+        20,
+        45,
+        31
+      ],
+      "use_z_prev": false,
+      "subtitle": "Аура Лумина разгорается на полную мощь!",
+      "hero_label": "Лумина (Звёздная ведьма)",
+      "scene_label": "Морская станция",
+      "framing_label": "Средний план героя",
+      "action_label": "Пробуждение боевой ауры",
+      "gen_ms": 13268.4,
+      "keyframe_file": "shot_04.png"
+    },
+    {
+      "shot_index": 5,
+      "role": "climax_beam",
+      "spec": {
+        "hero_id": 2,
+        "scene_id": 5,
+        "time_id": 0,
+        "framing_id": 1,
+        "action_id": 4,
+        "camera_id": 0,
+        "fx_id": 4,
+        "part_idx": 1,
+        "variant_seed": 4164
+      },
+      "tokens": [
+        3,
+        15,
+        20,
+        44,
+        31
+      ],
+      "use_z_prev": true,
+      "subtitle": "Лумина: «Звёздный импульс — ПОЛНЫЙ ВЫБРОС!»",
+      "hero_label": "Лумина (Звёздная ведьма)",
+      "scene_label": "Морская станция",
+      "framing_label": "Средний план героя",
+      "action_label": "Магический луч / Заклинание",
+      "gen_ms": 15023.2,
+      "keyframe_file": "shot_05.png"
+    },
+    {
+      "shot_index": 6,
+      "role": "epilogue",
+      "spec": {
+        "hero_id": 2,
+        "scene_id": 5,
+        "time_id": 0,
+        "framing_id": 0,
+        "action_id": 0,
+        "camera_id": 0,
+        "fx_id": 0,
+        "part_idx": 0,
+        "variant_seed": 4181
+      },
+      "tokens": [
+        3,
+        15,
+        20,
+        40,
+        30
+      ],
+      "use_z_prev": false,
+      "subtitle": "Над локацией «Морская станция» воцаряется тишина...",
+      "hero_label": "Лумина (Звёздная ведьма)",
+      "scene_label": "Морская станция",
+      "framing_label": "Общий план (сцена целиком)",
+      "action_label": "Спокойный взгляд и ветер в волосах",
+      "gen_ms": 13137.8,
+      "keyframe_file": "shot_06.png"
+    }
+  ],
+  "denoise_snapshots": [
+    "denoise_step_0.png",
+    "denoise_step_1.png",
+    "denoise_step_2.png",
+    "denoise_step_3.png",
+    "denoise_step_4.png",
+    "denoise_step_5.png"
+  ],
+  "files": {
+    "mp4": "episode.mp4",
+    "gif": "episode.gif",
+    "apng": "episode.apng",
+    "wav": "soundtrack.wav",
+    "storyboard": "storyboard_strip.png"
+  }
+}
